@@ -1,0 +1,68 @@
+diff --git a/test/HelloClient.cpp b/test/HelloClient.cpp
+index f11c094..85a72ae 100644
+--- a/test/HelloClient.cpp
++++ b/test/HelloClient.cpp
+@@ -3,6 +3,8 @@
+ // on windows)
+ #include "XmlRpc.h"
+ #include <iostream>
++#include <stdlib.h>
++
+ using namespace XmlRpc;
+ 
+ int main(int argc, char* argv[])
+diff --git a/test/HelloServer.cpp b/test/HelloServer.cpp
+index ff81ad8..5e75af6 100644
+--- a/test/HelloServer.cpp
++++ b/test/HelloServer.cpp
+@@ -60,11 +60,11 @@ public:
+ 
+ int main(int argc, char* argv[])
+ {
+-  if (argc != 2) {
+-    std::cerr << "Usage: HelloServer serverPort\n";
+-    return -1;
+-  }
+-  int port = atoi(argv[1]);
++//   if (argc != 2) {
++//     std::cerr << "Usage: HelloServer serverPort\n";
++//     return -1;
++//   }
++  int port = 1111;/*atoi(argv[1]);*/
+ 
+   XmlRpc::setVerbosity(5);
+ 
+diff --git a/test/TestValues.cpp b/test/TestValues.cpp
+index e770e51..55be6b8 100644
+--- a/test/TestValues.cpp
++++ b/test/TestValues.cpp
+@@ -1,7 +1,7 @@
+ // TestValues.cpp : Test XML encoding and decoding of XmlRpcValues.
+ 
+ #include <stdlib.h>
+-
++#include <stdio.h>
+ #include "XmlRpcValue.h"
+ 
+ 
+diff --git a/test/Validator.cpp b/test/Validator.cpp
+index 16d2e79..72615fe 100644
+--- a/test/Validator.cpp
++++ b/test/Validator.cpp
+@@ -1,6 +1,7 @@
+ // Validator.cpp : XMLRPC server based on the compliancy test at validator.xmlrpc.com.
+ //
+ #include "XmlRpc.h"
++#include <stdlib.h>
+ using namespace XmlRpc;
+ 
+ #include <iostream>
+@@ -137,7 +138,7 @@ public:
+   {
+     std::cerr << "ModerateSizeArrayCheck\n";
+     std::string s = params[0][0];
+-    s += params[0][params[0].size()-1];
++    s += std::string(params[0][params[0].size()-1]);
+     result = s;
+   }
+ } moderateSizeArrayCheck(&s);

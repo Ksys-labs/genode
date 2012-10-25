@@ -1,0 +1,78 @@
+
+set build_components {
+	core init
+	drivers/timer drivers/pci drivers/nic
+	test/xmlrpc_hello_srv
+}
+
+build $build_components
+
+create_boot_directory
+
+append config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="LOG"/>
+		<service name="CAP"/>
+		<service name="RAM"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="PD"/>
+		<service name="IRQ"/>
+		<service name="IO_PORT"/>
+		<service name="IO_MEM"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>}
+
+append_if [have_spec pci] config {
+	<start name="pci_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="PCI"/></provides>
+	</start>}
+
+append config {
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+	<start name="nic_drv">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+	<start name="test-xmlrpc-srv">
+		<resource name="RAM" quantum="4M"/>
+	</start>
+</config>
+}
+
+install_config $config
+
+set boot_modules {
+	core init timer nic_drv
+	ld.lib.so libc.lib.so libc_log.lib.so libm.lib.so
+	stdcxx.lib.so
+	xmlrpc++.lib.so
+	lwip.lib.so
+	test-xmlrpc-srv
+}
+
+lappend_if [have_spec pci]   boot_modules pci_drv
+
+
+build_boot_image $boot_modules
+
+append qemu_args " -m 512 "
+append qemu_args " -serial mon:stdio "
+append_if [have_spec     x86] qemu_args " -net nic,model=e1000 -net tap,ifname=tap0,script=no,downscript=no "
+append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 -net user "
+
+#
+# Execute test case
+#
+run_genode_until forever
+
+

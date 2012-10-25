@@ -1,0 +1,61 @@
+diff --git a/src/XmlRpcClient.cpp b/src/XmlRpcClient.cpp
+index e706d0a..2c775f7 100644
+--- a/src/XmlRpcClient.cpp
++++ b/src/XmlRpcClient.cpp
+@@ -6,7 +6,7 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
+-
++#include <string.h>
+ 
+ using namespace XmlRpc;
+ 
+diff --git a/src/XmlRpcDispatch.cpp b/src/XmlRpcDispatch.cpp
+index 3bbca40..06ccc51 100644
+--- a/src/XmlRpcDispatch.cpp
++++ b/src/XmlRpcDispatch.cpp
+@@ -4,7 +4,6 @@
+ #include "XmlRpcUtil.h"
+ 
+ #include <math.h>
+-#include <sys/timeb.h>
+ 
+ #if defined(_WINDOWS)
+ # include <winsock2.h>
+@@ -18,6 +17,11 @@
+ # include <sys/time.h>
+ #endif  // _WINDOWS
+ 
++#ifdef USE_FTIME
++#include <sys/timeb.h>
++#else
++#include <time.h>
++#endif
+ 
+ using namespace XmlRpc;
+ 
+diff --git a/src/XmlRpcServerConnection.cpp b/src/XmlRpcServerConnection.cpp
+index b9d6def..63e16a8 100644
+--- a/src/XmlRpcServerConnection.cpp
++++ b/src/XmlRpcServerConnection.cpp
+@@ -7,6 +7,7 @@
+ # include <stdio.h>
+ # include <stdlib.h>
+ #endif
++#include <string.h>
+ 
+ using namespace XmlRpc;
+ 
+diff --git a/src/XmlRpcSocket.cpp b/src/XmlRpcSocket.cpp
+index b71ef94..36cf38b 100644
+--- a/src/XmlRpcSocket.cpp
++++ b/src/XmlRpcSocket.cpp
+@@ -27,6 +27,7 @@ extern "C" {
+ 
+ #endif // MAKEDEPEND
+ 
++#include <string.h>
+ 
+ using namespace XmlRpc;
+ 
