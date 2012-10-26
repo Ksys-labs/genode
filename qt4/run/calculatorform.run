@@ -9,7 +9,7 @@ build {
 	drivers/pci
 	drivers/framebuffer
 	drivers/timer
-	server/nitpicker
+	server/nitpicker server/ram_fs
 	app/examples/calculatorform
 }
 
@@ -32,6 +32,7 @@ set config {
 		<service name="RM"/>
 		<service name="CPU"/>
 		<service name="LOG"/>
+		<service name="SIGNAL"/>
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
@@ -79,6 +80,13 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nitpicker"/></provides>
 	</start>
+	<start name="ram_fs">
+		<resource name="RAM" quantum="100M"/>
+		<provides><service name="File_system"/></provides>
+		<config>
+			<policy label="" root="/" writeable="yes" />
+		</config>
+	</start>
 	<start name="calculatorform">
 		<resource name="RAM" quantum="80M"/>
 	</start>
@@ -97,6 +105,7 @@ set boot_modules {
 	init
 	timer
 	nitpicker
+	ram_fs
 	calculatorform
 	dejavusans.lib.so
 	freetype.lib.so
@@ -110,6 +119,7 @@ set boot_modules {
 	qt_gui.lib.so
 	zlib.lib.so
 	stdcxx.lib.so
+	libc_fs.lib.so
 }
 
 # platform-specific modules
@@ -121,6 +131,6 @@ lappend_if [have_spec pl11x] boot_modules pl11x_drv
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 128"
+append qemu_args " -m 256"
 
 run_genode_until forever
