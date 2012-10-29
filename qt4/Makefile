@@ -23,7 +23,6 @@ QTSCRIPTCLASSIC     = qtscriptclassic-1.0_1-opensource
 QTSCRIPTCLASSIC_TGZ = $(QTSCRIPTCLASSIC).tar.gz
 
 PATCHES = qt4_genode.patch \
-          qt4_nonblocking_sockets.patch \
           qt4_no_search_for_resolv_lib.patch \
           qt4_lwip_connect_semantics_adaption.patch \
           previewer_example.patch \
@@ -32,7 +31,11 @@ PATCHES = qt4_genode.patch \
           qt4_virtual_deletelater.patch \
           qt4_renderwidget.patch \
           qt4_include_time_h.patch \
-          qt4_openssl_libs.patch
+          qt4_openssl_libs.patch \
+          qt4_flush_socket.patch
+
+#          qt4_nonblocking_sockets.patch \
+
 
 #
 # Utility to check if a tool is installed

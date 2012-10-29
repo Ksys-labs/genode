@@ -1,0 +1,14 @@
+diff --git a/src/network/socket/qabstractsocket.cpp b/src/network/socket/qabstractsocket.cpp
+index bd4c9e4..c2ef712 100644
+--- a/src/network/socket/qabstractsocket.cpp
++++ b/src/network/socket/qabstractsocket.cpp
+@@ -2231,6 +2231,9 @@ qint64 QAbstractSocket::writeData(const char *data, qint64 size)
+            qt_prettyDebug(data, qMin((int)size, 32), size).data(),
+            size, written);
+ #endif
++
++    flush();
++
+     return written;
+ }
+ 
