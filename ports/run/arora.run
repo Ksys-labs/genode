@@ -5,7 +5,7 @@
 set build_components {
 	core init
 	drivers/timer drivers/framebuffer drivers/pci drivers/input drivers/nic
-	server/nitpicker server/ram_fs
+	server/nitpicker
 	app/arora
 }
 
@@ -82,13 +82,6 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nitpicker"/></provides>
 	</start>
-	<start name="ram_fs">
-		<resource name="RAM" quantum="100M"/>
-		<provides><service name="File_system"/></provides>
-		<config>
-			<policy label="" root="/" writeable="yes" />
-		</config>
-	</start>
 	<start name="arora">
 		<resource name="RAM" quantum="2G"/>
 	</start>
@@ -104,16 +97,15 @@ install_config $config
 set boot_modules {
 	core init
 	timer nic_drv
-	ram_fs
 	nitpicker
 	arora
 	ld.lib.so
 	libc.lib.so libm.lib.so lwip.lib.so
 	zlib.lib.so libpng.lib.so jpeg.lib.so
-	libcrypto.lib.so libssl.lib.so
 	dejavusans.lib.so
 	freetype.lib.so
-	libc_lock_pipe.lib.so libc_fs.lib.so
+	libc_lock_pipe.lib.so
+	stdcxx.lib.so
 	qt_core.lib.so
 	qt_gui.lib.so
 	qt_jscore.lib.so
@@ -124,7 +116,6 @@ set boot_modules {
 	qt_xml.lib.so
 	qnitpickerviewwidget.lib.so
 	qpluginwidget.lib.so
-	stdcxx.lib.so
 }
 
 

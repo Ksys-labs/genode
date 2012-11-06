@@ -12,7 +12,7 @@
  */
 
 struct mouse_cursor {
-	short w, h, pixels[16][16];
+	unsigned short w, h, pixels[16][16];
 };
 
 

@@ -4,17 +4,18 @@ $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/configure:: $(CONTRIB_DIR)/gcc-$(GCC_VERSION)
 	@# Enable support for passing custom 'tmake_file' and 'extra_parts' to the
 	@# GCC configure process uncommenting the default initialization of the
 	@# respective variables. The 'extra_parts' variable is used to carry the
-	@# the information about which crtN files are to be created.
-	@#
-	@# The 't-386elf' file must the treated to prevent it from defining the
-	@# 'EXTRA_PARTS' variable. If defined, the 'libgcc' Makefile would prepare
-	@# it against our custom list of 'extra_parts' and consequently fail.
+	@# information about which crtN files are to be created.
 	@#
 	$(VERBOSE)sed -i "/^tmake_file=$$/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/gcc/config.gcc
 	$(VERBOSE)sed -i "/^extra_parts=$$/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/gcc/config.gcc
+	$(VERBOSE)sed -i "/^tmake_file=$$/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libgcc/config.host
 	$(VERBOSE)sed -i "/^extra_parts=$$/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libgcc/config.host
-	$(VERBOSE)sed -i "/^EXTRA_PARTS=/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/gcc/config/i386/t-i386elf
-	$(VERBOSE)sed -i "/^EXTRA_MULTILIB_PARTS *=/s/^/#/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/gcc/config/arm/t-arm-elf
+	$(VERBOSE)sed -i "/extra_parts=\"crt.*\"/s/^/#/g" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libgcc/config.host
+	@#
+	@# /* TODO: add documentation */
+	@#
+	$(VERBOSE)sed -i "s/^libgcov-objects = .*/libgcov-objects = /" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libgcc/Makefile.in
+	$(VERBOSE)sed -i "s/-lc//" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libgcc/config/t-{libunwind-elf,slibgcc}
 	@#
 	@# Let 'config.gcc' expand our already populated 'tmake_file' variable rather
 	@# than making a hard assignment. This is needed for the ARM platform because
@@ -83,10 +84,10 @@ $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/configure:: $(CONTRIB_DIR)/gcc-$(GCC_VERSION)
 	@# in text relocations. Because for base tool chains, no 'dynamic_linker'
 	@# is defined (see 'libtool.m4'), 'dynamic_linker' is set to 'no', which
 	@# results in 'can_build_shared = no', which, in turn , results
-	@# in 'enable_shared = no', which, in turn, sets 'LIBSUPCXX_PICFLAGS' to
+	@# in 'enable_shared = no', which, in turn, sets 'PIC_CXXFLAGS' to
 	@# nothing rather then '-prefer-pic'.
 	@#
-	$(VERBOSE)sed -i "/LIBSUPCXX_PICFLAGS=$$/s/LIB/__LIB/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libstdc++-v3/configure.ac
+	$(VERBOSE)sed -i "/PIC_CXXFLAGS=$$/s/PIC/__PIC/" $(CONTRIB_DIR)/gcc-$(GCC_VERSION)/libstdc++-v3/configure.ac
 	@#
 	@# Re-generate configure scripts
 	@#
