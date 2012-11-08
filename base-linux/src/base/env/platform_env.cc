@@ -13,6 +13,7 @@
 
 #include <util/arg_string.h>
 #include <base/platform_env.h>
+#include <base/thread.h>
 
 using namespace Genode;
 
@@ -37,7 +38,7 @@ Platform_env::Local_parent::session(Service_name const &service_name,
 		Rm_session_mmap *rm = new (env()->heap())
 		                      Rm_session_mmap(true, size);
 
-		return Local_interface::capability(rm);
+		return Session_capability::local_cap(rm);
 	}
 
 	return Parent_client::session(service_name, args);
@@ -57,13 +58,9 @@ void Platform_env::Local_parent::close(Session_capability session)
 	/*
 	 * Detect capability to local RM session
 	 */
-	try {
-		Capability<Rm_session_mmap> rm =
-			static_cap_cast<Rm_session_mmap>(session);
+	Capability<Rm_session_mmap> rm = static_cap_cast<Rm_session_mmap>(session);
 
-		destroy(env()->heap(), Local_interface::deref(rm));
-
-	} catch (Local_interface::Non_local_capability) { }
+	destroy(env()->heap(), Capability<Rm_session_mmap>::deref(rm));
 }
 
 
@@ -94,4 +91,37 @@ unsigned long Platform_env::_get_env_ulong(const char *key)
 	}
 
 	return 0;
+}
+
+
+/*****************************
+ ** Support for IPC library **
+ *****************************/
+
+namespace Genode {
+
+	Native_connection_state server_socket_pair()
+	{
+		/*
+		 * Obtain access to Linux-specific extension of the CPU session
+		 * interface. We can cast to the specific type because the Linux
+		 * version of 'Platform_env' is hosting a 'Linux_cpu_client' object.
+		 */
+		Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
+
+		if (!cpu) {
+			PERR("could not obtain Linux extension to CPU session interface");
+			struct Could_not_access_linux_cpu_session { };
+			throw Could_not_access_linux_cpu_session();
+		}
+
+		Native_connection_state ncs;
+
+		Thread_base *thread = Thread_base::myself();
+		if (thread) {
+			ncs.server_sd = cpu->server_sd(thread->cap()).dst().socket;
+			ncs.client_sd = cpu->client_sd(thread->cap()).dst().socket;
+		}
+		return ncs;
+	}
 }

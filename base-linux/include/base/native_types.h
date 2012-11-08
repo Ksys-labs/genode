@@ -64,6 +64,7 @@ namespace Genode {
 	/**
 	 * Native thread contains more thread-local data than just the ID
 	 *
+	 * FIXME doc
 	 * A thread needs two sockets as it may be a server that depends on another
 	 * service during request processing. If the server socket would be used for
 	 * the client call, the server thread may be unblocked by further requests
@@ -73,8 +74,7 @@ namespace Genode {
 	 */
 	struct Native_thread : Native_thread_id
 	{
-		int client;  /* socket used as IPC client */
-		int server;  /* socket used as IPC server */
+		bool is_ipc_server;
 
 		/**
 		 * Opaque pointer to additional thread-specific meta data
@@ -85,7 +85,7 @@ namespace Genode {
 		 */
 		Thread_meta_data *meta_data;
 
-		Native_thread() : client(-1), server(-1), meta_data(0) { }
+		Native_thread() : is_ipc_server(false), meta_data(0) { }
 	};
 
 	inline bool operator == (Native_thread_id t1, Native_thread_id t2) {
@@ -94,10 +94,22 @@ namespace Genode {
 	inline bool operator != (Native_thread_id t1, Native_thread_id t2) {
 		return (t1.tid != t2.tid) || (t1.pid != t2.pid); }
 
-	struct Cap_dst_policy {
-		typedef long Dst;
-		static bool valid(Dst id) { return id != 0; }
-		static Dst  invalid()     { return 0;       }
+	struct Cap_dst_policy
+	{
+		struct Dst
+		{
+			int socket;
+
+			/**
+			 * Default constructor creates invalid destination
+			 */
+			Dst() : socket(-1) { }
+
+			explicit Dst(int socket) : socket(socket) { }
+		};
+
+		static bool valid(Dst id) { return id.socket != -1; }
+		static Dst  invalid()     { return Dst(); }
 		static void copy(void* dst, Native_capability_tpl<Cap_dst_policy>* src);
 	};
 
@@ -107,7 +119,19 @@ namespace Genode {
 	typedef struct { } Native_utcb;
 
 	typedef Native_capability_tpl<Cap_dst_policy> Native_capability;
-	typedef int Native_connection_state;  /* socket descriptor */
+
+	/**
+	 * The connection state is the socket handle of the RPC entrypoint
+	 */
+	struct Native_connection_state
+	{
+		int server_sd;
+		int client_sd;
+
+		Native_connection_state() : server_sd(-1), client_sd(-1) { }
+	};
+
+	enum { PARENT_SOCKET_HANDLE = 100 };
 
 	struct Native_config
 	{
@@ -125,7 +149,6 @@ namespace Genode {
 		 */
 		static addr_t context_virtual_size() { return 0x00100000UL; }
 	};
-
 }
 
 #endif /* _INCLUDE__BASE__NATIVE_TYPES_H_ */

@@ -1,6 +1,6 @@
 TARGET        = core
 REQUIRES      = linux
-LIBS          = cxx ipc heap core_printf child lock raw_server syscall rpath
+LIBS          = cxx ipc heap core_printf child lock raw_server syscall
 
 GEN_CORE_DIR  = $(BASE_DIR)/src/core
 
@@ -12,6 +12,7 @@ SRC_CC        = main.cc \
                 ram_session_support.cc \
                 rom_session_component.cc \
                 cpu_session_component.cc \
+                cpu_session_extension.cc \
                 cpu_session_support.cc \
                 pd_session_component.cc \
                 io_mem_session_component.cc \
@@ -24,7 +25,8 @@ SRC_CC        = main.cc \
 
 INC_DIR      += $(REP_DIR)/src/core/include \
                 $(GEN_CORE_DIR)/include \
-                $(REP_DIR)/src/platform
+                $(REP_DIR)/src/platform \
+                $(REP_DIR)/src/base/ipc
 
 HOST_INC_DIR += /usr/include
 

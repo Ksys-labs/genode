@@ -16,6 +16,7 @@
 #include <base/thread.h>
 #include <base/snprintf.h>
 #include <base/sleep.h>
+#include <linux_cpu_session/linux_cpu_session.h>
 
 /* Linux syscall bindings */
 #include <linux_syscalls.h>
@@ -26,13 +27,20 @@ using namespace Genode;
 static void empty_signal_handler(int) { }
 
 
+static Lock &startup_lock()
+{
+	static Lock lock(Lock::LOCKED);
+	return lock;
+}
+
+
 /**
  * Signal handler for killing the thread
  */
 static void thread_exit_signal_handler(int) { lx_exit(0); }
 
 
-static void thread_start(void *)
+static void thread_start(void *arg)
 {
 	/*
 	 * Set signal handler such that canceled system calls get not
@@ -45,12 +53,25 @@ static void thread_start(void *)
 	 */
 	lx_sigaction(LX_SIGCHLD, (void (*)(int))1);
 
+	Thread_base *thread = (Thread_base *)arg;
+
+	/* inform core about the new thread and process ID of the new thread */
+	Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
+	if (cpu)
+		cpu->thread_id(thread->cap(), thread->tid().pid, thread->tid().tid);
+
+	/* wakeup 'start' function */
+	startup_lock().unlock();
+
 	Thread_base::myself()->entry();
 	sleep_forever();
 }
 
 
-void Thread_base::_init_platform_thread() { }
+void Thread_base::_init_platform_thread()
+{
+	_thread_cap = env()->cpu_session()->create_thread(_context->name);
+}
 
 
 void Thread_base::_deinit_platform_thread()
@@ -86,6 +107,10 @@ void Thread_base::_deinit_platform_thread()
 
 void Thread_base::start()
 {
+	/* synchronize calls of the 'start' function */
+	static Lock lock;
+	Lock::Guard guard(lock);
+
 	/*
 	 * The first time we enter this code path, the 'start' function is
 	 * called by the main thread as there cannot exist other threads
@@ -103,14 +128,8 @@ void Thread_base::start()
 	_tid.tid = lx_create_thread(thread_start, thread_sp, this);
 	_tid.pid = lx_getpid();
 
-	/*
-	 * Inform core about the new thread by calling create_thread and encoding
-	 * the thread's PID in the thread-name argument.
-	 */
-	char name_and_pid[Cpu_session::THREAD_NAME_LEN + 2*16];
-	snprintf(name_and_pid, sizeof(name_and_pid), "%s:0x%x:0x%x",
-	         _context->name, _tid.tid, _tid.pid);
-	_thread_cap = env()->cpu_session()->create_thread(name_and_pid);
+	/* wait until the 'thread_start' function got entered */
+	startup_lock().lock();
 }
 
 

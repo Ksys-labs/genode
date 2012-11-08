@@ -23,11 +23,11 @@
 #include <base/env.h>
 #include <base/printf.h>
 #include <util/misc_math.h>
-#include <base/local_interface.h>
 #include <base/heap.h>
 #include <parent/client.h>
 #include <ram_session/client.h>
-#include <cpu_session/client.h>
+#include <linux_cpu_session/client.h>
+#include <pd_session/client.h>
 
 namespace Genode {
 
@@ -148,12 +148,10 @@ namespace Genode {
 
 
 			/*
-			 * On Linux, we use a local region manager session
-			 * that attaches dataspaces via mmap to the local
-			 * address space.
+			 * On Linux, we use a local region manager session that attaches
+			 * dataspaces via mmap to the local address space.
 			 */
-			class Rm_session_mmap : public Local_interface,
-			                        public Rm_session,
+			class Rm_session_mmap : public Rm_session,
 			                        public Dataspace
 			{
 				private:
@@ -238,7 +236,7 @@ namespace Genode {
 					 */
 					Dataspace_capability dataspace()
 					{
-						return Local_interface::capability(this);
+						return Dataspace_capability::local_cap(this);
 					}
 			};
 
@@ -323,11 +321,12 @@ namespace Genode {
 
 			Parent_capability _parent_cap()
 			{
-				long tid        = _get_env_ulong("parent_tid");
 				long local_name = _get_env_ulong("parent_local_name");
 
 				/* produce typed capability manually */
-				return reinterpret_cap_cast<Parent>(Native_capability(tid, local_name));
+				typedef Native_capability::Dst Dst;
+				Dst const dst(PARENT_SOCKET_HANDLE);
+				return reinterpret_cap_cast<Parent>(Native_capability(dst, local_name));
 			}
 
 
@@ -339,8 +338,9 @@ namespace Genode {
 			Ram_session_capability        _ram_session_cap;
 			Expanding_ram_session_client  _ram_session_client;
 			Cpu_session_capability        _cpu_session_cap;
-			Cpu_session_client            _cpu_session_client;
+			Linux_cpu_session_client      _cpu_session_client;
 			Rm_session_mmap               _rm_session_mmap;
+			Pd_session_client             _pd_session_client;
 			Heap                          _heap;
 
 		public:
@@ -354,8 +354,9 @@ namespace Genode {
 				_ram_session_cap(static_cap_cast<Ram_session>(parent()->session("Env::ram_session", ""))),
 				_ram_session_client(_ram_session_cap),
 				_cpu_session_cap(static_cap_cast<Cpu_session>(parent()->session("Env::cpu_session", ""))),
-				_cpu_session_client(_cpu_session_cap),
+				_cpu_session_client(static_cap_cast<Linux_cpu_session>(parent()->session("Env::cpu_session", ""))),
 				_rm_session_mmap(false),
+				_pd_session_client(static_cap_cast<Pd_session>(parent()->session("Env::pd_session", ""))),
 				_heap(&_ram_session_client, &_rm_session_mmap)
 			{ }
 
@@ -382,9 +383,9 @@ namespace Genode {
 			Ram_session_capability  ram_session_cap() { return  _ram_session_cap; }
 			Rm_session             *rm_session()      { return &_rm_session_mmap; }
 			Heap                   *heap()            { return &_heap; }
-			Cpu_session            *cpu_session()     { return &_cpu_session_client; }
+			Linux_cpu_session      *cpu_session()     { return &_cpu_session_client; }
 			Cpu_session_capability  cpu_session_cap() { return  _cpu_session_cap; }
-			Pd_session             *pd_session()      { return 0; }
+			Pd_session             *pd_session()      { return &_pd_session_client; }
 	};
 }
 

@@ -18,9 +18,7 @@
 
 /* local includes */
 #include "platform_thread.h"
-
-/* Linux syscall helper */
-#include <linux_syscalls.h>
+#include "server_socket_pair.h"
 
 using namespace Genode;
 
@@ -29,41 +27,21 @@ typedef Token<Scanner_policy_identifier_with_underline> Tid_token;
 
 
 Platform_thread::Platform_thread(const char *name, unsigned, addr_t)
+: _tid(-1), _pid(-1)
 {
-	/* search for thread-id portion of thread name */
-	Tid_token tok(name);
-	while (tok.type() != Tid_token::END && tok[0] != ':')
-		tok = tok.next();
+	strncpy(_name, name, min(sizeof(_name), strlen(name)));
+}
 
-	/* tok points at the colon separator, next token is the id */
-	tok = tok.next();
 
-	if (tok.type() == Tid_token::END) {
-		PWRN("Invalid format of thread name.");
-		return;
-	}
+Platform_thread::~Platform_thread()
+{
+	ep_sd_registry()->disassociate(_ncs.client_sd);
 
-	/* convert string to thread id */
-	ascii_to(tok.start(), &_tid);
+	if (_ncs.client_sd)
+		lx_close(_ncs.client_sd);
 
-	/* search for process-id portion of thread name */
-	while (tok.type() != Tid_token::END && tok[0] != ':')
-		tok = tok.next();
-
-	/* tok points at the colon separator, next token is the id */
-	tok = tok.next();
-
-	if (tok.type() == Tid_token::END) {
-		PWRN("Invalid format of thread name.");
-		return;
-	}
-
-	/* convert string to process id */
-	ascii_to(tok.start(), &_pid);
-
-	/* initialize private members */
-	size_t name_len = tok.start() - name;
-	strncpy(_name, name, min(sizeof(_name), name_len));
+	if (_ncs.server_sd)
+		lx_close(_ncs.server_sd);
 }
 
 
@@ -83,4 +61,21 @@ void Platform_thread::pause()
 void Platform_thread::resume()
 {
 	PDBG("not implemented");
+}
+
+
+int Platform_thread::client_sd()
+{
+	/* construct socket pair on first call */
+	if (_ncs.client_sd == -1)
+		_ncs = create_server_socket_pair(_tid);
+
+	return _ncs.client_sd;
+}
+
+
+int Platform_thread::server_sd()
+{
+	client_sd();
+	return _ncs.server_sd;
 }

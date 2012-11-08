@@ -14,6 +14,7 @@
 #include <base/crt0.h>
 #include <base/printf.h>
 #include <_main_helper.h>
+#include <linux_cpu_session/linux_cpu_session.h>
 
 
 extern "C" int raw_write_str(const char *str);
@@ -39,6 +40,8 @@ int genode___cxa_atexit(void (*func)(void*), void *arg, void *dso)
 extern char **environ;
 extern char **lx_environ;
 
+static void empty_signal_handler(int) { }
+
 /*
  * This function must be called before any other static constructor in the Genode
  * application, so it gets the highest priority (lowest priority number >100)
@@ -46,6 +49,12 @@ extern char **lx_environ;
 __attribute__((constructor(101))) void lx_hybrid_init()
 {
 	lx_environ = environ;
+
+	/*
+	 * Set signal handler such that canceled system calls get not
+	 * transparently retried after a signal gets received.
+	 */
+	lx_sigaction(LX_SIGUSR1, empty_signal_handler);
 }
 
 /*
@@ -58,6 +67,7 @@ __attribute__((constructor(101))) void lx_hybrid_init()
  */
 char **genode_argv = 0;
 int    genode_argc = 1;
+
 
 /************
  ** Thread **
@@ -156,7 +166,21 @@ namespace Genode {
 }
 
 
-static void empty_signal_handler(int) { }
+/**
+ * Return Linux-specific extension of the Env::CPU session interface
+ */
+Linux_cpu_session *cpu_session()
+{
+	Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
+
+	if (!cpu) {
+		PERR("could not obtain Linux extension to CPU session interface");
+		struct Could_not_access_linux_cpu_session { };
+		throw Could_not_access_linux_cpu_session();
+	}
+
+	return cpu;
+}
 
 
 static void adopt_thread(Thread_meta_data *meta_data)
@@ -277,6 +301,17 @@ Thread_base::Thread_base(const char *name, size_t stack_size)
 	}
 
 	_tid.meta_data->construct_lock.lock();
+
+	Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
+
+	if (!cpu) {
+		PERR("could not obtain Linux extension to CPU session interface");
+		struct Could_not_access_linux_cpu_session { };
+		throw Could_not_access_linux_cpu_session();
+	}
+
+	_thread_cap = cpu_session()->create_thread(name);
+	cpu_session()->thread_id(_thread_cap, _tid.pid, _tid.tid);
 }
 
 
@@ -305,4 +340,7 @@ Thread_base::~Thread_base()
 
 	destroy(env()->heap(), _tid.meta_data);
 	_tid.meta_data = 0;
+
+	/* inform core about the killed thread */
+	cpu_session()->kill_thread(_thread_cap);
 }
