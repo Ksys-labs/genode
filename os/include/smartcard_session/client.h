@@ -53,8 +53,8 @@ namespace Smartcard {
 			_io_buffer(call<Rpc_dataspace>())
 		{ }
 
-		ReaderStatus get_reader_status() const {
-			call<Rpc_get_reader_status>();
+		ReaderStatus reader_status() const {
+			call<Rpc_reader_status>();
 			return *reinterpret_cast<ReaderStatus*>(_io_buffer.base);
 		}
 

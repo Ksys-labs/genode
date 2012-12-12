@@ -26,7 +26,7 @@ namespace Smartcard {
 
 		virtual bool is_card_present() = 0;
 
-		virtual void get_reader_status(ReaderStatus *status) = 0;
+		virtual void reader_status(ReaderStatus *status) = 0;
 
 		virtual Genode::size_t transmit(const void *cmd_buf, Genode::size_t cmd_length, void *resp_buf) = 0;
 	};

@@ -24,7 +24,7 @@ public:
 	const char* what() const { return _msg; }
 };
 
-class DataTooLong: ReaderException {
+class DataTooLong: public ReaderException {
 public:
 	DataTooLong(const char *msg = "Data too long"): ReaderException(msg) {}
 };
@@ -34,17 +34,17 @@ public:
 	UnknownHeaderSignature(const char *msg = "Unknown header signature"): ReaderException(msg) {}
 };
 
-class Timeout: ReaderException {
+class Timeout: public ReaderException {
 public:
 	Timeout(const char *msg = "Timeout"): ReaderException(msg) {}
 };
 
-class BadLRC: ReaderException {
+class BadLRC: public ReaderException {
 public:
 	BadLRC(const char *msg = "Bad LRC in response"): ReaderException(msg) {}
 };
 
-class AlparNac: ReaderException {
+class AlparNac: public ReaderException {
 public:
 	AlparNac(const char *msg = "NAC in response"): ReaderException(msg) {}
 };
