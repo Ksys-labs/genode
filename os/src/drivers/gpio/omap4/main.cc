@@ -195,8 +195,8 @@ int main(int, char **)
 			if (gpio_node.is_last("gpio")) break;
 		}
 	}
-	catch (Genode::Xml_node::Nonexistent_sub_node) {
-		PERR("No GPIO config");
+	catch (...) {
+		PDBG("No GPIO config");
 	}
 
 	/*
