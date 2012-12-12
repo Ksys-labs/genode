@@ -18,6 +18,7 @@
 #include <platform_pd.h>
 #include <kernel/syscalls.h>
 #include "include/platform.h"
+#include <cpu_session/cpu_session.h>
 
 static bool const verbose = 0;
 
@@ -63,11 +64,11 @@ Kernel::Utcb* Genode::physical_utcb(Native_thread_id tid)
 	}
 
 	if(!phys_utcb[tid]) {
-		if (!platform_specific()->
-		           core_mem_alloc()->
-		           alloc_aligned(sizeof(Kernel::Utcb), 
-		                         (void**)&phys_utcb[tid], 
-		                         Kernel::Utcb::ALIGNMENT_LOG2))
+		if (platform_specific()->
+		          core_mem_alloc()->
+		          alloc_aligned(sizeof(Kernel::Utcb), 
+		                        (void**)&phys_utcb[tid], 
+		                        Kernel::Utcb::ALIGNMENT_LOG2).is_error())
 		{
 			PERR("Allocate memory for a new UTCB failed");
 			return 0;
@@ -87,10 +88,17 @@ void Platform_thread::affinity(unsigned int cpu_no) { PERR("not implemented"); }
 void Platform_thread::cancel_blocking() { PERR("not implemented"); }
 
 
-int Platform_thread::state(Thread_state *state_dst)
+void Platform_thread::state(Thread_state s)
 {
-	PERR("not implemented");
-	return -1;
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
+}
+
+
+Thread_state Platform_thread::state()
+{
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
 }
 
 

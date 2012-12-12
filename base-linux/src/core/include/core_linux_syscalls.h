@@ -72,11 +72,6 @@ inline int lx_execve(const char *filename, char *const argv[],
 }
 
 
-/**
- * Send signal to process
- *
- * This function is used by core to kill processes.
- */
 inline int lx_kill(int pid, int signal)
 {
 	return lx_syscall(SYS_kill, pid, signal);
@@ -90,13 +85,31 @@ inline int lx_create_process(int (*entry)(void *), void *stack, void *arg)
 }
 
 
+inline int lx_setuid(unsigned int uid)
+{
+	return lx_syscall(SYS_setuid, uid);
+}
+
+
+inline int lx_setgid(unsigned int gid)
+{
+	return lx_syscall(SYS_setgid, gid);
+}
+
+
 /*********************
  ** Chroot handling **
  *********************/
 
-inline int lx_chroot(const char *path)
+inline int lx_chroot(char const *path)
 {
 	return lx_syscall(SYS_chroot, path);
+}
+
+
+inline int lx_chdir(char const *path)
+{
+	return lx_syscall(SYS_chdir, path);
 }
 
 

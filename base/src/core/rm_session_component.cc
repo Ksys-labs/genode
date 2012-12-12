@@ -256,6 +256,7 @@ int Rm_client::pager(Ipc_pager &pager)
 	Mapping mapping(dst_fault_area.base(),
 	                src_fault_area.base(),
 	                src_dataspace->write_combined(),
+	                src_dataspace->is_io_mem(),
 	                map_size_log2,
 	                src_dataspace->writable());
 
@@ -349,15 +350,15 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 	/* allocate region for attachment */
 	void *r = 0;
 	if (use_local_addr) {
-		switch (_map.alloc_addr(size, local_addr)) {
+		switch (_map.alloc_addr(size, local_addr).value) {
 
-		case Range_allocator::OUT_OF_METADATA:
+		case Range_allocator::Alloc_return::OUT_OF_METADATA:
 			throw Out_of_metadata();
 
-		case Range_allocator::RANGE_CONFLICT:
+		case Range_allocator::Alloc_return::RANGE_CONFLICT:
 			throw Region_conflict();
 
-		case Range_allocator::ALLOC_OK:
+		case Range_allocator::Alloc_return::OK:
 			r = local_addr;
 			break;
 		}
@@ -380,8 +381,15 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 				continue;
 
 			/* try allocating the align region */
-			if (_map.alloc_aligned(size, &r, align_log2))
+			Range_allocator::Alloc_return alloc_return =
+				_map.alloc_aligned(size, &r, align_log2);
+
+			if (alloc_return.is_ok())
 				break;
+			else if (alloc_return.value == Range_allocator::Alloc_return::OUT_OF_METADATA) {
+				_map.free(r);
+				throw Out_of_metadata();
+			}
 		}
 
 		if (align_log2 < get_page_size_log2()) {
@@ -412,9 +420,9 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 		     dsc, dsc->phys_addr(), dsc->size(), offset, (addr_t)r, (addr_t)r + size);
 
 	/* check if attach operation resolves any faulting region-manager clients */
-	for (Rm_faulter *faulter = _faulters.first(); faulter; ) {
+	for (Rm_faulter *faulter = _faulters.head(); faulter; ) {
 
-		/* remeber next pointer before possibly removing current list element */
+		/* remember next pointer before possibly removing current list element */
 		Rm_faulter *next = faulter->next();
 
 		if (faulter->fault_in_addr_range((addr_t)r, size)) {
@@ -568,7 +576,7 @@ Pager_capability Rm_session_component::add_client(Thread_capability thread)
 
 	Rm_client *cl;
 	try { cl = new(&_client_slab) Rm_client(this, badge); }
-	catch (Allocator::Out_of_memory) { throw Out_of_memory(); }
+	catch (Allocator::Out_of_memory) { throw Out_of_metadata(); }
 
 	_clients.insert(cl);
 
@@ -642,7 +650,7 @@ void Rm_session_component::fault(Rm_faulter *faulter, addr_t pf_addr,
 	faulter->fault(this, Rm_session::State(pf_type, pf_addr));
 
 	/* enqueue faulter */
-	_faulters.insert(faulter);
+	_faulters.enqueue(faulter);
 
 	/* issue fault signal */
 	_fault_notifier.submit();
@@ -670,7 +678,7 @@ Rm_session::State Rm_session_component::state()
 	Lock::Guard lock_guard(_lock);
 
 	/* pick one of the currently faulted threads */
-	Rm_faulter *faulter = _faulters.first();
+	Rm_faulter *faulter = _faulters.head();
 
 	/* return ready state if there are not current faulters */
 	if (!faulter)
@@ -740,7 +748,7 @@ Rm_session_component::~Rm_session_component()
 	_ds_ep->dissolve(&_ds);
 
 	/* remove all faulters with pending page faults at this rm session */
-	while (Rm_faulter *faulter = _faulters.first()) {
+	while (Rm_faulter *faulter = _faulters.head()) {
 		_lock.unlock();
 		faulter->dissolve_from_faulting_rm_session();
 		_lock.lock();
@@ -748,6 +756,15 @@ Rm_session_component::~Rm_session_component()
 
 	/* remove all clients */
 	while (Rm_client *cl = _client_slab.raw()->first_object()) {
+		Thread_capability thread_cap = cl->thread_cap();                        
+		if (thread_cap.valid()) {                                               
+			/* lookup thread and reset pager pointer */
+			Cpu_thread_component *cpu_thread = dynamic_cast<Cpu_thread_component *>
+			                                   (_thread_ep->obj_by_cap(thread_cap));
+			if (cpu_thread)                                                     
+				cpu_thread->platform_thread()->pager(0);                        
+		}                                                                       
+
 		_lock.unlock();
 		cl->dissolve_from_faulting_rm_session();
 		this->dissolve(cl);

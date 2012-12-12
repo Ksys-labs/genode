@@ -157,20 +157,30 @@ void Platform_thread::unbind()
 void Platform_thread::pager(Pager_object *pager_obj)
 {
 	_pager_obj   = pager_obj;
-	_pager.local = pager_obj->cap();
+	if (_pager_obj)
+		_pager.local = pager_obj->cap();
+	else
+		_pager.local = Native_capability();
 }
 
 
-int Platform_thread::state(Thread_state *state_dst)
+void Platform_thread::state(Thread_state s)
 {
-	if (_pager_obj)
-		*state_dst = _pager_obj->state;
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
+}
 
-	state_dst->kcap = _gate.remote;
-	state_dst->id   = _gate.local.local_name();
-	state_dst->utcb = _utcb;
 
-	return 0;
+Thread_state Platform_thread::state()
+{
+	Thread_state s;
+	if (_pager_obj) s = _pager_obj->state;
+
+	s.kcap = _gate.remote;
+	s.id   = _gate.local.local_name();
+	s.utcb = _utcb;
+
+	return s;
 }
 
 

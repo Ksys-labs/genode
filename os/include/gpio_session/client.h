@@ -26,59 +26,54 @@ namespace Gpio {
 		: Genode::Rpc_client<Session>(session) { }
 
 
-		void set_direction_output(int gpio, bool enable)
+		void direction_output(int gpio, bool enable)
 		{
-			call<Rpc_set_direction_output>(gpio, enable);
+			call<Rpc_direction_output>(gpio, enable);
 		}
 
-		void set_direction_input(int gpio)
+		void direction_input(int gpio)
 		{
-			call<Rpc_set_direction_input>(gpio);
+			call<Rpc_direction_input>(gpio);
 		}
 
-		void set_dataout(int gpio, bool enable)
+		void dataout(int gpio, bool enable)
 		{
-			call<Rpc_set_dataout>(gpio, enable);
+			call<Rpc_dataout>(gpio, enable);
 		}
 
-		int get_datain(int gpio)
+		int datain(int gpio)
 		{
-			return call<Rpc_get_datain>(gpio);
+			return call<Rpc_datain>(gpio);
 		}
 
-		void set_debounce_enable(int gpio, bool enable)
+		void debounce_enable(int gpio, bool enable)
 		{
-			call<Rpc_set_debounce_enable>(gpio, enable);
+			call<Rpc_debounce_enable>(gpio, enable);
 		}
 
-		void set_debouncing_time(int gpio, unsigned int us)
+		void debouncing_time(int gpio, unsigned int us)
 		{
-			call<Rpc_set_debouncing_time>(gpio, us);
+			call<Rpc_debouncing_time>(gpio, us);
 		}
 
-		void set_falling_detect(int gpio, bool enable)
+		void falling_detect(int gpio, bool enable)
 		{
-			call<Rpc_set_falling_detect>(gpio, enable);
+			call<Rpc_falling_detect>(gpio, enable);
 		}
 
-		void set_rising_detect(int gpio, bool enable)
+		void rising_detect(int gpio, bool enable)
 		{
-			call<Rpc_set_rising_detect>(gpio, enable);
+			call<Rpc_rising_detect>(gpio, enable);
 		}
 
-		void set_irq_enable(int gpio, bool enable)
+		void irq_enable(int gpio, bool enable)
 		{
-			call<Rpc_set_irq_enable>(gpio, enable);
+			call<Rpc_irq_enable>(gpio, enable);
 		}
 
-		void register_signal(Genode::Signal_context_capability cap, int gpio)
+		void irq_sigh(Signal_context_capability cap, int gpio)
 		{
-			call<Rpc_register_signal>(cap, gpio);
-		}
-
-		void unregister_signal(int gpio)
-		{
-			call<Rpc_unregister_signal>(gpio);
+			call<Rpc_irq_sigh>(cap, gpio);
 		}
 	};
 }

@@ -52,10 +52,6 @@ Platform_thread::~Platform_thread()
 	}
 	/* destroy object at the kernel */
 	Kernel::delete_thread(_id);
-
-	/* free kernel object space */
-	Range_allocator * ram = platform()->ram_alloc();
-	ram->free(&_kernel_thread, Kernel::thread_size());
 }
 
 
@@ -72,7 +68,7 @@ Platform_thread::Platform_thread(const char * name,
 	/* create UTCB for a core thread */
 	Range_allocator * const ram = platform()->ram_alloc();
 	assert(ram->alloc_aligned(sizeof(Native_utcb), (void **)&_phys_utcb,
-	                          MIN_MAPPING_SIZE_LOG2));
+	                          MIN_MAPPING_SIZE_LOG2).is_ok());
 	_virt_utcb = _phys_utcb;
 
 	/* common constructor parts */
@@ -122,9 +118,6 @@ int Platform_thread::join_pd(unsigned long const pd_id,
 
 void Platform_thread::_init()
 {
-	/* create kernel object */
-	Range_allocator * ram = platform()->ram_alloc();
-	assert(ram->alloc(Kernel::thread_size(), &_kernel_thread));
 	_id = Kernel::new_thread(_kernel_thread, this);
 	assert(_id);
 }
@@ -153,8 +146,8 @@ int Platform_thread::start(void * ip, void * sp, unsigned int cpu_no)
 		catch (...) { assert(0); }
 	}
 	/* let thread participate in CPU scheduling */
-	_software_tlb = Kernel::start_thread(this, ip, sp, cpu_no);
-	return _software_tlb ? 0 : -1;
+	_tlb = Kernel::start_thread(this, ip, sp, cpu_no);
+	return _tlb ? 0 : -1;
 }
 
 

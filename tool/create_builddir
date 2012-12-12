@@ -27,12 +27,14 @@ usage:
 	@echo "                  'nova_x86_64'"
 	@echo "                  'codezero_vpb926'"
 	@echo "                  'mb_s3a_starter_kit'"
-	@echo "                  'hw_panda_a2'"
+	@echo "                  'hw_panda'"
 	@echo "                  'hw_vea9x4'"
 	@echo "                  'hw_pbxa9'"
+	@echo "                  'hw_imx31'"
 	@echo "                  'foc_x86_32'"
 	@echo "                  'foc_x86_64'"
 	@echo "                  'foc_pbxa9'"
+	@echo "                  'foc_imx53'"
 	@echo "                  'foc_vea9x4'"
 	@echo "                  'foc_panda'"
 	@echo "                  'lx_hybrid_x86'"
@@ -117,7 +119,7 @@ $(BUILD_DIR)/Makefile:
 #
 # Add 'ports-foc' repository to Fiasco.OC build directory
 #
-ifeq ($(filter-out foc_x86_32 foc_pbxa9 foc_overo foc_vea9x4 foc_panda,$(PLATFORM)),)
+ifeq ($(filter-out foc_x86_32 foc_imx53 foc_pbxa9 foc_vea9x4 foc_panda foc_overo,$(PLATFORM)),)
 $(BUILD_DIR)/etc/build.conf::
 	@cat $(BUILD_CONF).ports-foc >> $@
 endif
@@ -133,7 +135,7 @@ endif
 #
 # Add ARM drivers repositories to ARM build directories
 #
-ifeq ($(filter-out foc_panda,$(PLATFORM)),)
+ifeq ($(filter-out foc_panda hw_panda foc_imx53 foc_overo,$(PLATFORM)),)
 $(BUILD_DIR)/etc/build.conf::
 	@cat $(BUILD_CONF).drivers_arm >> $@
 endif
@@ -172,6 +174,9 @@ foc_vea9x4::
 foc_panda::
 	@echo "SPECS = genode foc_panda" > $(BUILD_DIR)/etc/specs.conf
 
+foc_imx53::
+	@echo "SPECS = genode foc_imx53" > $(BUILD_DIR)/etc/specs.conf
+
 codezero_vpb926::
 	@echo "CODEZERO_DIR = $(GENODE_DIR)/base-codezero/contrib" > $(BUILD_DIR)/etc/codezero.conf
 
@@ -187,8 +192,11 @@ hw_pbxa9::
 hw_vea9x4::
 	@echo "SPECS = genode hw_vea9x4" > $(BUILD_DIR)/etc/specs.conf
 
-hw_panda_a2::
-	@echo "SPECS = genode hw_panda_a2" > $(BUILD_DIR)/etc/specs.conf
+hw_panda::
+	@echo "SPECS = genode hw_panda" > $(BUILD_DIR)/etc/specs.conf
+
+hw_imx31::
+	@echo "SPECS = genode hw_imx31" > $(BUILD_DIR)/etc/specs.conf
 
 lx_hybrid_x86::
 	@echo "CROSS_DEV_PREFIX =" > $(BUILD_DIR)/etc/tools.conf

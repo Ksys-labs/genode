@@ -107,7 +107,7 @@ class Gpio::Driver
 
 		bool                      irq_enabled[MAX_GPIOS];
 
-		Signal_transmitter        *_transmitters[MAX_GPIOS];
+		Signal_context_capability _sign[MAX_GPIOS];
 
 	public:
 
@@ -122,18 +122,12 @@ class Gpio::Driver
 		bool set_gpio_rising_detect(int gpio, bool enable);
 		bool set_gpio_irq_enable(int gpio, bool enable);
 
-		void register_signal(Genode::Signal_context_capability cap, int gpio)
+		void register_signal(Signal_context_capability cap, int gpio)
 		{
-			if (!_transmitters[gpio])
+			if (!_sign[gpio].valid())
 			{
-				_transmitters[gpio] = new (env()->heap()) Signal_transmitter(cap);
+				_sign[gpio] = cap;
 			}
-		}
-
-		void unregister_signal(int gpio)
-		{
-			delete _transmitters[gpio];
-			_transmitters[gpio] = 0;
 		}
 
 		void handle_event(int irq_number);
@@ -146,11 +140,13 @@ class Gpio::Driver
 
 		inline void _irq_signal_send(int gpio)
 		{
-			if (_transmitters[gpio])
+			if (_sign[gpio].valid())
 			{
 				if (verbose)
 					PDBG("gpio=%d", gpio);
-				_transmitters[gpio]->submit();
+				
+				Signal_transmitter transmitter(_sign[gpio]);
+				transmitter.submit();
 			}
 		}
 
@@ -195,8 +191,6 @@ Gpio::Driver::Driver()
 	_gpio_bank[4] = &_gpio5;
 	_gpio_bank[5] = &_gpio6;
 
-	memset(_transmitters, 0, sizeof(_transmitters));
-
 	for (int i = 0; i < NR_GPIOS; ++i)
 	{
 		uint32_t r = _gpio_bank[i]->read<Gpio_reg::Ctrl>();
@@ -204,6 +198,7 @@ Gpio::Driver::Driver()
 			PDBG("GPIO%d ctrl=%08x", i+1, r);
 	}
 }
+
 
 bool Gpio::Driver::set_gpio_direction(int gpio, bool is_input)
 {
@@ -225,6 +220,7 @@ bool Gpio::Driver::set_gpio_direction(int gpio, bool is_input)
 	return true;
 }
 
+
 bool Gpio::Driver::set_gpio_dataout(int gpio, bool enable)
 {
 	if (verbose)
@@ -243,10 +239,11 @@ bool Gpio::Driver::set_gpio_dataout(int gpio, bool enable)
 	return true;
 }
 
+
 int Gpio::Driver::get_gpio_datain(int gpio)
 {
-// 	if (verbose)
-// 		PDBG("gpio=%d", gpio);
+	if (verbose)
+		PDBG("gpio=%d", gpio);
 
 	if (!_gpio_valid(gpio))
 		return -1;
@@ -257,6 +254,7 @@ int Gpio::Driver::get_gpio_datain(int gpio)
 
 	return (value & (1 << _get_gpio_index(gpio))) != 0 ;
 }
+
 
 bool Gpio::Driver::set_gpio_debounce_enable(int gpio, bool enable)
 {
@@ -277,6 +275,7 @@ bool Gpio::Driver::set_gpio_debounce_enable(int gpio, bool enable)
 
 	return true;
 }
+
 
 bool Gpio::Driver::set_gpio_debouncing_time(int gpio, unsigned int us)
 {
@@ -302,6 +301,7 @@ bool Gpio::Driver::set_gpio_debouncing_time(int gpio, unsigned int us)
 	return true;
 }
 
+
 bool Gpio::Driver::set_gpio_falling_detect(int gpio, bool enable)
 {
 	if (verbose)
@@ -322,6 +322,7 @@ bool Gpio::Driver::set_gpio_falling_detect(int gpio, bool enable)
 	return true;
 }
 
+
 bool Gpio::Driver::set_gpio_rising_detect(int gpio, bool enable)
 {
 	if (verbose)
@@ -341,6 +342,7 @@ bool Gpio::Driver::set_gpio_rising_detect(int gpio, bool enable)
 
 	return true;
 }
+
 
 bool Gpio::Driver::set_gpio_irq_enable(int gpio, bool enable)
 {
@@ -367,6 +369,7 @@ bool Gpio::Driver::set_gpio_irq_enable(int gpio, bool enable)
 	return true;
 }
 
+
 void Gpio::Driver::handle_event(int irq_number)
 {
 	if (verbose)
@@ -382,6 +385,7 @@ void Gpio::Driver::handle_event(int irq_number)
 	}
 }
 
+
 void Gpio::Driver::_handle_event_gpio1()
 {
 	int sts = _gpio1.read<Gpio_reg::Irqstatus_0>();
@@ -390,6 +394,7 @@ void Gpio::Driver::_handle_event_gpio1()
 	_irq_event(0, sts);
 	_gpio1.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
+
 
 void Gpio::Driver::_handle_event_gpio2()
 {
@@ -400,6 +405,7 @@ void Gpio::Driver::_handle_event_gpio2()
 	_gpio2.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
 
+
 void Gpio::Driver::_handle_event_gpio3()
 {
 	int sts = _gpio3.read<Gpio_reg::Irqstatus_0>();
@@ -408,6 +414,7 @@ void Gpio::Driver::_handle_event_gpio3()
 	_irq_event(2, sts);
 	_gpio3.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
+
 
 void Gpio::Driver::_handle_event_gpio4()
 {
@@ -418,6 +425,7 @@ void Gpio::Driver::_handle_event_gpio4()
 	_gpio4.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
 
+
 void Gpio::Driver::_handle_event_gpio5()
 {
 	int sts = _gpio5.read<Gpio_reg::Irqstatus_0>();
@@ -426,6 +434,7 @@ void Gpio::Driver::_handle_event_gpio5()
 	_irq_event(4, sts);
 	_gpio5.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
+
 
 void Gpio::Driver::_handle_event_gpio6()
 {
@@ -436,4 +445,4 @@ void Gpio::Driver::_handle_event_gpio6()
 	_gpio6.write<Gpio_reg::Irqstatus_0>(0xffffffff);
 }
 
-#endif // _DRIVER_H_
+#endif /* _DRIVER_H_ */

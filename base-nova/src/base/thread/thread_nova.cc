@@ -37,6 +37,7 @@ using namespace Genode;
 void Thread_base::_thread_start()
 {
 	Genode::Thread_base::myself()->entry();
+	Thread_base::myself()->_join_lock.unlock();
 	Genode::sleep_forever();
 }
 
@@ -116,12 +117,13 @@ void Thread_base::start()
 	/* create EC at core */
 	addr_t thread_sp = reinterpret_cast<addr_t>(&_context->stack[-4]);
 
-	Thread_state state(true);
+	Thread_state state;
 	state.sel_exc_base = _tid.exc_pt_sel;
 	state.is_vcpu      = _tid.is_vcpu;
 
-	if (env()->cpu_session()->state(_thread_cap, &state) ||
-	    env()->cpu_session()->start(_thread_cap, (addr_t)_thread_start,
+	try { env()->cpu_session()->state(_thread_cap, state); }
+	catch (...) { throw Cpu_session::Thread_creation_failed(); }
+	if (env()->cpu_session()->start(_thread_cap, (addr_t)_thread_start,
 	                                thread_sp))
 		throw Cpu_session::Thread_creation_failed();
 

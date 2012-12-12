@@ -49,7 +49,7 @@ class Context_area_rm_session : public Rm_session
 		 */
 		Local_addr attach(Dataspace_capability ds_cap,
 		                  size_t size, off_t offset,
-		                  bool use_local_addr, Local_addr local_addr)
+		                  bool use_local_addr, Local_addr local_addr, bool)
 		{
 			Dataspace_component *ds = context_ds[ds_cap.local_name()];
 			if (!ds) {
@@ -98,14 +98,14 @@ class Context_area_ram_session : public Ram_session
 			/* allocate physical memory */
 			size = round_page(size);
 			void *phys_base;
-			if (!platform_specific()->ram_alloc()->alloc_aligned(size, &phys_base,
-			                                                     get_page_size_log2())) {
+			if (platform_specific()->ram_alloc()->alloc_aligned(size, &phys_base,
+			                                                    get_page_size_log2()).is_error()) {
 				PERR("could not allocate backing store for new context");
 				return Ram_dataspace_capability();
 			}
 
 			context_ds[i] = new (platform()->core_mem_alloc())
-				Dataspace_component(size, 0, (addr_t)phys_base, false, true);
+				Dataspace_component(size, 0, (addr_t)phys_base, false, true, 0);
 
 			/*
 			 * We do not manage the dataspace via an entrypoint because it will

@@ -29,49 +29,118 @@ namespace Gpio {
 
 		virtual ~Session() { }
 
-		virtual void set_direction_output(int gpio, bool enable) = 0;
-		virtual void set_direction_input(int gpio) = 0;
-		virtual void set_dataout(int gpio, bool enable) = 0;
-		virtual int  get_datain(int gpio) = 0;
-		virtual void set_debounce_enable(int gpio, bool enable) = 0;
-		virtual void set_debouncing_time(int gpio, unsigned int us) = 0;
-		virtual void set_falling_detect(int gpio, bool enable) = 0;
-		virtual void set_rising_detect(int gpio, bool enable) = 0;
-		virtual void set_irq_enable(int gpio, bool enable) = 0;
+		/**
+		 * Configure direction on a specified GPIO pin as output
+		 * 
+		 * \param   gpio    number of the pin
+		 * \param   enable  logic level on the pin
+		 */
+		virtual void direction_output(int gpio, bool enable) = 0;
+		
+		/**
+		 * Configure direction on a specified GPIO pin as input
+		 * 
+		 * \param   gpio    number of the pin
+		 */
+		virtual void direction_input(int gpio) = 0;
+		
+		/**
+		 * Set the logic level on a specified GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 * \param   enable  logic level on the pin
+		 */
+		virtual void dataout(int gpio, bool enable) = 0;
+		
+		/**
+		 * Read the logic level on a specified GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 * 
+		 * \return  level on specified GPIO pin
+		 */
+		virtual int  datain(int gpio) = 0;
+		
+		/**
+		 * Enable the debounce on a specified input GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 */
+		virtual void debounce_enable(int gpio, bool enable) = 0;
+		
+		/**
+		 * Set the debouncing time for all input pins of GPIO bank
+		 *
+		 * \param   gpio    number of the pin
+		 */
+		virtual void debouncing_time(int gpio, unsigned int us) = 0;
+		
+		/**
+		 * Configure the interrupt request on occurence of a falling edge on 
+		 * a specified input GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 */
+		virtual void falling_detect(int gpio, bool enable) = 0;
+		
+		/**
+		 * Configure the interrupt request on occurence of a rising edge on 
+		 * a specified input GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 */
+		virtual void rising_detect(int gpio, bool enable) = 0;
+		
+		/**
+		 * Enable or disable the interrupt on a specified GPIO pin
+		 * 
+		 * \param   gpio    number of the pin
+		 * \param   enable  interrupt status( true - enable, false - disable)
+		 */
+		virtual void irq_enable(int gpio, bool enable) = 0;
 
-		virtual void register_signal(Genode::Signal_context_capability cap, int gpio) = 0;
-		virtual void unregister_signal(int gpio) = 0;
+		/**
+		 * Register signal handler to be notified on interrupt on a specified 
+		 * GPIO pin
+		 * 
+		 * \param   cap     capability of signal-context to handle GPIO 
+		 *                  interrupt
+		 * \param   gpio    number of the pin
+		 * 
+		 * This function is used for a set up signal handler for a specified 
+		 * GPIO interrupt. Signal emited to the client if IRQ on pin configured   
+		 * when the driver handles this IRQ.
+		 */
+		virtual void irq_sigh(Signal_context_capability cap, int gpio) = 0;
 
 		/*******************
 		 ** RPC interface **
 		 *******************/
 
-		GENODE_RPC(Rpc_set_direction_output, void, set_direction_output, int, bool);
-		GENODE_RPC(Rpc_set_direction_input,  void, set_direction_input,  int);
-		GENODE_RPC(Rpc_set_dataout,          void, set_dataout,          int, bool);
-		GENODE_RPC(Rpc_get_datain,           int,  get_datain,           int);
-		GENODE_RPC(Rpc_set_debounce_enable,  void, set_debounce_enable,  int, bool);
-		GENODE_RPC(Rpc_set_debouncing_time,  void, set_debouncing_time,  int, unsigned int);
-		GENODE_RPC(Rpc_set_falling_detect,   void, set_falling_detect,   int, bool);
-		GENODE_RPC(Rpc_set_rising_detect,    void, set_rising_detect,    int, bool);
-		GENODE_RPC(Rpc_set_irq_enable,       void, set_irq_enable,       int, bool);
-		GENODE_RPC(Rpc_register_signal,      void, register_signal,      Genode::Signal_context_capability, int);
-		GENODE_RPC(Rpc_unregister_signal,    void, unregister_signal,    int);
+		GENODE_RPC(Rpc_direction_output, void, direction_output, int, bool);
+		GENODE_RPC(Rpc_direction_input, void, direction_input, int);
+		GENODE_RPC(Rpc_dataout, void, dataout, int, bool);
+		GENODE_RPC(Rpc_datain, int,  datain, int);
+		GENODE_RPC(Rpc_debounce_enable, void, debounce_enable, int, bool);
+		GENODE_RPC(Rpc_debouncing_time, void, debouncing_time, int, unsigned int);
+		GENODE_RPC(Rpc_falling_detect, void, falling_detect, int, bool);
+		GENODE_RPC(Rpc_rising_detect, void, rising_detect, int, bool);
+		GENODE_RPC(Rpc_irq_enable, void, irq_enable, int, bool);
+		GENODE_RPC(Rpc_irq_sigh, void, irq_sigh, Signal_context_capability, int);
 
 
-		typedef Meta::Type_tuple<Rpc_set_direction_output,
-				Meta::Type_tuple<Rpc_set_direction_input,
-				Meta::Type_tuple<Rpc_set_dataout,
-				Meta::Type_tuple<Rpc_get_datain,
-				Meta::Type_tuple<Rpc_set_debounce_enable,
-				Meta::Type_tuple<Rpc_set_debouncing_time,
-				Meta::Type_tuple<Rpc_set_falling_detect,
-				Meta::Type_tuple<Rpc_set_rising_detect,
-				Meta::Type_tuple<Rpc_set_irq_enable,
-				Meta::Type_tuple<Rpc_register_signal,
-				Meta::Type_tuple<Rpc_unregister_signal,
+		typedef Meta::Type_tuple<Rpc_direction_output,
+				Meta::Type_tuple<Rpc_direction_input,
+				Meta::Type_tuple<Rpc_dataout,
+				Meta::Type_tuple<Rpc_datain,
+				Meta::Type_tuple<Rpc_debounce_enable,
+				Meta::Type_tuple<Rpc_debouncing_time,
+				Meta::Type_tuple<Rpc_falling_detect,
+				Meta::Type_tuple<Rpc_rising_detect,
+				Meta::Type_tuple<Rpc_irq_enable,
+				Meta::Type_tuple<Rpc_irq_sigh,
 								Meta::Empty>
-				> > > > > > > > > > Rpc_functions;
+				> > > > > > > > > Rpc_functions;
 	};
 }
 

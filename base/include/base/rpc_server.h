@@ -61,7 +61,7 @@ namespace Genode {
 				_read_args(is, args._2);
 			}
 
-			void _read_args(Ipc_istream &is, Meta::Empty) { }
+			void _read_args(Ipc_istream &, Meta::Empty) { }
 
 			template <typename ARG_LIST>
 			void _write_results(Ipc_ostream &os, ARG_LIST &args)
@@ -72,7 +72,7 @@ namespace Genode {
 				_write_results(os, args._2);
 			}
 
-			void _write_results(Ipc_ostream &os, Meta::Empty) { }
+			void _write_results(Ipc_ostream &, Meta::Empty) { }
 
 			template <typename RPC_FUNCTION, typename EXC_TL>
 			Rpc_exception_code _do_serve(typename RPC_FUNCTION::Server_args &args,
@@ -270,14 +270,32 @@ namespace Genode {
 			 */
 			static void _activation_entry();
 
+			struct Exit
+			{
+				GENODE_RPC(Rpc_exit, void, _exit);
+				GENODE_RPC_INTERFACE(Rpc_exit);
+			};
+
+			struct Exit_handler : Rpc_object<Exit, Exit_handler>
+			{
+				int exit;
+
+				Exit_handler() : exit(false) { }
+
+				void _exit() { exit = true; }
+			};
+
 		protected:
 
 			Ipc_server      *_ipc_server;
-			Rpc_object_base *_curr_obj;       /* currently dispatched RPC object    */
-			Lock             _curr_obj_lock;  /* for the protection of '_curr_obj'  */
-			Lock             _cap_valid;      /* thread startup synchronization     */
-			Lock             _delay_start;    /* delay start of request dispatching */
-			Cap_session     *_cap_session;    /* for creating capabilities          */
+			Rpc_object_base *_curr_obj;       /* currently dispatched RPC object       */
+			Lock             _curr_obj_lock;  /* for the protection of '_curr_obj'     */
+			Lock             _cap_valid;      /* thread startup synchronization        */
+			Lock             _delay_start;    /* delay start of request dispatching    */
+			Lock             _delay_exit;     /* delay destructor until server settled */
+			Cap_session     *_cap_session;    /* for creating capabilities             */
+			Exit_handler     _exit_handler;
+			Capability<Exit> _exit_cap;
 
 			/**
 			 * Back-end function to associate RPC object with the entry point
@@ -317,6 +335,8 @@ namespace Genode {
 			 */
 			Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
 			               char const *name, bool start_on_construction = true);
+
+			~Rpc_entrypoint();
 
 			/**
 			 * Associate RPC object with the entry point
@@ -379,6 +399,11 @@ namespace Genode {
 			 * answering the original call.
 			 */
 			void explicit_reply(Untyped_capability reply_cap, int return_value);
+
+			/**
+			 * Return true if the caller corresponds to the entrypoint called
+			 */
+			bool is_myself() const;
 	};
 }
 

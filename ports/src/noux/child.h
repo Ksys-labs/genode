@@ -30,8 +30,8 @@
 #include <ram_session_component.h>
 #include <cpu_session_component.h>
 #include <child_policy.h>
+#include <io_receptor_registry.h>
 
-extern void (*cleanup_socket_descriptors)();
 
 namespace Noux {
 
@@ -74,6 +74,10 @@ namespace Noux {
 	class User_info;
 	User_info *user_info();
 
+	/**
+	 * Return singleton instance of Io_receptor_registry
+	 */
+	Io_receptor_registry *io_receptor_registry();
 
 	class Child;
 
@@ -338,10 +342,6 @@ namespace Noux {
 
 			~Child()
 			{
-				/* short-cut to close all remaining open sd's if the child exits */
-				if (cleanup_socket_descriptors)
-					cleanup_socket_descriptors();
-
 				_sig_rec->dissolve(&_execve_cleanup_dispatcher);
 				_sig_rec->dissolve(&_exit_dispatcher);
 

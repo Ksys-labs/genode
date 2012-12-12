@@ -12,6 +12,7 @@
  */
 
 #include <base/rpc_server.h>
+#include <base/rpc_client.h>
 #include <base/blocking.h>
 
 using namespace Genode;
@@ -90,12 +91,19 @@ void Rpc_entrypoint::activate()
 }
 
 
+bool Rpc_entrypoint::is_myself() const
+{
+	return (Thread_base::myself() == this);
+}
+
+
 Rpc_entrypoint::Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
                                char const *name, bool start_on_construction)
 :
 	Thread_base(name, stack_size),
 	_cap(Untyped_capability()),
 	_curr_obj(0), _cap_valid(Lock::LOCKED), _delay_start(Lock::LOCKED),
+	_delay_exit(Lock::LOCKED),
 	_cap_session(cap_session)
 {
 	Thread_base::start();
@@ -103,4 +111,35 @@ Rpc_entrypoint::Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
 
 	if (start_on_construction)
 		activate();
+
+	_exit_cap = manage(&_exit_handler);
+}
+
+
+Rpc_entrypoint::~Rpc_entrypoint()
+{
+	typedef Object_pool<Rpc_object_base> Pool;
+
+	/* leave server loop */
+	_exit_cap.call<Exit::Rpc_exit>();
+
+	dissolve(&_exit_handler);
+
+	if (Pool::first()) {
+		PWRN("Object pool not empty in %s", __func__);
+
+		/* dissolve all objects - objects are not destroyed! */
+		while (Rpc_object_base *obj = Pool::first())
+			_dissolve(obj);
+	}
+
+	/*
+	 * Now that we finished the 'dissolve' steps above (which need a working
+	 * 'Ipc_server' in the context of the entrypoint thread), we can allow the
+	 * entrypoint thread to leave the scope. Thereby, the 'Ipc_server' object
+	 * will get destructed.
+	 */
+	_delay_exit.unlock();
+
+	join();
 }

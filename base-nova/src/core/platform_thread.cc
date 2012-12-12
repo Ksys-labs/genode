@@ -111,7 +111,6 @@ int Platform_thread::start(void *ip, void *sp)
 	_sel_exc_base = cap_selector_allocator()->alloc(NUM_INITIAL_PT_LOG2);
 
 	addr_t pd_core_sel  = Platform_pd::pd_core_sel();
-	addr_t sm_alloc_sel = _sel_exc_base + PD_SEL_CAP_LOCK;
 	addr_t sm_ec_sel    = _pager->exc_pt_sel() + SM_SEL_EC_CLIENT;
 
 	addr_t remap_src[] = { _pd->parent_pt_sel(),
@@ -162,13 +161,6 @@ int Platform_thread::start(void *ip, void *sp)
 		              Obj_crd(remap_src[i], 0),
 		              Obj_crd(_sel_exc_base + remap_dst[i], 0)))
 			goto cleanup_base;
-	}
-
-	/* Create lock for cap allocator selector */
-	res = create_sm(sm_alloc_sel, pd_core_sel, 1);
-	if (res != NOVA_OK) {
-		PERR("could not create semaphore for capability allocator");
-		goto cleanup_base;
 	}
 
 	pd_sel = cap_selector_allocator()->alloc();
@@ -265,33 +257,32 @@ void Platform_thread::resume()
 	_pager->wake_up();
 }
 
-
-int Platform_thread::state(Thread_state *state_dst)
+Thread_state Platform_thread::state()
 {
-	if (!state_dst || !_pager) return -1;
+	Thread_state s;
+	if (!_pager) throw Cpu_session::State_access_failed();
+	_pager->copy_thread_state(&s);
+	return s;
+};
 
-	if (state_dst->transfer) {
-		/* Not permitted for main thread */
-		if (_is_main_thread) return -2;
+void Platform_thread::state(Thread_state s)
+{
+	/* not permitted for main thread */
+	if (_is_main_thread) throw Cpu_session::State_access_failed();
 
-		/* You can do it only once */
-		if (_sel_exc_base != Native_thread::INVALID_INDEX) return -3;
+	/* you can do it only once */
+	if (_sel_exc_base != Native_thread::INVALID_INDEX)
+		throw Cpu_session::State_access_failed();
 
-		/**
-		 * _sel_exc_base  exception base of thread in caller
-		 *                protection domain - not in Core !
-		 * _is_vcpu       If true it will run as vCPU,
-		 *                 otherwise it will be a thread.
-		 */
-		_sel_exc_base = state_dst->sel_exc_base;
-		_is_vcpu      = state_dst->is_vcpu;
-
-		return 0;
-	}
-
-	return  _pager->copy_thread_state(state_dst);
-}
-
+	/**
+	 * _sel_exc_base  exception base of thread in caller
+	 *                protection domain - not in Core !
+	 * _is_vcpu       If true it will run as vCPU,
+	 *                 otherwise it will be a thread.
+	 */
+	_sel_exc_base = s.sel_exc_base;
+	_is_vcpu      = s.is_vcpu;
+};
 
 void Platform_thread::cancel_blocking()
 {

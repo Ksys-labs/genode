@@ -19,6 +19,8 @@
 #include <base/native_types.h>
 #include <kernel/syscalls.h>
 #include <kernel/log.h>
+#include <base/thread.h>
+#include <kernel/thread.h>
 
 /* core includes */
 #include <assert.h>
@@ -46,10 +48,10 @@ namespace Genode {
 		bool                     _main_thread;
 		Native_utcb *            _phys_utcb;
 		Native_utcb *            _virt_utcb;
-		Software_tlb *           _software_tlb;
+		Tlb *                    _tlb;
 		Ram_dataspace_capability _utcb;
 		char                     _name[NAME_MAX_LEN];
-		void *                   _kernel_thread;
+		char                     _kernel_thread[sizeof(Kernel::Thread)];
 
 		/**
 		 * Common construction part
@@ -119,18 +121,21 @@ namespace Genode {
 			};
 
 			/**
-			 * Request our raw thread state
-			 *
-			 * \param state_dst  destination state buffer
-			 *
-			 * \retval  0  successful
-			 * \retval -1  thread state not accessible
+			 * Get raw thread state
 			 */
-			int state(Genode::Thread_state * state_dst)
+			Thread_state state()
 			{
-				kernel_log() << __PRETTY_FUNCTION__ << ": Not implemented\n";
-				while (1) ;
-				return -1;
+				Kernel::read_thread_state(id());
+				return *(Thread_state *)Thread_base::myself()->utcb()->base();
+			};
+
+			/**
+			 * Override raw thread state
+			 */
+			void state(Thread_state s)
+			{
+				*(Thread_state *)Thread_base::myself()->utcb()->base() = s;
+				Kernel::write_thread_state(id());
 			};
 
 			/**
@@ -176,7 +181,7 @@ namespace Genode {
 
 			Ram_dataspace_capability utcb() const { return _utcb; }
 
-			Software_tlb * software_tlb() const { return _software_tlb; }
+			Tlb * tlb() const { return _tlb; }
 	};
 }
 

@@ -15,9 +15,9 @@
 #define _INCLUDE__KERNEL__SYSCALLS_H_
 
 /* Genode includes */
-#include <base/syscall.h>
+#include <base/syscall_types.h>
 
-class Software_tlb;
+class Tlb;
 
 namespace Genode
 {
@@ -35,19 +35,20 @@ namespace Kernel
 
 		/* execution control */
 		NEW_THREAD = 1,
-		DELETE_THREAD = 24,
+		DELETE_THREAD = 26,
 		START_THREAD = 2,
 		PAUSE_THREAD = 3,
 		RESUME_THREAD = 4,
+		RESUME_FAULTER = 28,
 		GET_THREAD = 5,
 		CURRENT_THREAD_ID = 6,
 		YIELD_THREAD = 7,
-		READ_REGISTER = 18,
-		WRITE_REGISTER = 19,
+		READ_THREAD_STATE = 18,
+		WRITE_THREAD_STATE = 19,
 
 		/* interprocess communication */
 		REQUEST_AND_WAIT = 8,
-		REPLY_AND_WAIT = 9,
+		REPLY = 9,
 		WAIT_FOR_REQUEST = 10,
 
 		/* management of resource protection-domains */
@@ -68,11 +69,47 @@ namespace Kernel
 		NEW_SIGNAL_CONTEXT = 21,
 		AWAIT_SIGNAL = 22,
 		SUBMIT_SIGNAL = 23,
+		SIGNAL_PENDING = 27,
 
 		/* vm specific */
-		NEW_VM = 25,
-		RUN_VM = 26,
+		NEW_VM = 24,
+		RUN_VM = 25,
 	};
+
+	/*****************************************************************
+	 ** Syscall with 1 to 6 arguments                               **
+	 **                                                             **
+	 ** These functions must not be inline to ensure that objects,  **
+	 ** wich are referenced by arguments, are tagged as "used" even **
+	 ** though only the pointer gets handled in here.               **
+	 *****************************************************************/
+
+	Syscall_ret syscall(Syscall_arg arg_0);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3,
+	                    Syscall_arg arg_4);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3,
+	                    Syscall_arg arg_4,
+	                    Syscall_arg arg_5);
 
 	/**
 	 * Virtual range of the mode transition region in every PD
@@ -107,8 +144,8 @@ namespace Kernel
 	 * Restricted to core threads. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
-	inline int new_pd(void * const dst)
-	{ return syscall(NEW_PD, (Syscall_arg)dst); }
+	inline int new_pd(void * const dst) {
+		return syscall(NEW_PD, (Syscall_arg)dst); }
 
 
 	/**
@@ -165,21 +202,19 @@ namespace Kernel
 	 * \param ip  initial instruction pointer
 	 * \param sp  initial stack pointer
 	 *
-	 * \retval >0  success, return value is the software TLB of the thread
+	 * \retval >0  success, return value is the TLB of the thread
 	 * \retval  0  the targeted thread wasn't started or was already started
 	 *             when this gets called (in both cases it remains untouched)
 	 *
 	 * Restricted to core threads.
 	 */
-	inline Software_tlb *
+	inline Tlb *
 	start_thread(Genode::Platform_thread * const phys_pt, void * ip, void * sp,
 	             unsigned int cpu_no)
 	{
-		return (Software_tlb *)syscall(START_THREAD,
-		                               (Syscall_arg)phys_pt,
-		                               (Syscall_arg)ip,
-		                               (Syscall_arg)sp,
-		                               (Syscall_arg)cpu_no);
+		return (Tlb *)syscall(START_THREAD, (Syscall_arg)phys_pt,
+		                      (Syscall_arg)ip, (Syscall_arg)sp,
+		                      (Syscall_arg)cpu_no);
 	}
 
 
@@ -211,6 +246,15 @@ namespace Kernel
 	 */
 	inline int resume_thread(unsigned long const id = 0)
 	{ return syscall(RESUME_THREAD, id); }
+
+
+	/**
+	 * Continue thread after a pagefault that could be resolved
+	 *
+	 * \param id  ID of the targeted thread
+	 */
+	inline void resume_faulter(unsigned long const id = 0) {
+		syscall(RESUME_FAULTER, id); }
 
 
 	/**
@@ -266,14 +310,17 @@ namespace Kernel
 
 
 	/**
-	 * Send reply of the last received request and wait for next request
+	 * Reply to last IPC request
 	 *
-	 * \param size  reply-message size (beginning with the callers UTCB base)
+	 * \param size           reply size (beginning with the callers UTCB base)
+	 * \param await_request  if the call shall await and fetch next request
 	 *
-	 * \return  size of received request (beginning with the callers UTCB base)
+	 * \return  request size (beginning with the callers UTCB base)
+	 *          if await_request was set
 	 */
-	inline unsigned long reply_and_wait(unsigned long const size)
-	{ return (unsigned long)syscall(REPLY_AND_WAIT, size); }
+	inline unsigned long reply(unsigned long const size,
+	                           bool const await_request) {
+		return (unsigned long)syscall(REPLY, size, await_request); }
 
 
 	/**
@@ -336,41 +383,31 @@ namespace Kernel
 
 
 	/**
-	 * Get the current value of a register of a specific CPU context
+	 * Copy the current state of a thread to the callers UTCB
 	 *
-	 * \param thread_id  ID of the thread that owns the targeted context
-	 * \param reg_id     platform-specific ID of the targeted register
+	 * \param thread_id  ID of the targeted thread
 	 *
 	 * Restricted to core threads. One can also read from its own context,
 	 * or any thread that is active in the meantime. In these cases
-	 * be aware of the fact, that the result reflects the context
+	 * be aware of the fact, that the result reflects the thread
 	 * state that were backed at the last kernel entry of the thread.
+	 * The copy might be incoherent when this function returns because
+	 * the caller might get scheduled away before then.
 	 */
-	inline unsigned long read_register(unsigned long const thread_id,
-	                                   unsigned long const reg_id)
-	{
-		return syscall(READ_REGISTER, (Syscall_arg)thread_id,
-		               (Syscall_arg)reg_id);
-	}
+	inline void read_thread_state(unsigned const thread_id) {
+		syscall(READ_THREAD_STATE, (Syscall_arg)thread_id); }
 
 
 	/**
-	 * Write a value to a register of a specific CPU context
+	 * Override the state of a thread with the callers UTCB content
 	 *
-	 * \param thread_id  ID of the thread that owns the targeted context
-	 * \param reg_id     platform-specific ID of the targeted register
-	 * \param value      value that shall be written to the register
+	 * \param thread_id  ID of the targeted thread
 	 *
 	 * Restricted to core threads. One can also write to its own context, or
 	 * to that of a thread that is active in the meantime.
 	 */
-	inline void write_register(unsigned long const thread_id,
-	                           unsigned long const reg_id,
-	                           unsigned long const value)
-	{
-		syscall(WRITE_REGISTER, (Syscall_arg)thread_id, (Syscall_arg)reg_id,
-		        (Syscall_arg)value);
-	}
+	inline void write_thread_state(unsigned const thread_id) {
+		syscall(WRITE_THREAD_STATE, (Syscall_arg)thread_id); }
 
 
 	/**
@@ -428,6 +465,15 @@ namespace Kernel
 	 */
 	inline void await_signal(unsigned long receiver_id)
 	{ syscall(AWAIT_SIGNAL, (Syscall_arg)receiver_id); }
+
+
+	/**
+	 * Get summarized state of all contexts of a signal receiver
+	 *
+	 * \param receiver_id  ID of the targeted receiver kernel-object
+	 */
+	inline bool signal_pending(unsigned long receiver_id) {
+		return syscall(SIGNAL_PENDING, (Syscall_arg)receiver_id); }
 
 
 	/**

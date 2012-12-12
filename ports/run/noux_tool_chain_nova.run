@@ -1,0 +1,17 @@
+#
+# \brief  Noux environment for building the Genode/NOVA demo scenario on Genode
+# \author Christian Prochaska
+# \date   2012-11-26
+#
+
+if {![have_spec foc_x86_32]} {
+        puts "\nThis run script is currently only supported on the 'foc_x86_32' target platform\n"
+        exit 0
+}
+
+set platform          "nova_x86_32"
+set platform_base_dir "base-nova"
+set platform_pkgs     ""
+set platform_cmds     ""
+
+source ${genode_dir}/ports/run/noux_tool_chain.inc

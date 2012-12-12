@@ -1,6 +1,7 @@
 /*
  * \brief  Platform interface
  * \author Norman Feske
+ * \author Alexander Boettcher
  * \date   2009-10-02
  */
 
@@ -24,6 +25,8 @@ namespace Genode {
 
 	class Platform : public Platform_generic
 	{
+		private:
+
 			typedef Core_mem_allocator::Phys_allocator Phys_allocator;
 
 			Core_mem_allocator _core_mem_alloc; /* core-accessible memory  */
@@ -36,10 +39,10 @@ namespace Genode {
 			/**
 			 * Virtual address range usable by non-core processes
 			 */
-			addr_t _vm_base;
+			const addr_t _vm_base;
 			size_t _vm_size;
 
-			void _preserve_page(addr_t phys_page);
+			addr_t _map_page(addr_t phys_page, addr_t pages);
 
 		public:
 
