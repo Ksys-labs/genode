@@ -23,7 +23,7 @@ static void printhex(unsigned char *data, unsigned length)
 {
 	char atr_str[1024];
 	if (length > 256) length = 256;
-	for (int i = 0; i < length; ++i)
+	for (unsigned i = 0; i < length; ++i)
 	{
 		atr_str[i*3] = '\0';
 		snprintf(atr_str + i * 3, 4, "%02x ", data[i]);
@@ -45,7 +45,7 @@ int main(int, char **)
 
 	timer.msleep(500);
 
-	Smartcard::ReaderStatus status = smartcard.get_reader_status();
+	Smartcard::ReaderStatus status = smartcard.reader_status();
 
 	printf("ATR(%d): ", status.atr().length);
 	printhex(status.atr().data, status.atr().length);
