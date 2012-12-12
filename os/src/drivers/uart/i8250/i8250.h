@@ -138,10 +138,9 @@ class I8250 : public Uart::Driver, public Genode::Irq_handler
 			return _inb<TRB>();
 		}
 
-		bool set_baudrate(int baud)
+		void baud_rate(int baud_rate)
 		{
-			_init_comport(baud);
-			return true;
+			_init_comport(baud_rate);
 		}
 };
 

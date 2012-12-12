@@ -44,10 +44,9 @@ namespace Uart {
 		/**
 		 * Set baud rate for terminal
 		 */
-		virtual bool set_baudrate(int /*baud*/)
+		virtual void baud_rate(int /*baud_rate*/)
 		{
 			PDBG("Setting baudrate is not supported yet. Use default 115200.");
-			return false;
 		}
 	};
 
