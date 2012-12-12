@@ -13,7 +13,7 @@
 
 #include <base/snprintf.h>
 #include <timer_session/connection.h>
-#include <terminal_session/connection.h>
+#include <uart_session/connection.h>
 
 
 using namespace Genode;
@@ -23,7 +23,7 @@ int main()
 	printf("--- UART test started ---\n");
 
 	static Timer::Connection    timer;
-	static Terminal::Connection terminal;
+	static Uart::Connection     terminal;
 
 	unsigned baudrate = 115200;
 
@@ -31,7 +31,7 @@ int main()
 
 		static char buf[100];
 
-		terminal.set_baudrate(baudrate);
+		terminal.baud_rate(baudrate);
 
 		int n = snprintf(buf, sizeof(buf), "UART test message %d (baudrate=%d)\r\n", i, baudrate);
 		terminal.write(buf, n);
