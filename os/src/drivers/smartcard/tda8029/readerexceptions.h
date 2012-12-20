@@ -29,7 +29,7 @@ public:
 	DataTooLong(const char *msg = "Data too long"): ReaderException(msg) {}
 };
 
-class UnknownHeaderSignature: ReaderException {
+class UnknownHeaderSignature: public ReaderException {
 public:
 	UnknownHeaderSignature(const char *msg = "Unknown header signature"): ReaderException(msg) {}
 };

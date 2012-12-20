@@ -171,10 +171,8 @@ bool Driver::open_reader()
 			PDBG("Reopen serial port with baud %d.", baud);
 	}
 
-	if (verbose) {
-		snprintf(_status._reader_name, 255, "TDA8029 (%s)", firmware);
-		PDBG("%s", _status._reader_name);
-	}
+	snprintf(_status._reader_name, 255, "TDA8029 (%s)", firmware);
+	PINF("%s", _status._reader_name);
 
 	timeout(2500);
 	
