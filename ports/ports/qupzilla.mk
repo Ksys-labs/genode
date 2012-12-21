@@ -17,6 +17,7 @@ $(DOWNLOAD_DIR)/$(QUPZILLA_TGZ):
 
 $(CONTRIB_DIR)/$(QIPZILLA): $(DOWNLOAD_DIR)/$(QUPZILLA_TGZ)
 	$(VERBOSE)tar xfz $< -C $(CONTRIB_DIR) && touch $@
+	$(VERBOSE)patch -d $@ -p1 -i ../../src/app/qupzilla/qupzilla_genode.patch
 	$(VERBOSE)mkdir -p $(CONTRIB_DIR)/$(QIPZILLA)/src/lib/data/themes/default/
 	$(VERBOSE)cp -R  $(CONTRIB_DIR)/$(QIPZILLA)/bin/themes/default $(CONTRIB_DIR)/$(QIPZILLA)/src/lib/data/themes
-	$(VERBOSE)patch -d $@ -p1 -i ../../src/app/qupzilla/qupzilla_genode.patch
+
