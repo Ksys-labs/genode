@@ -1,0 +1,14 @@
+diff --git arch/l4/Kconfig arch/l4/Kconfig
+index bac0d58..f31d755 100644
+--- arch/l4/Kconfig
++++ arch/l4/Kconfig
+@@ -116,6 +116,9 @@ endmenu # IRQ Handling
+ 
+ menu "Stub drivers"
+ 
++config NET_NIC_SRV
++	bool "Genode NIC driver server"
++
+ config L4_EXTERNAL_RTC
+ 	bool "Use the rtc server"
+ 	default y

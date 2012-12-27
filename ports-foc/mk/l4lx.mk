@@ -1,8 +1,13 @@
-TARGET              = vmlinux
+TARGET              = $(LX_TARGET)
+TARGET0             = vmlinux
+
+L4LX_REP_DIR       ?= $(REP_DIR)
+LX_BASE_TARGET     ?= $(LX_TARGET)
+
 VERBOSE_LX_MK      ?= 0
 REQUIRES           += foc
-INC_DIR            += $(REP_DIR)/include
-LIBS                = l4lx l4sys
+INC_DIR            += $(L4LX_REP_DIR)/include
+LIBS               += l4lx l4sys
 GENODE_LIBS        := allocator_avl \
                       avl_tree \
                       cap_alloc \
@@ -15,6 +20,7 @@ GENODE_LIBS        := allocator_avl \
                       l4sys \
                       lock \
                       log_console \
+                      server \
                       signal \
                       slab \
                       startup \
@@ -25,15 +31,17 @@ GENODE_LIBS_SORTED  = $(sort $(wildcard $(GENODE_LIBS)))
 GENODE_LIBS_SORTED += $(shell $(CC) $(CC_MARCH) -print-libgcc-file-name)
 
 L4LX_BUILD     = $(BUILD_BASE_DIR)/$(LX_TARGET)
-L4LX_BINARY    = $(L4LX_BUILD)/$(TARGET)
+L4LX_BINARY    = $(L4LX_BUILD)/$(TARGET0)
 L4LX_SYMLINK   = $(BUILD_BASE_DIR)/bin/$(LX_TARGET)
 L4LX_CONFIG    = $(L4LX_BUILD)/.config
 
-$(TARGET): $(L4LX_BINARY)
+$(TARGET): $(TARGET0)
+
+$(TARGET0): $(L4LX_BINARY)
 
 $(L4LX_BINARY): $(L4LX_CONFIG)
 	$(VERBOSE_MK)$(MAKE) $(VERBOSE_DIR) \
-	               -C $(REP_DIR)/contrib/$(LX_TARGET) \
+	               -C $(L4LX_REP_DIR)/contrib/$(LX_BASE_TARGET) \
 	               O=$(L4LX_BUILD) \
 	               CROSS_COMPILE="$(CROSS_DEV_PREFIX)" \
 	               CC="$(CC)" \

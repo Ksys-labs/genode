@@ -23,16 +23,21 @@
 extern "C" {
 #endif
 
-L4_CV l4_cap_idx_t genode_net_irq_cap     (void);
-L4_CV int          genode_net_ready       (void);
-L4_CV void         genode_net_start       (void *dev, FASTCALL void (*func)(void*, void*, unsigned long));
-L4_CV void         genode_net_stop        (void);
-L4_CV void         genode_net_mac         (void* mac_addr, unsigned long size);
-L4_CV int          genode_net_tx          (void* addr,     unsigned long len);
-L4_CV int          genode_net_tx_ack_avail(void);
-L4_CV void         genode_net_tx_ack      (void);
-L4_CV void         genode_net_rx_receive  (void);
+#define MAX_GENODE_NET 4
+
+L4_CV void         genode_net_run         (int count);
+
+L4_CV l4_cap_idx_t genode_net_irq_cap     (int num);
+L4_CV int          genode_net_ready       (int num);
+L4_CV void         genode_net_start       (int num, void *dev, FASTCALL void (*func)(void*, void*, unsigned long));
+L4_CV void         genode_net_stop        (int num);
+L4_CV void         genode_net_mac         (int num, void* mac_addr, unsigned long size);
+L4_CV int          genode_net_tx          (int num, void* addr,     unsigned long len);
+L4_CV int          genode_net_tx_ack_avail(int num);
+L4_CV void         genode_net_tx_ack      (int num);
+L4_CV void         genode_net_rx_receive  (int num);
 L4_CV void        *genode_net_memcpy      (void *dst, void const *src, unsigned long size);
+L4_CV int          genode_net_strcmp      (const char *s1, const char *s2, unsigned long size);
 
 #ifdef __cplusplus
 }

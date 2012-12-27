@@ -1,0 +1,120 @@
+assert_spec foc
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	drivers/uart
+	drivers/framebuffer
+	l4linux }
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+	<start name="uart_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="l4linux.1" uart="1"/>
+		</config>
+	</start>
+	<start name="pci_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="PCI"/></provides>
+	</start>
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="l4linux.1">
+		<binary name="l4linux"/>
+		<resource name="RAM" quantum="256M"/>
+		<config args="mem=128M console=tty1 console=ttyS0 l4x_rd=initrd.gz l4x_cpus=1 l4x_cpus_map=0"/>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer uart_drv
+	l4linux
+	initrd.gz
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+set uri "http://genode.org/files/release-11.11/l4lx/initrd-ia32.gz"
+puts "Download initramfs ..."
+if {![file exists bin/initrd.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/initrd.gz $uri
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 512 "
+append qemu_args " -serial file:l4l.log "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -smp 2,cores=2 "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap0,script=no,downscript=no "
+
+#
+# Execute test case
+#
+run_genode_until forever
