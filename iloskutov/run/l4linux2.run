@@ -1,0 +1,222 @@
+assert_spec foc
+assert_spec x86
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	drivers/framebuffer
+	server/nic_bridge
+	server/nit_fb
+	server/nitpicker
+	server/terminal
+	l4linux-clnt
+	l4linux-srv
+}
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+	<start name="pci_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="PCI"/></provides>
+	</start>
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<config>
+			<nic device="00:03.0"/>
+		</config>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+	<start name="nic_drv.2">
+		<binary name="nic_drv"/>
+		<config>
+			<nic device="00:04.0"/>
+		</config>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="nitpicker">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nitpicker"/></provides>
+		<route>
+			<service name="Input">       <child name="ps2_drv"/> </service>
+			<service name="Framebuffer"> <child name="vesa_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="linux.1.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="1" ypos="0" width="510" height="549" refresh_rate="25"/>
+	</start>
+	<start name="linux.1.fblog">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="550" width="510" height="190"/>
+	</start>
+	<start name="linux.2.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="513" ypos="0" width="510" height="549" refresh_rate="25"/>
+	</start>
+	<start name="linux.2.fblog">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="513" ypos="550" width="510" height="190"/>
+	</start>
+	<start name="linux.1.log">
+		<binary name="terminal"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Terminal"/></provides>
+		<route>
+			<service name="Input">       <child name="linux.1.fblog"/> </service>
+			<service name="Framebuffer"> <child name="linux.1.fblog"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="linux.2.log">
+		<binary name="terminal"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Terminal"/></provides>
+		<route>
+			<service name="Input">       <child name="linux.2.fblog"/> </service>
+			<service name="Framebuffer"> <child name="linux.2.fblog"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="l4linux.1">
+		<binary name="l4linux-srv"/>
+		<resource name="RAM" quantum="200M"/>
+		<config args="mem=128M console=tty1 console=ttyS0 l4x_rd=initrd.gz l4x_cpus=1 l4x_cpus_map=0"/>
+		<provides>
+			<service name="Nic"/>
+		</provides>
+		<route>
+			<service name="Input">       <child name="linux.1.fb"/> </service>
+			<service name="Framebuffer"> <child name="linux.1.fb"/> </service>
+			<service name="Nic">         <child name="nic_drv.1"/> </service> 
+			<service name="Terminal">    <child name="linux.1.log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="l4linux.2">
+		<binary name="l4linux-clnt"/>
+		<resource name="RAM" quantum="200M"/>
+		<config args="mem=128M console=tty1 console=ttyS0 l4x_rd=initrd.gz l4x_cpus=1 l4x_cpus_map=1 genode_net.if_nums=2"/>
+		<route>
+			<service name="Input">       <child name="linux.2.fb"/> </service>
+			<service name="Framebuffer"> <child name="linux.2.fb"/> </service>
+			<service name="Nic">
+				<if-arg key="label" value="eth0"/> <child name="nic_drv.2"/>
+			</service>
+			<service name="Nic">
+				<if-arg key="label" value="eth1"/> <child name="l4linux.1"/>
+			</service>
+			<service name="Terminal">    <child name="linux.2.log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer
+	nitpicker
+	nit_fb
+	terminal
+	l4linux-srv
+	l4linux-clnt
+	initrd.gz
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+set uri "http://genode.org/files/release-11.11/l4lx/initrd-ia32.gz"
+if {![file exists bin/initrd.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/initrd.gz $uri
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 2048 "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -smp 2,cores=2 "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap0,script=no,downscript=no "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap1,script=no,downscript=no "
+
+#
+# Execute test case
+#
+run_genode_until forever
