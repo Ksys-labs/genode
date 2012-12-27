@@ -27,7 +27,9 @@
 #include <base/snprintf.h>
 #include <util/avl_tree.h>
 
-#include <irq_session/connection.h>
+// #include <irq_session/connection.h>
+#include <pci_session/connection.h>
+#include <base/signal.h>
 
 extern "C" {
 #include <dde_kit/interrupt.h>
@@ -43,7 +45,8 @@ class Irq_handler : Dde_kit::Thread, public Avl_node<Irq_handler>
 	private:
 
 		unsigned       _irq_number;      /* IRQ number */
-		Irq_connection _irq;             /* IRQ connection */
+// 		Irq_connection _irq;             /* IRQ connection */
+		Pci::Connection _pci;
 		char           _thread_name[10];
 
 		void (*_handler)(void *);        /* handler function */
@@ -53,6 +56,9 @@ class Irq_handler : Dde_kit::Thread, public Avl_node<Irq_handler>
 		bool           _shared;          /* true, if IRQ sharing is supported */
 		int            _handle_irq;      /* nested irq disable counter */
 		Lock           _lock;            /* synchronize access to counter */
+		
+		Signal_receiver sig_rec;
+		Signal_context  sig_ctx;
 
 
 		const char * _compose_thread_name(unsigned irq)
@@ -67,9 +73,12 @@ class Irq_handler : Dde_kit::Thread, public Avl_node<Irq_handler>
 		            void (*init)(void *) = 0, bool shared = false)
 		:
 			Dde_kit::Thread(_compose_thread_name(irq)), _irq_number(irq),
-			_irq(irq), _handler(handler), _init(init), _priv(priv),
+			/*_irq(irq), */_handler(handler), _init(init), _priv(priv),
 			_shared(shared), _handle_irq(1), _lock(Lock::LOCKED)
 		{
+			// register irq signal
+			_pci.irq_sigh(sig_rec.manage(&sig_ctx), irq);
+			
 			start();
 
 			/* wait until thread is started */
@@ -102,7 +111,8 @@ class Irq_handler : Dde_kit::Thread, public Avl_node<Irq_handler>
 			_lock.unlock();
 
 			while (1) {
-				_irq.wait_for_irq();
+				//_irq.wait_for_irq();
+				sig_rec.wait_for_signal();
 
 				/* only call registered handler function, if IRQ is not disabled */
 				_lock.lock();

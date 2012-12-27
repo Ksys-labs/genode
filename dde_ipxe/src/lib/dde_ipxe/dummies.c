@@ -15,6 +15,8 @@
 
 int snprintf(char *buf, __SIZE_TYPE__ size, const char *fmt, ...) { TRACE; return 0; }
 
+const char *strerror(int errnum) { TRACE; (void)errnum; return ""; }
+
 void clear_settings()             { TRACE; }
 void netdev_settings_operations() { TRACE; }
 
