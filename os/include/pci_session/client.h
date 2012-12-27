@@ -32,6 +32,11 @@ namespace Pci {
 
 		void release_device(Device_capability device) {
 			call<Rpc_release_device>(device); }
+			
+		void irq_sigh(Genode::Signal_context_capability cap, int irq)
+		{
+			call<Rpc_irq_sigh>(cap, irq);
+		}
 	};
 }
 

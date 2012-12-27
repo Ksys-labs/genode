@@ -16,6 +16,7 @@
 
 #include <pci_device/pci_device.h>
 #include <session/session.h>
+#include <base/signal.h>
 
 namespace Pci {
 
@@ -48,6 +49,9 @@ namespace Pci {
 		 * Use this function to relax the heap partition of your PCI session.
 		 */
 		virtual void release_device(Device_capability device) = 0;
+		
+		
+		virtual void irq_sigh(Genode::Signal_context_capability cap, int irq) = 0;
 
 
 		/*********************
@@ -57,8 +61,9 @@ namespace Pci {
 		GENODE_RPC(Rpc_first_device, Device_capability, first_device);
 		GENODE_RPC(Rpc_next_device, Device_capability, next_device, Device_capability);
 		GENODE_RPC(Rpc_release_device, void, release_device, Device_capability);
+		GENODE_RPC(Rpc_irq_sigh, void, irq_sigh, Genode::Signal_context_capability, int);
 
-		GENODE_RPC_INTERFACE(Rpc_first_device, Rpc_next_device, Rpc_release_device);
+		GENODE_RPC_INTERFACE(Rpc_first_device, Rpc_next_device, Rpc_release_device, Rpc_irq_sigh);
 	};
 }
 

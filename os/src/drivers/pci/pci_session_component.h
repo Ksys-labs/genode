@@ -15,13 +15,133 @@
 #define _PCI_SESSION_COMPONENT_H_
 
 #include <base/rpc_server.h>
+#include <base/lock.h>
 #include <pci_session/pci_session.h>
 #include <root/component.h>
+
+#include <irq_session/connection.h>
+#include <base/signal.h>
+
+#include <util/avl_tree.h>
+#include <util/list.h>
 
 #include "pci_device_component.h"
 #include "pci_config_access.h"
 
 namespace Pci {
+	
+	class Signal_node: public Genode::List<Signal_node>::Element
+	{
+	private:
+		Genode::Signal_context_capability _cap;
+		
+	public:
+		Signal_node(Genode::Signal_context_capability cap) : _cap(cap) {}
+		
+		Genode::Signal_context_capability cap() { return _cap; }
+	};
+	
+	class Irq_handler : Genode::Thread<4096>, public Genode::Avl_node<Irq_handler>
+	{
+	private:
+
+		unsigned                _irq_number;
+		Genode::Irq_connection  _irq;
+		
+		Genode::Lock            _lock;
+		
+		Genode::List<Signal_node> sig_list;
+
+	public:
+
+		Irq_handler(Genode::Signal_context_capability cap, int irq_number)
+		:
+			_irq_number(irq_number),
+			_irq(irq_number)
+		{
+// 			PDBG("irq=%d", irq_number);
+			add_signal(cap);
+			
+			start();
+		}
+		
+		void add_signal(Genode::Signal_context_capability cap)
+		{
+			Genode::Lock::Guard lock_guard(_lock);
+			
+			sig_list.insert( new (Genode::env()->heap()) Signal_node(cap) );
+		}
+
+		void entry()
+		{
+			while (1) {
+				_irq.wait_for_irq();
+// 				PDBG("irq %d", _irq_number);
+				_lock.lock();
+				Signal_node *s = sig_list.first();
+				for( ;s ; s = s->next())
+				{
+					if (s->cap().valid())
+					{
+// 						PDBG("sending signal");
+
+						Genode::Signal_transmitter transmitter(s->cap());
+						transmitter.submit();
+					}
+				}
+				_lock.unlock();
+			}
+		}
+		
+		/** AVL node comparison */
+		bool higher(Irq_handler *irq_handler) {
+			return (_irq_number < irq_handler->_irq_number); }
+
+		/** AVL node lookup */
+		Irq_handler *lookup(unsigned irq_number)
+		{
+			if (irq_number == _irq_number) return this;
+
+			Irq_handler *h = child(_irq_number < irq_number);
+			return h ? h->lookup(irq_number) : 0;
+		}
+	};
+	
+	class Irq_handler_database : public Genode::Avl_tree<Irq_handler>
+	{
+		private:
+
+			Genode::Lock _lock;
+
+		public:
+
+			Irq_handler *lookup(unsigned irq_number)
+			{
+				Genode::Lock::Guard lock_guard(_lock);
+
+				return first() ? first()->lookup(irq_number) : 0;
+			}
+
+			void insert(Irq_handler *h)
+			{
+				Genode::Lock::Guard lock_guard(_lock);
+
+				Genode::Avl_tree<Irq_handler>::insert(h);
+			}
+
+			void remove(Irq_handler *h)
+			{
+				Genode::Lock::Guard lock_guard(_lock);
+
+				Genode::Avl_tree<Irq_handler>::remove(h);
+			}
+	};
+	
+	static Irq_handler_database *irq_handlers()
+	{
+		static Irq_handler_database _irq_handlers;
+		return &_irq_handlers;
+	}
 
 	/**
 	 * Check if given PCI bus was found on inital scan
@@ -211,7 +331,27 @@ namespace Pci {
 				/* FIXME: adjust quota */
 				destroy(_md_alloc, device);
 			}
-	};
+			
+			void irq_sigh(Genode::Signal_context_capability cap, int irq)
+			{
+				Irq_handler *h = irq_handlers()->lookup(irq);
+				
+				if (!h)
+				{
+					try {
+						h = new (Genode::env()->heap()) Irq_handler(cap, irq);
+					} catch (...) {
+						PERR("allocation failed (size=%zd)", sizeof(*h));
+						return;
+					}
+
+					irq_handlers()->insert(h);
+				} else {
+					h->add_signal(cap);
+				}
+				
+			}
+		};
 
 
 	class Root : public Genode::Root_component<Session_component>
