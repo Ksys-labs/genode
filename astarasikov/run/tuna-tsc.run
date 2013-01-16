@@ -26,6 +26,7 @@ set build_components {
 
 	test/mms-touchscreen
 	test/i2c-tuna
+	test/omap4-gpiomux
 }
 
 build $build_components
@@ -193,6 +194,26 @@ set config {
 		</route>
 	</start>
 
+	<start name="omap4_gpiomux">
+		<binary name="omap4_gpiomux_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="GpioMux"/></provides>
+		<route>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-omap4-gpiomux">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<!--
 	<start name="test-mms-touchscreen">
 		<resource name="RAM" quantum="1M" />
 		<route>
@@ -202,6 +223,7 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
+	-->
 
 	<start name="nitpicker_launchpad">
 		<binary name="nitpicker" />
@@ -250,6 +272,8 @@ set boot_modules {
 	omap_i2c_drv
 	test-i2c-tuna
 	omap4_gpio_drv
+	omap4_gpiomux_drv
+	test-omap4-gpiomux
 }
 
 build_boot_image  [join $boot_modules " "]
