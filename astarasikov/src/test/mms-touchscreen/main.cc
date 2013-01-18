@@ -239,6 +239,8 @@ int main()
 		i2c->read(MMS_TS_ADDR, regs[i].reg, &tr, 1);
 		PINF("MMS %s : %x", regs[i].name, tr);
 	}
+
+	bool finger_down = false;
 	
 	do {
 		if (!i2c->read(MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ, buf, 1)) {
@@ -269,10 +271,24 @@ int main()
 				0, x, y, 0, 0);
 			ev_queue.add(ev);
 			
-			if (!id) {
-				Input::Event ev(up ? Input::Event::RELEASE:
-					Input::Event::PRESS, Input::BTN_LEFT, x, y, 0, 0);
-				ev_queue.add(ev);
+			/* emulate mouse with the first finger */
+			if (id == 0) {
+				if (up) {
+					if (finger_down) {
+						finger_down = false;
+						Input::Event em(Input::Event::RELEASE,
+							Input::BTN_LEFT, x, y, 0, 0);
+						ev_queue.add(em);
+					}
+				}
+				else {
+					if (!finger_down) {
+						finger_down = true;
+						Input::Event em(Input::Event::PRESS,
+							Input::BTN_LEFT, x, y, 0, 0);
+						ev_queue.add(em);
+					}
+				}
 			}
 			
 			PINF("Touch %d <%d; %d> (%d %d)", id, x, y, p, w);
