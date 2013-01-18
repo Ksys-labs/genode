@@ -7,6 +7,6 @@
 TARGET = test-mms-touchscreen
 REQUIRES = omap4
 SRC_CC += main.cc
-LIBS += cxx env
+LIBS += cxx env server
 
 vpath main.cc $(PRG_DIR)

@@ -87,6 +87,74 @@ set config {
 		</route>
 	</start>
 	
+	<start name="omap4_i2c4">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="4" />
+	</start>
+
+	<start name="omap4_i2c3">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="3" />
+	</start>
+	
+	<start name="test-i2c-tuna">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="I2C"> <child name="omap4_i2c4" /> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_gpio">
+		<binary name="omap4_gpio_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="Gpio"/></provides>
+		<config>
+			<gpio num="46" mode="O" value="0" />
+			<gpio num="19" mode="O" value="1" />
+		</config>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_gpiomux">
+		<binary name="omap4_gpiomux_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="GpioMux"/></provides>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-omap4-gpiomux">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="touchscreen">
+		<binary name="test-mms-touchscreen" />
+		<resource name="RAM" quantum="1M" />
+		<provides>
+			<service name="Input"/>
+		</provides>
+		<route>
+			<service name="I2C"> <child name="omap4_i2c3" /> </service>
+			<service name="Gpio"> <child name="omap4_gpio"/> </service>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
 	<!-- framebuffer multiplexing -->
 	
 	<start name="nitpicker_root">
@@ -94,7 +162,7 @@ set config {
 		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Nitpicker"/></provides>
 		<route>
-			<service name="Input">       <child name="usb_drv"/> </service>
+			<service name="Input">       <child name="touchscreen"/> </service>
 			<service name="Framebuffer"> <child name="fb_drv"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
@@ -149,82 +217,6 @@ set config {
 		</route>
 	</start>
 
-	<start name="omap4_i2c4">
-		<binary name="omap_i2c_drv" />
-		<resource name="RAM" quantum="1M" />
-		<provides><service name="I2C"/></provides>
-		<config bus_number="4" />
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-
-	<start name="omap4_i2c3">
-		<binary name="omap_i2c_drv" />
-		<resource name="RAM" quantum="1M" />
-		<provides><service name="I2C"/></provides>
-		<config bus_number="3" />
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-	
-	<start name="test-i2c-tuna">
-		<resource name="RAM" quantum="1M" />
-		<route>
-			<service name="I2C"> <child name="omap4_i2c4" /> </service>
-			<service name="Timer"> <child name="timer" /> </service>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-
-	<start name="omap4_gpio">
-		<binary name="omap4_gpio_drv" />
-		<resource name="RAM" quantum="1M" />
-		<provides><service name="Gpio"/></provides>
-		<config>
-			<gpio num="46" mode="O" value="0" />
-			<gpio num="19" mode="O" value="1" />
-		</config>
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-
-	<start name="omap4_gpiomux">
-		<binary name="omap4_gpiomux_drv" />
-		<resource name="RAM" quantum="1M" />
-		<provides><service name="GpioMux"/></provides>
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-
-	<start name="test-omap4-gpiomux">
-		<resource name="RAM" quantum="1M" />
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
-
-	<start name="test-mms-touchscreen">
-		<resource name="RAM" quantum="1M" />
-		<route>
-			<service name="LOG"> <child name="main_log"/> </service>
-			<service name="I2C"> <child name="omap4_i2c3" /> </service>
-			<service name="Gpio"> <child name="omap4_gpio"/> </service>
-			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
-			<service name="Timer"> <child name="timer" /> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
-	</start>
 
 	<start name="nitpicker_launchpad">
 		<binary name="nitpicker" />

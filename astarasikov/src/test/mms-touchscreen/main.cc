@@ -14,6 +14,16 @@
 
 /* Genode includes */
 
+#include <base/printf.h>
+#include <base/env.h>
+#include <base/rpc_server.h>
+#include <root/component.h>
+#include <cap_session/connection.h>
+#include <input/component.h>
+#include <input/keycodes.h>
+#include <input/event.h>
+#include <os/ring_buffer.h>
+
 #include <i2c_session/connection.h>
 #include <gpio_session/connection.h>
 #include <timer_session/connection.h>
@@ -21,9 +31,21 @@
 #include <platform/omap4/gpiomux_session/connection.h>
 #include <platform/omap4/gpiomux_session/mux_bits.h>
 
-#include <base/printf.h>
-
 using namespace Genode;
+
+/*****************************************
+ ** Implementation of the input service **
+ *****************************************/
+
+class Event_queue : public Ring_buffer<Input::Event, 256> { };
+
+static Event_queue ev_queue;
+
+namespace Input {
+	void event_handling(bool enable) { }
+	bool event_pending() { return !ev_queue.empty(); }
+	Event get_event() { return ev_queue.get(); }
+}
 	
 static I2C::Connection *i2c;
 static Timer::Connection *timer;
@@ -169,11 +191,16 @@ int main()
 	mux = &_mux;
 	PINF("GPIO MUX");
 
+
+	enum { STACK_SIZE = 4096 };
+	static Cap_connection cap;
+	static Rpc_entrypoint ep(&cap, STACK_SIZE, "mms_ts_ep");
+	static Input::Root input_root(&ep, env()->heap());
+	env()->parent()->announce(ep.manage(&input_root));
+
 	tuna_melfas_init();
-	mms_pwr_on_reset();
 	tuna_melfas_mux_fw_flash(true);
 	hw_reboot(0);
-	tuna_melfas_mux_fw_flash(false);
 	mms_pwr_on_reset();
 	PINF("reset done");
 
@@ -185,6 +212,7 @@ int main()
 	if (!i2c->write(MMS_TS_ADDR, 0, buf, 1)) {
 		PERR("Failed to wake up MMS_TS");
 	}
+	timer->msleep(10);
 
 	do {
 		if (!i2c->read(MMS_TS_ADDR, MMS_FW_VERSION, &fw_version, 1)) {
@@ -193,7 +221,7 @@ int main()
 		}
 		PINF("MMS TS: FW Version %x", fw_version);
 		timer->msleep(100);
-	} while ((fw_version & 0x80) && tries < 3);
+	} while ((fw_version & 0x80) && tries++ < 3);
 
 	#define _REG(name) {name, #name}
 	struct {
@@ -212,34 +240,45 @@ int main()
 		PINF("MMS %s : %x", regs[i].name, tr);
 	}
 	
-	buf[0] = 0;
-	if (!i2c->write(MMS_TS_ADDR, 0, buf, 1)) {
-		PERR("Failed to wake up MMS_TS");
-	}
-	timer->msleep(10);
-
 	do {
 		if (!i2c->read(MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ, buf, 1)) {
 			PERR("Failed to read i2c %x %x", MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ);
 		}
 		int count = buf[0];
 
+		if (!count || count > MAX_FINGERS * FINGER_EVENT_SZ) {
+			continue;
+		}
+		
+		Genode::memset(buf, 0, sizeof(buf));
 		if (!i2c->read(MMS_TS_ADDR, MMS_INPUT_EVENT0, buf, count)) {
 			PERR("Failed to read i2c %x %x", MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ);
 		}
-
-		if (!count) {
-			continue;
-		}
-
+			
 		for (int i = 0; i < count; i+= FINGER_EVENT_SZ) {
 			Genode::uint8_t *tmp = buf + i;
+			int id = (tmp[0] & 0xf) - 1;
 			int x = tmp[2] | ((tmp[1] & 0xf) << 8);
 			int y = tmp[3] | (((tmp[1] >> 4) & 0xf) << 8);
-			PINF("Touch <%d; %d>", x, y);
+			int w = tmp[4];
+			int p = tmp[5];
+			
+			bool up = ((tmp[0] & 0x80) == 0);
+			
+			Input::Event ev(Input::Event::MOTION,
+				0, x, y, 0, 0);
+			ev_queue.add(ev);
+			
+			if (!id) {
+				Input::Event ev(up ? Input::Event::RELEASE:
+					Input::Event::PRESS, Input::BTN_LEFT, x, y, 0, 0);
+				ev_queue.add(ev);
+			}
+			
+			PINF("Touch %d <%d; %d> (%d %d)", id, x, y, p, w);
 		}
 		
-		timer->msleep(50);
+		timer->msleep(10);
 	} while (1);
 
 	PINF("MMS_TS: done");
