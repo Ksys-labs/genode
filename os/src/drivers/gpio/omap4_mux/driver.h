@@ -29,7 +29,7 @@ namespace GpioMux {
 	class Driver;
 }
 
-static int verbose = 1;
+static int verbose = 0;
 
 class GpioMux::Driver
 {
