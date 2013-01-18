@@ -200,8 +200,38 @@ struct I2C::Omap4_I2C : Mmio
 		write<Cnt>(0);
 	}
 
-	int i2c_read_byte(uint8_t devaddr, uint8_t regoffset, uint8_t *value)
+	void flush_fifo(void)
 	{
+		uint16_t stat;
+
+		/* note: if you try and read data when its not there or ready
+		* you get a bus error
+		*/
+		while (1) {
+			stat = read<Stat>();
+			if (stat == I2C_STAT_RRDY) {
+				read<Data>();
+				write<Stat>(I2C_STAT_RRDY);
+				_timer.msleep(1);
+			} else
+				break;
+		}
+	}
+
+	int i2c_read(uint8_t devaddr, uint32_t regoffset, int alen, uint8_t *buffer, int len)
+	{
+		int i;
+
+		if (alen > 1) {
+			PERR("I2C read: addr len %d not supported\n", alen);
+			return 1;
+		}
+
+		if (regoffset + len > 256) {
+			PERR("I2C read: address out of range\n");
+			return 1;
+		}
+		
 		int i2c_error = 0;
 		uint16_t status;
 
@@ -236,21 +266,22 @@ struct I2C::Omap4_I2C : Mmio
 		/* set slave address */
 		write<Sa>(devaddr);
 		/* read one byte from slave */
-		write<Cnt>(1);
+		write<Cnt>(len);
 		/* need stop bit here */
 		write<Con>(I2C_CON_EN | I2C_CON_MST | I2C_CON_STT | I2C_CON_STP);
 
 		/* receive data */
-		while (1) {
+		for (i = 0; i < len; i++) {
 			status = wait_for_pin();
 			if (status == 0 || status & I2C_STAT_NACK) {
 				i2c_error = 1;
 				goto read_exit;
 			}
 			if (status & I2C_STAT_RRDY) {
-				*value = read<Data>();
+				buffer[i] = read<Data>();
 				write<Stat>(I2C_STAT_RRDY);
 			}
+
 			if (status & I2C_STAT_ARDY) {
 				write<Stat>(I2C_STAT_ARDY);
 				break;
@@ -263,48 +294,10 @@ struct I2C::Omap4_I2C : Mmio
 		write<Cnt>(0);
 		return i2c_error;
 	}
-
-	void flush_fifo(void)
+	
+	int i2c_read_byte(uint8_t devaddr, uint8_t regoffset, uint8_t *value)
 	{
-		uint16_t stat;
-
-		/* note: if you try and read data when its not there or ready
-		* you get a bus error
-		*/
-		while (1) {
-			stat = read<Stat>();
-			if (stat == I2C_STAT_RRDY) {
-				read<Data>();
-				write<Stat>(I2C_STAT_RRDY);
-				_timer.msleep(1);
-			} else
-				break;
-		}
-	}
-
-	int i2c_read(uint8_t chip, uint32_t addr, int alen, uint8_t *buffer, int len)
-	{
-		int i;
-
-		if (alen > 1) {
-			PERR("I2C read: addr len %d not supported\n", alen);
-			return 1;
-		}
-
-		if (addr + len > 256) {
-			PERR("I2C read: address out of range\n");
-			return 1;
-		}
-
-		for (i = 0; i < len; i++) {
-			if (i2c_read_byte(chip, addr + i, &buffer[i])) {
-				PERR("I2C read: I/O error\n");
-				init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-				return 1;
-			}
-		}
-
-		return 0;
+		return i2c_read(devaddr, regoffset, 1, value, 1);
 	}
 
 	int i2c_write(uint8_t chip, uint32_t addr, int alen, uint8_t *buffer, int len)
