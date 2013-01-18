@@ -148,7 +148,7 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	
+
 	<start name="omap4_i2c4">
 		<binary name="omap_i2c_drv" />
 		<resource name="RAM" quantum="1M" />
@@ -159,7 +159,7 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	
+
 	<start name="omap4_i2c3">
 		<binary name="omap_i2c_drv" />
 		<resource name="RAM" quantum="1M" />
@@ -180,10 +180,11 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	
-	<start name="omap4_gpio_drv">
+
+	<start name="omap4_gpio">
+		<binary name="omap4_gpio_drv" />
 		<resource name="RAM" quantum="1M" />
-		<provides><service name="GPIO"/></provides>
+		<provides><service name="Gpio"/></provides>
 		<config>
 			<gpio num="46" mode="O" value="0" />
 			<gpio num="19" mode="O" value="1" />
@@ -213,17 +214,17 @@ set config {
 		</route>
 	</start>
 
-	<!--
 	<start name="test-mms-touchscreen">
 		<resource name="RAM" quantum="1M" />
 		<route>
 			<service name="LOG"> <child name="main_log"/> </service>
 			<service name="I2C"> <child name="omap4_i2c3" /> </service>
+			<service name="Gpio"> <child name="omap4_gpio"/> </service>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
 			<service name="Timer"> <child name="timer" /> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	-->
 
 	<start name="nitpicker_launchpad">
 		<binary name="nitpicker" />
