@@ -15,10 +15,109 @@
 /* Genode includes */
 
 #include <i2c_session/connection.h>
+#include <gpio_session/connection.h>
 #include <timer_session/connection.h>
+
+#include <platform/omap4/gpiomux_session/connection.h>
+#include <platform/omap4/gpiomux_session/mux_bits.h>
+
 #include <base/printf.h>
 
 using namespace Genode;
+	
+static I2C::Connection *i2c;
+static Timer::Connection *timer;
+static Gpio::Connection *gpio;
+static GpioMux::Connection *mux;
+
+/* tuna specific stuff */
+#define GPIO_TOUCH_EN		19
+#define GPIO_TOUCH_IRQ		46
+
+/* touch is on i2c3 */
+#define GPIO_TOUCH_SCL	130
+#define GPIO_TOUCH_SDA	131
+
+static void gpio_out(int g, int val) {
+	gpio->direction_output(g, val);
+	gpio->dataout(g, val);
+}
+
+static void tuna_melfas_mux_fw_flash(bool to_gpios) {
+	if (to_gpios) {
+		mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		gpio_out(GPIO_TOUCH_IRQ, 0);
+
+		mux->init_gpio(GPIO_TOUCH_SCL, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		gpio_out(GPIO_TOUCH_SCL, 0);
+		
+		mux->init_gpio(GPIO_TOUCH_SDA, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		gpio_out(GPIO_TOUCH_SDA, 0);
+	}
+	else {
+		mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE3);
+		gpio_out(GPIO_TOUCH_IRQ, 1);
+		gpio->direction_input(GPIO_TOUCH_IRQ);
+
+		mux->init_gpio(GPIO_TOUCH_SCL, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0);
+		gpio_out(GPIO_TOUCH_SCL, 1);
+		gpio->direction_input(GPIO_TOUCH_SCL);
+		
+		mux->init_gpio(GPIO_TOUCH_SDA, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0);
+		gpio_out(GPIO_TOUCH_SDA, 1);
+		gpio->direction_input(GPIO_TOUCH_SDA);
+	}
+}
+
+static void tuna_melfas_init(void) {
+	mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE3);
+	gpio->direction_input(GPIO_TOUCH_IRQ);
+
+	mux->init_gpio(GPIO_TOUCH_EN, OMAP_PIN_OUTPUT | OMAP_MUX_MODE3);
+	gpio_out(GPIO_TOUCH_EN, 1);
+
+	tuna_melfas_mux_fw_flash(false);
+	timer->msleep(200);
+}
+
+static void hw_reboot(bool bootloader) {
+	gpio_out(GPIO_TOUCH_EN, 0);
+	gpio_out(GPIO_TOUCH_SDA, bootloader ? 0 : 1);
+	gpio_out(GPIO_TOUCH_SCL, bootloader ? 0 : 1);
+	gpio_out(GPIO_TOUCH_IRQ, 0);
+	timer->msleep(30);
+	gpio_out(GPIO_TOUCH_EN, 1);
+	timer->msleep(30);
+
+	if (bootloader) {
+		gpio_out(GPIO_TOUCH_SCL, 0);
+		gpio_out(GPIO_TOUCH_SDA, 1);
+	} else {
+		gpio_out(GPIO_TOUCH_IRQ, 1);
+		gpio->direction_input(GPIO_TOUCH_IRQ);
+		gpio->direction_input(GPIO_TOUCH_SCL);
+		gpio->direction_input(GPIO_TOUCH_SDA);
+	}
+	timer->msleep(40);
+}
+
+static void mms_pwr_on_reset() {
+	tuna_melfas_mux_fw_flash(true);
+	
+	gpio_out(GPIO_TOUCH_EN, 0);
+	gpio_out(GPIO_TOUCH_SDA, 1);
+	gpio_out(GPIO_TOUCH_SCL, 1);
+	gpio_out(GPIO_TOUCH_IRQ, 1);
+	timer->msleep(50);
+	gpio_out(GPIO_TOUCH_EN, 1);
+	timer->msleep(50);
+	
+	tuna_melfas_mux_fw_flash(false);
+	
+	timer->msleep(250);
+}
+
+/* generic stuff */
 
 #define MMS_TS_ADDR 0x48
 
@@ -56,50 +155,91 @@ static void mms_ts_interrupt(void) {
 
 int main()
 {
-	printf("--- MMS Touchscreen ---\n");
-	static I2C::Connection i2c;
-	static Timer::Connection timer;
+	PINF("--- MMS Touchscreen ---\n");
+	static I2C::Connection _i2c;
+	i2c = &_i2c;
+	PINF("I2C");
+	static Timer::Connection _timer;
+	timer = &_timer;
+	PINF("TIMER");
+	static Gpio::Connection _gpio;
+	gpio = &_gpio;
+	PINF("GPIO");
+	static GpioMux::Connection _mux;
+	mux = &_mux;
+	PINF("GPIO MUX");
 
-	return 0;
+	tuna_melfas_init();
+	mms_pwr_on_reset();
+	tuna_melfas_mux_fw_flash(true);
+	hw_reboot(0);
+	tuna_melfas_mux_fw_flash(false);
+	mms_pwr_on_reset();
+	PINF("reset done");
 
 	int tries = 0;
 	Genode::uint8_t fw_version = -1;
+	Genode::uint8_t buf[FINGER_EVENT_SZ * MAX_FINGERS];
+		
+	buf[0] = 0;
+	if (!i2c->write(MMS_TS_ADDR, 0, buf, 1)) {
+		PERR("Failed to wake up MMS_TS");
+	}
 
 	do {
-		if (!i2c.read(MMS_TS_ADDR, MMS_FW_VERSION, &fw_version, 1)) {
+		if (!i2c->read(MMS_TS_ADDR, MMS_FW_VERSION, &fw_version, 1)) {
 			PERR("Failed to read i2c %x %x", MMS_TS_ADDR, MMS_FW_VERSION);
 			break;
 		}
+		PINF("MMS TS: FW Version %x", fw_version);
+		timer->msleep(100);
 	} while ((fw_version & 0x80) && tries < 3);
 
-	PINF("MMS TS: FW Version %x", fw_version);
-
-	Genode::uint8_t buf[FINGER_EVENT_SZ * MAX_FINGERS];
+	#define _REG(name) {name, #name}
+	struct {
+		Genode::uint8_t reg;
+		char *name;
+	} regs[] = {
+		_REG(MMS_TSP_REVISION),
+		_REG(MMS_HW_REVISION),
+		_REG(MMS_COMPAT_GROUP),
+		_REG(MMS_XRES_LO),
+		_REG(MMS_YRES_LO),
+	};
+	for (int i = 0; i < sizeof(regs)/sizeof(regs[0]);i++){
+		Genode::uint8_t tr = -1;
+		i2c->read(MMS_TS_ADDR, regs[i].reg, &tr, 1);
+		PINF("MMS %s : %x", regs[i].name, tr);
+	}
+	
+	buf[0] = 0;
+	if (!i2c->write(MMS_TS_ADDR, 0, buf, 1)) {
+		PERR("Failed to wake up MMS_TS");
+	}
+	timer->msleep(10);
 
 	do {
-		buf[0] = 0;
-		if (!i2c.write(MMS_TS_ADDR, 0, buf, 1)) {
-			PERR("Failed to wake up MMS_TS");
-		}
-
-		if (!i2c.read(MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ, buf, 1)) {
+		if (!i2c->read(MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ, buf, 1)) {
 			PERR("Failed to read i2c %x %x", MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ);
 		}
 		int count = buf[0];
 
-		if (!i2c.read(MMS_TS_ADDR, MMS_INPUT_EVENT0, buf, count)) {
+		if (!i2c->read(MMS_TS_ADDR, MMS_INPUT_EVENT0, buf, count)) {
 			PERR("Failed to read i2c %x %x", MMS_TS_ADDR, MMS_INPUT_EVENT_PKT_SZ);
+		}
+
+		if (!count) {
+			continue;
 		}
 
 		for (int i = 0; i < count; i+= FINGER_EVENT_SZ) {
 			Genode::uint8_t *tmp = buf + i;
 			int x = tmp[2] | ((tmp[1] & 0xf) << 8);
 			int y = tmp[3] | (((tmp[1] >> 4) & 0xf) << 8);
-		
 			PINF("Touch <%d; %d>", x, y);
 		}
 		
-		timer.msleep(200);
+		timer->msleep(50);
 	} while (1);
 
 	PINF("MMS_TS: done");
