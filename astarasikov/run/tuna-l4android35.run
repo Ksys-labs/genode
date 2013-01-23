@@ -1,0 +1,307 @@
+#
+# Build
+#
+
+set build_components {
+	core
+	init
+	
+	drivers/timer
+	drivers/framebuffer
+	drivers/usb
+	drivers/i2c
+	drivers/gpio
+	drivers/sd_card
+
+	server/nic_bridge
+	server/nitpicker
+	server/nit_fb
+	server/terminal
+	server/terminal_log
+
+	test/mms-touchscreen
+	test/i2c-tuna
+	test/omap4-gpiomux
+	l4android
+}
+
+build $build_components
+create_boot_directory
+
+#
+# Generate config
+#
+
+set config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+
+	<start name="fb_drv">
+		<binary name="omap4_fb_drv" />
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+
+	<start name="usb_drv">
+		<resource name="RAM" quantum="40M"/>
+		<provides>
+			<service name="Input"/>
+			<service name="Nic"/>
+		</provides>
+		<config>
+			<hid/>
+			<nic mac="2e:60:90:0c:4e:01" />
+		</config>
+	</start>
+
+	<start name="nic_bridge">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="Nic"> <child name="usb_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_i2c3">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="3" />
+	</start>
+
+	<start name="omap4_gpio">
+		<binary name="omap4_gpio_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="Gpio"/></provides>
+		<config>
+			<gpio num="46" mode="O" value="0" />
+			<gpio num="19" mode="O" value="1" />
+		</config>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_gpiomux">
+		<binary name="omap4_gpiomux_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="GpioMux"/></provides>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-omap4-gpiomux">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="touchscreen">
+		<binary name="test-mms-touchscreen" />
+		<resource name="RAM" quantum="1M" />
+		<provides>
+			<service name="Input"/>
+		</provides>
+		<route>
+			<service name="I2C"> <child name="omap4_i2c3" /> </service>
+			<service name="Gpio"> <child name="omap4_gpio"/> </service>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<!-- framebuffer multiplexing -->
+	
+	<start name="nitpicker_root">
+		<binary name="nitpicker" />
+		<resource name="RAM" quantum="40M"/>
+		<provides><service name="Nitpicker"/></provides>
+		<route>
+			<service name="Input">       <child name="touchscreen"/> </service>
+			<service name="Framebuffer"> <child name="fb_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="android1_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="10M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="0" width="720" height="640" refresh_rate="25"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="log_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="640" width="720" height="320"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="android1_term_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="940" width="720" height="320"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="log_term">
+		<binary name="terminal"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Terminal"/></provides>
+		<route>
+			<service name="Input">       <child name="log_fb"/> </service>
+			<service name="Framebuffer"> <child name="log_fb"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="android1_term">
+		<binary name="terminal"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Terminal"/></provides>
+		<route>
+			<service name="Input">       <child name="android1_term_fb"/> </service>
+			<service name="Framebuffer"> <child name="android1_term_fb"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="main_log">
+		<binary name="terminal_log" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="LOG"/></provides>
+		<route>
+			<service name="Terminal"> <child name="log_term"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_i2c4">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="4" />
+	</start>
+	
+	<start name="test-i2c-tuna">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="I2C"> <child name="omap4_i2c4" /> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="sd_card">
+		<binary name="sd_card_drv" />
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="Block"/></provides>
+		<route>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="vmlinux.1">
+		<binary name="l4android"/>
+		<resource name="RAM" quantum="512M"/>
+		<config args="mem=220M console=ttyS0 l4x_rd=initrd_l4a_ginger.gz">
+		</config>
+		<route>
+			<service name="Input">       <child name="android1_fb"/> </service>
+			<service name="Framebuffer"> <child name="android1_fb"/> </service>
+			<service name="Terminal">    <child name="android1_term"/> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <any-child/> <parent/> </any-service>
+		</route>
+	</start>
+	
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+
+# generic modules
+set boot_modules {
+	core init
+	timer
+	nic_bridge
+	nitpicker
+	nit_fb
+	terminal
+	terminal_log
+	liquid_fb
+	launchpad
+	scout
+	testnit
+	nitlog
+	omap4_fb_drv
+	usb_drv
+	test-mms-touchscreen
+	omap_i2c_drv
+	test-i2c-tuna
+	omap4_gpio_drv
+	omap4_gpiomux_drv
+	test-omap4-gpiomux
+	sd_card_drv
+	l4android
+	initrd_l4a_ginger.gz
+}
+
+set initrd_path "/mnt/disk1/workspace/work/l4/l4android/bin/initrd_l4a_ginger.gz"
+if {![file exists bin/root-ginger.gz]} {
+	puts "Download initramfs ..."
+	exec cp $initrd_path bin/initrd_l4a_ginger.gz
+}
+
+build_boot_image  [join $boot_modules " "]
