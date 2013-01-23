@@ -37,7 +37,7 @@ using namespace Genode;
  ** Implementation of the input service **
  *****************************************/
 
-class Event_queue : public Ring_buffer<Input::Event, 256> { };
+class Event_queue : public Ring_buffer<Input::Event, 10> { };
 
 static Event_queue ev_queue;
 
