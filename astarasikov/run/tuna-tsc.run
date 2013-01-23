@@ -11,6 +11,7 @@ set build_components {
 	drivers/usb
 	drivers/i2c
 	drivers/gpio
+	drivers/sd_card
 
 	server/nic_bridge
 	server/nitpicker
@@ -27,6 +28,7 @@ set build_components {
 	test/mms-touchscreen
 	test/i2c-tuna
 	test/omap4-gpiomux
+	l4linux
 }
 
 build $build_components
@@ -86,28 +88,12 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	
-	<start name="omap4_i2c4">
-		<binary name="omap_i2c_drv" />
-		<resource name="RAM" quantum="1M" />
-		<provides><service name="I2C"/></provides>
-		<config bus_number="4" />
-	</start>
 
 	<start name="omap4_i2c3">
 		<binary name="omap_i2c_drv" />
 		<resource name="RAM" quantum="1M" />
 		<provides><service name="I2C"/></provides>
 		<config bus_number="3" />
-	</start>
-	
-	<start name="test-i2c-tuna">
-		<resource name="RAM" quantum="1M" />
-		<route>
-			<service name="I2C"> <child name="omap4_i2c4" /> </service>
-			<service name="Timer"> <child name="timer" /> </service>
-			<any-service> <parent/> <any-child/> </any-service>
-		</route>
 	</start>
 
 	<start name="omap4_gpio">
@@ -189,7 +175,21 @@ set config {
 			<service name="Framebuffer"/>
 			<service name="Input"/>
 		</provides>
-		<config xpos="0" ypos="0" width="720" height="640"/>
+		<config xpos="0" ypos="320" width="720" height="320"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="linux_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="0" width="720" height="320"/>
 		<route>
 			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
@@ -201,8 +201,8 @@ set config {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Terminal"/></provides>
 		<route>
-			<service name="Input">       <child name="blocktest_fb"/> </service>
-			<service name="Framebuffer"> <child name="blocktest_fb"/> </service>
+			<service name="Input">       <child name="log_b"/> </service>
+			<service name="Framebuffer"> <child name="log_fb"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
@@ -216,7 +216,6 @@ set config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-
 
 	<start name="nitpicker_launchpad">
 		<binary name="nitpicker" />
@@ -235,6 +234,49 @@ set config {
 		<route>
 			<service name="Nitpicker"> <child name="nitpicker_launchpad"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="omap4_i2c4">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="4" />
+	</start>
+	
+	<start name="test-i2c-tuna">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="I2C"> <child name="omap4_i2c4" /> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="sd_card">
+		<binary name="sd_card_drv" />
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="Block"/></provides>
+		<route>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="vmlinux.1">
+		<binary name="l4linux"/>
+		<resource name="RAM" quantum="48M"/>
+		<config args="mem=16M l4x_rd=initrd.gz">
+			<block label="sda" />
+		</config>
+		<route>
+			<service name="Input">       <child name="linux_fb"/> </service>
+			<service name="Framebuffer"> <child name="linux_fb"/> </service>
+			<service name="Block">       <child name="sd_card"/> </service>
+			<service name="Nic">         <child name="nic_bridge"/> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <any-child/> <parent/> </any-service>
 		</route>
 	</start>
 </config>}
@@ -267,9 +309,15 @@ set boot_modules {
 	omap4_gpio_drv
 	omap4_gpiomux_drv
 	test-omap4-gpiomux
+	sd_card_drv
+	l4linux
+	initrd.gz
+}
+
+set uri "https://github.com/downloads/skalk/genode/busybox-initrd-arm-20120710.gz"
+if {![file exists bin/initrd.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/initrd.gz $uri
 }
 
 build_boot_image  [join $boot_modules " "]
-append qemu_args " -m 256 "
-
-#run_genode_until forever
