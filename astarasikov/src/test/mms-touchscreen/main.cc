@@ -67,35 +67,43 @@ static void gpio_out(int g, int val) {
 
 static void tuna_melfas_mux_fw_flash(bool to_gpios) {
 	if (to_gpios) {
-		mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		mux->init_gpio(GPIO_TOUCH_IRQ,
+			Omap4::GpioMux::PIN_INPUT | Omap4::GpioMux::MUX_MODE3);
 		gpio_out(GPIO_TOUCH_IRQ, 0);
 
-		mux->init_gpio(GPIO_TOUCH_SCL, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		mux->init_gpio(GPIO_TOUCH_SCL,
+			Omap4::GpioMux::PIN_INPUT | Omap4::GpioMux::MUX_MODE3);
 		gpio_out(GPIO_TOUCH_SCL, 0);
 		
-		mux->init_gpio(GPIO_TOUCH_SDA, OMAP_PIN_INPUT | OMAP_MUX_MODE3);
+		mux->init_gpio(GPIO_TOUCH_SDA,
+			Omap4::GpioMux::PIN_INPUT | Omap4::GpioMux::MUX_MODE3);
 		gpio_out(GPIO_TOUCH_SDA, 0);
 	}
 	else {
-		mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE3);
+		mux->init_gpio(GPIO_TOUCH_IRQ,
+			Omap4::GpioMux::PIN_INPUT_PULLUP | Omap4::GpioMux::MUX_MODE3);
 		gpio_out(GPIO_TOUCH_IRQ, 1);
 		gpio->direction_input(GPIO_TOUCH_IRQ);
 
-		mux->init_gpio(GPIO_TOUCH_SCL, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0);
+		mux->init_gpio(GPIO_TOUCH_SCL,
+			Omap4::GpioMux::PIN_INPUT_PULLUP | Omap4::GpioMux::MUX_MODE0);
 		gpio_out(GPIO_TOUCH_SCL, 1);
 		gpio->direction_input(GPIO_TOUCH_SCL);
 		
-		mux->init_gpio(GPIO_TOUCH_SDA, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0);
+		mux->init_gpio(GPIO_TOUCH_SDA,
+			Omap4::GpioMux::PIN_INPUT_PULLUP | Omap4::GpioMux::MUX_MODE0);
 		gpio_out(GPIO_TOUCH_SDA, 1);
 		gpio->direction_input(GPIO_TOUCH_SDA);
 	}
 }
 
 static void tuna_melfas_init(void) {
-	mux->init_gpio(GPIO_TOUCH_IRQ, OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE3);
+	mux->init_gpio(GPIO_TOUCH_IRQ,
+		Omap4::GpioMux::PIN_INPUT_PULLUP | Omap4::GpioMux::MUX_MODE3);
 	gpio->direction_input(GPIO_TOUCH_IRQ);
 
-	mux->init_gpio(GPIO_TOUCH_EN, OMAP_PIN_OUTPUT | OMAP_MUX_MODE3);
+	mux->init_gpio(GPIO_TOUCH_EN,
+		Omap4::GpioMux::PIN_OUTPUT | Omap4::GpioMux::MUX_MODE3);
 	gpio_out(GPIO_TOUCH_EN, 1);
 
 	tuna_melfas_mux_fw_flash(false);

@@ -24,7 +24,7 @@ int main()
 	PINF("+++ Test OMAP4 GPIO MUX +++");
 
 	static GpioMux::Connection mux;
-	mux.init_signal("i2c1_scl", OMAP_PIN_INPUT_PULLUP);
+	mux.init_signal("i2c1_scl", Omap4::GpioMux::PIN_INPUT_PULLUP);
 
 	PINF("--- Test OMAP4 GPIO MUX ---");
 
