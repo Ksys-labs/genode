@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,11 +36,11 @@ namespace Genode {
 				return new (md_alloc())
 					Cpu_session_component(_thread_ep, _pager_ep, _md_alloc, args); }
 
-            void _upgrade_session(Cpu_session_component *cpu, const char *args)
-            {
-                    size_t ram_quota = Arg_string::find_arg(args, "ram_quota").long_value(0);
-                    cpu->upgrade_ram_quota(ram_quota);
-            }
+			void _upgrade_session(Cpu_session_component *cpu, const char *args)
+			{
+				size_t ram_quota = Arg_string::find_arg(args, "ram_quota").long_value(0);
+				cpu->upgrade_ram_quota(ram_quota);
+			}
 
 		public:
 

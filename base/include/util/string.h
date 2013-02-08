@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -50,6 +50,29 @@ namespace Genode {
 
 
 	/**
+	 * Simple memmove
+	 *
+	 * \param dst   destination memory block
+	 * \param src   source memory block
+	 * \param size  number of bytes to move
+	 *
+	 * \return      pointer to destination memory block
+	 */
+	inline void *memmove(void *dst, const void *src, size_t size)
+	{
+		char *d = (char *)dst, *s = (char *)src;
+		size_t i;
+
+		if (s > d)
+			for (i = 0; i < size; i++, *d++ = *s++);
+		else
+			for (s += size - 1, d += size - 1, i = size; i-- > 0; *d-- = *s--);
+
+		return dst;
+	}
+
+
+	/**
 	 * Copy memory block
 	 *
 	 * \param dst   destination memory block
@@ -62,6 +85,10 @@ namespace Genode {
 	{
 		char *d = (char *)dst, *s = (char *)src;
 		size_t i;
+
+		/* check for overlap */
+		if ((d + size > s) && (s + size > d))
+			return memmove(dst, src, size);
 
 		/* try cpu specific version first */
 		if ((i = size - memcpy_cpu(dst, src, size)) == size)
@@ -84,13 +111,6 @@ namespace Genode {
 
 		return dst;
 	}
-
-
-	/**
-	 * Memmove wrapper for sophisticated overlapping-aware memcpy
-	 */
-	inline void *memmove(void *dst, const void *src, size_t size) {
-		return memcpy(dst, src, size); }
 
 
 	/**
@@ -134,19 +154,18 @@ namespace Genode {
 	/**
 	 * Compare memory blocks
 	 *
-	 * \retval 0  memory blocks are equal
-	 * \retval 1  memory blocks differ
-	 *
-	 * NOTE: This function is not fully compatible to the C standard.
+	 * \retval  0  memory blocks are equal
+	 * \retval <0  first memory block is less than second one
+	 * \retval >0  first memory block is greater than second one
 	 */
 	inline int memcmp(const void *p0, const void *p1, size_t size)
 	{
-		char *c0 = (char *)p0;
-		char *c1 = (char *)p1;
+		const unsigned char *c0 = (const unsigned char *)p0;
+		const unsigned char *c1 = (const unsigned char *)p1;
 
 		size_t i;
 		for (i = 0; i < size; i++)
-			if (c0[i] != c1[i]) return 1;
+			if (c0[i] != c1[i]) return c0[i] - c1[i];
 
 		return 0;
 	}

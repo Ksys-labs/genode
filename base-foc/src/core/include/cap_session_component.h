@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -16,6 +16,7 @@
 
 /* Genode includes */
 #include <base/rpc_server.h>
+#include <base/allocator.h>
 
 namespace Genode {
 
@@ -26,6 +27,8 @@ namespace Genode {
 			static long _unique_id_cnt; /* TODO: remove this from generic core code */
 
 		public:
+
+			Cap_session_component(Allocator *md_alloc, const char *args) {}
 
 			Native_capability alloc(Native_capability ep);
 

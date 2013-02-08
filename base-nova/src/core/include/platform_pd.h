@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -88,7 +88,6 @@ namespace Genode {
 			 * \return PD selector
 			 */
 			static addr_t pd_core_sel() { return __core_pd_sel; }
-
 	};
 }
 

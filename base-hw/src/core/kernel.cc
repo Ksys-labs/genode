@@ -16,7 +16,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -53,17 +53,6 @@ namespace Kernel
 	/* import Genode types */
 	typedef Genode::Thread_state Thread_state;
 	typedef Genode::umword_t umword_t;
-
-	/**
-	 * Copy 'size' successive bytes from 'src_base' to 'dst_base'
-	 */
-	inline void copy_range(void * const src_base, void * const dst_base,
-	                       size_t size)
-	{
-		for (unsigned long off = 0; off < size; off += sizeof(umword_t))
-			*(umword_t *)((addr_t)dst_base + off) =
-				*(umword_t *)((addr_t)src_base + off);
-	}
 }
 
 
@@ -73,7 +62,7 @@ void Kernel::Ipc_node::_receive_request(Message_buf * const r)
 	assert(r->size <= _inbuf.size);
 
 	/* fetch message */
-	copy_range(r->base, _inbuf.base, r->size);
+	Genode::memcpy(_inbuf.base, r->base, r->size);
 	_inbuf.size = r->size;
 	_inbuf.origin = r->origin;
 
@@ -90,7 +79,7 @@ void Kernel::Ipc_node::_receive_reply(void * const base, size_t const size)
 	assert(size <= _inbuf.size);
 
 	/* receive reply */
-	copy_range(base, _inbuf.base, size);
+	Genode::memcpy(_inbuf.base, base, size);
 	_inbuf.size = size;
 
 	/* update state */
@@ -293,7 +282,7 @@ namespace Kernel
 			Pd(Tlb * const t) : _tlb(t)
 			{
 				/* try to add translation for mode transition region */
-				page_flags_t const flags = Page_flags::mode_transition();
+				Page_flags::access_t const flags = Page_flags::mode_transition();
 				unsigned const slog2 =
 					tlb()->insert_translation(mtc()->VIRT_BASE,
 					                          mtc()->phys_base(),
@@ -948,7 +937,7 @@ namespace Kernel
 		 * the memory that holds the TLB data, because the latter
 		 * is not feasible in core space.
 		 */
-		Cpu::flush_caches();
+		Cpu::tlb_insertions();
 
 		/* resume targeted thread */
 		t->resume();

@@ -5,19 +5,17 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-/* Genode includes */
-#include <drivers/board.h>
-
 /* core includes */
-#include <cortex_a9/cpu.h>
-#include <cortex_a9/no_trustzone/pic.h>
+#include <cpu/cortex_a9.h>
+#include <pic/cortex_a9_no_trustzone.h>
 #include <platform.h>
+#include <board.h>
 
 using namespace Genode;
 
@@ -79,7 +77,7 @@ Native_region * Platform::_core_only_mmio_regions(unsigned const i)
 		  Board::CORTEX_A9_PRIVATE_MEM_SIZE },
 
 		/* core UART */
-		{ Board::TL16C750_3_MMIO_BASE, Board::TL16C750_3_MMIO_SIZE }
+		{ Board::TL16C750_3_MMIO_BASE, Board::TL16C750_MMIO_SIZE }
 	};
 	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
 }

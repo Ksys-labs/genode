@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,8 +36,8 @@ namespace Genode
 	 */
 	class Platform_pd
 	{
-		unsigned long     _id; /* ID of our kernel object */
-		Native_capability _parent; /* our parent interface */
+		unsigned          _id;          /* ID of our kernel object */
+		Native_capability _parent;      /* our parent interface */
 		Native_thread_id  _main_thread; /* the first thread that gets
 		                                 * executed in this PD */
 

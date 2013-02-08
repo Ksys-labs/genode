@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -98,7 +98,9 @@ namespace Timer {
 			 */
 			bool belongs_to(Genode::Session_capability cap)
 			{
-				return _entrypoint.obj_by_cap(cap) == this;
+				Genode::Object_pool<Session_component>::Guard
+					lcap(_entrypoint.lookup_and_lock(cap));
+				return lcap == this;
 			}
 
 			/**

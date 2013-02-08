@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -32,7 +32,7 @@ static Signal_connection *signal_connection()
  ** Process-wide connection to core's signal service **
  ******************************************************/
 
-enum { STACK_SIZE = 4096 };
+enum { STACK_SIZE = 2*1024*sizeof(addr_t) };
 
 class Signal_handler_thread : Thread<STACK_SIZE>, Lock
 {
@@ -165,6 +165,68 @@ Genode::Signal_context_registry *signal_context_registry()
 }
 
 
+/************
+ ** Signal **
+ ************/
+
+void Signal::_dec_ref_and_unlock()
+{
+	if (_data.context) {
+		Lock::Guard lock_guard(_data.context->_lock);
+		_data.context->_ref_cnt--;
+		if (_data.context->_ref_cnt == 0)
+			_data.context->_destroy_lock.unlock();
+	}
+}
+
+
+void Signal::_inc_ref()
+{
+	if (_data.context) {
+		Lock::Guard lock_guard(_data.context->_lock);
+		_data.context->_ref_cnt++;
+	}
+}
+
+
+Signal::Signal(Signal::Data data) : _data(data)
+{
+	if (_data.context) {
+		_data.context->_ref_cnt = 1;
+		_data.context->_destroy_lock.lock();
+	}
+}
+
+
+Signal::Signal(Signal const &other) : _data(other._data)
+{
+	_inc_ref();
+}
+
+
+Signal::~Signal()
+{
+	_dec_ref_and_unlock();
+}
+
+
+Signal &Signal::operator=(Signal const &other)
+{
+	if ((_data.context == other._data.context)
+	 && (_data.num     == other._data.num))
+		return *this;
+
+	_dec_ref_and_unlock();
+
+	_data.context = other._data.context;
+	_data.num     = other._data.num;
+
+	_inc_ref();
+
+	return *this;
+}
+
+
 /************************
  ** Signal transmitter **
  ************************/
@@ -179,7 +241,7 @@ void Signal_transmitter::context(Signal_context_capability context)
 }
 
 
-void Signal_transmitter::submit(int cnt)
+void Signal_transmitter::submit(unsigned cnt)
 {
 	signal_connection()->submit(_context, cnt);
 }
@@ -253,7 +315,7 @@ Signal_context_capability Signal_receiver::manage(Signal_context *context)
 			if (try_again)
 				break;
 
-			PINF("upgrade quota donation for SIGNAL session");
+			PINF("upgrading quota donation for SIGNAL session");
 			env()->parent()->upgrade(signal_connection()->cap(), "ram_quota=4K");
 			try_again = true;
 		}
@@ -270,6 +332,8 @@ void Signal_receiver::dissolve(Signal_context *context)
 	Lock::Guard list_lock_guard(_contexts_lock);
 
 	_unsynchronized_dissolve(context);
+
+	Lock::Guard context_destroy_lock_guard(context->_destroy_lock);
 }
 
 
@@ -312,12 +376,12 @@ Signal Signal_receiver::wait_for_signal()
 				continue;
 
 			context->_pending = false;
-			Signal result = context->_curr_signal;
+			Signal::Data result = context->_curr_signal;
 
 			/* invalidate current signal in context */
-			context->_curr_signal = Signal(0, 0);
+			context->_curr_signal = Signal::Data(0, 0);
 
-			if (result.num() == 0)
+			if (result.num == 0)
 				PWRN("returning signal with num == 0");
 
 			/* return last received signal */
@@ -334,21 +398,21 @@ Signal Signal_receiver::wait_for_signal()
 		 * the signal-causing context is absent from the list.
 		 */
 	}
-	return Signal(0, 0); /* unreachable */
+	return Signal::Data(0, 0); /* unreachable */
 }
 
 
-void Signal_receiver::local_submit(Signal ns)
+void Signal_receiver::local_submit(Signal::Data ns)
 {
-	Signal_context *context = ns.context();
+	Signal_context *context = ns.context;
 
 	/*
 	 * Replace current signal of the context by signal with accumulated
 	 * counters. In the common case, the current signal is an invalid
 	 * signal with a counter value of zero.
 	 */
-	int num = context->_curr_signal.num() + ns.num();
-	context->_curr_signal = Signal(context, num);
+	unsigned num = context->_curr_signal.num + ns.num;
+	context->_curr_signal = Signal::Data(context, num);
 
 	/* wake up the receiver if the context becomes pending */
 	if (!context->_pending) {
@@ -372,7 +436,7 @@ void Signal_receiver::dispatch_signals(Signal_source *signal_source)
 		}
 
 		/* construct and locally submit signal object */
-		Signal signal(context, source_signal.num());
+		Signal::Data signal(context, source_signal.num());
 		context->_receiver->local_submit(signal);
 
 		/* free context lock that was taken by 'test_and_lock' */

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -994,7 +994,7 @@ int main(int, char **)
 
 			bool press   = (event->type() == Input::Event::PRESS   ? true : false);
 			bool release = (event->type() == Input::Event::RELEASE ? true : false);
-			int  keycode =  event->keycode();
+			int  keycode =  event->code();
 
 			if (press || release)
 				scancode_tracker.submit(keycode, press);

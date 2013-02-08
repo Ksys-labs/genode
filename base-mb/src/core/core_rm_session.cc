@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -28,7 +28,7 @@ Core_rm_session::attach(Dataspace_capability ds_cap, size_t size,
                         Rm_session::Local_addr local_addr,
                         bool executable)
 {
-	Dataspace_component *ds = static_cast<Dataspace_component *>(_ds_ep->obj_by_cap(ds_cap));
+	Object_pool<Dataspace_component>::Guard ds(_ds_ep->lookup_and_lock(ds_cap));
 	if (!ds)
 		throw Invalid_dataspace();
 

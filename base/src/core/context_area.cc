@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -162,6 +162,9 @@ class Context_area_ram_session : public Ram_session
 		{
 			Dataspace_component *dataspace_component =
 				dynamic_cast<Dataspace_component*>(Dataspace_capability::deref(ds));
+
+			if (!dataspace_component)
+				return;
 
 			for (unsigned i = 0; i < MAX_CORE_CONTEXTS; i++)
 				if (context_ds[i] == dataspace_component) {

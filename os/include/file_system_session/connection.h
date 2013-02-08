@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -35,7 +35,7 @@ namespace File_system {
 		:
 			Genode::Connection<Session>(
 				session("ram_quota=%zd, tx_buf_size=%zd, label=\"%s\"",
-				        3*4096 + tx_buf_size, tx_buf_size, label)),
+				        4*1024*sizeof(long) + tx_buf_size, tx_buf_size, label)),
 			Session_client(cap(), tx_block_alloc) { }
 	};
 }

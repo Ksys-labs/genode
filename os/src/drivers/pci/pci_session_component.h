@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -156,8 +156,8 @@ namespace Pci {
 				Config_access config_access;
 
 				/* lookup device component for previous device */
-				Device_component *prev = dynamic_cast<Device_component *>
-				                         (_ep->obj_by_cap(prev_device));
+				Genode::Object_pool<Device_component>::Guard
+					prev(_ep->lookup_and_lock(prev_device));
 
 				/*
 				 * Start bus scanning after the previous device's location.
@@ -200,7 +200,7 @@ namespace Pci {
 			{
 				/* lookup device component for previous device */
 				Device_component *device = dynamic_cast<Device_component *>
-				                           (_ep->obj_by_cap(device_cap));
+				                           (_ep->lookup_and_lock(device_cap));
 
 				if (!device)
 					return;

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -23,7 +23,6 @@
 #include <nic_session/connection.h>
 #include <net/ipv4.h>
 #include <base/allocator_guard.h>
-
 #include <os/session_policy.h>
 
 #include "address_node.h"
@@ -153,8 +152,7 @@ namespace Net {
 			                  Ethernet_frame::Mac_address vmac,
 			                  Nic::Connection            *session,
 			                  Genode::Rpc_entrypoint     &ep,
-			                  char                       *ip_addr = 0
-							);
+			                  char                       *ip_addr = 0);
 
 			~Session_component();
 
@@ -180,6 +178,7 @@ namespace Net {
 	class Root : public Genode::Root_component<Session_component>
 	{
 		private:
+
 			enum { verbose = 1 };
 
 			Mac_allocator           _mac_alloc;
@@ -187,9 +186,8 @@ namespace Net {
 			Genode::Rpc_entrypoint &_ep;
 
 		protected:
-			enum {
-				MAX_IP_ADDR_LENGTH  = 16,
-			};
+
+			enum { MAX_IP_ADDR_LENGTH  = 16, };
 			char ip_addr[MAX_IP_ADDR_LENGTH];
 			char label[256];
 

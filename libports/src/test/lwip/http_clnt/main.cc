@@ -1,21 +1,28 @@
+/*
+ * \brief  HTTP client test
+ * \author Ivan Loskutov
+ * \date   2012-12-21
+ */
+
+/*
+ * Copyright (C) 2012 Ksys Labs LLC
+ * Copyright (C) 2012-2013 Genode Labs GmbH
+ *
+ * This file is part of the Genode OS framework, which is distributed
+ * under the terms of the GNU General Public License version 2.
+ */
+
 /* Genode includes */
 #include <base/printf.h>
 #include <base/thread.h>
 #include <util/string.h>
 #include <timer_session/connection.h>
 
-//#include <unistd.h>
-//#include <sys/types.h>
-
 extern "C" {
-	#include <lwip/sockets.h>
-	#include <lwip/api.h>
-	#include <netif/etharp.h>
-
+#include <lwip/sockets.h>
+#include <lwip/api.h>
+#include <netif/etharp.h>
 }
-
-//#include <arpa/inet.h>
-//#include <netinet/in.h>
 
 #include <lwip/genode.h>
 
@@ -29,8 +36,6 @@ static const char *http_get_request =
  * and sends as much 'http get' requests as possible,
  * printing out the response.
  */
-
-
 int main()
 {
 	static Timer::Connection _timer;
@@ -49,7 +54,7 @@ int main()
 
 
 		PDBG("Create new socket ...");
-		int s = lwip_socket(AF_INET, SOCK_STREAM, 0 ); //IPPROTO_TCP);
+		int s = lwip_socket(AF_INET, SOCK_STREAM, 0 );
 		if (s < 0) {
 			PERR("No socket available!");
 			continue;
@@ -69,7 +74,7 @@ int main()
 
 		PDBG("Send request...");
 		unsigned long bytes = lwip_send(s, (char*)http_get_request,
-										Genode::strlen(http_get_request), 0);
+		                                Genode::strlen(http_get_request), 0);
 		if ( bytes < 0 ) {
 			PERR("Couldn't send request ...");
 			lwip_close(s);
@@ -92,7 +97,6 @@ int main()
 		/* Close socket */
 		lwip_close(s);
 	}
-
 
 	return 0;
 }

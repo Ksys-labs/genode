@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,17 +36,15 @@ static Genode::Lock *alloc_lock()
 
 addr_t Cap_selector_allocator::alloc(size_t num_caps_log2)
 {
-	alloc_lock()->lock();
-	addr_t ret_base = Bit_allocator::alloc(num_caps_log2);
-	alloc_lock()->unlock();
-	return ret_base;
+	Lock::Guard(alloc_lock());
+	return Bit_allocator::alloc(num_caps_log2);
 }
+
 
 void Cap_selector_allocator::free(addr_t cap, size_t num_caps_log2)
 {
-	alloc_lock()->lock();
+	Lock::Guard(alloc_lock());
 	Bit_allocator::free(cap, num_caps_log2);
-	alloc_lock()->unlock();
 }
 
 

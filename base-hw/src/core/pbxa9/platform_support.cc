@@ -5,19 +5,17 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-/* Genode includes */
-#include <drivers/board.h>
-
 /* core includes */
+#include <board.h>
 #include <platform.h>
-#include <cortex_a9/cpu.h>
-#include <cortex_a9/no_trustzone/pic.h>
+#include <cpu/cortex_a9.h>
+#include <pic/cortex_a9_no_trustzone.h>
 
 
 using namespace Genode;

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -14,7 +14,7 @@
 /* Genode includes */
 #include <base/printf.h>
 
-/* Core includes */
+/* core includes */
 #include <cpu_session_component.h>
 
 using namespace Genode;

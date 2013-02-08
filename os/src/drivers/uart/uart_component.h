@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -66,7 +66,7 @@ namespace Uart {
 			 * Constructor
 			 */
 			Session_component(Uart::Driver_factory &driver_factory,
-							  unsigned index, unsigned baudrate)
+			                  unsigned index, unsigned baudrate)
 			:
 				_io_buffer(Genode::env()->ram_session(), IO_BUFFER_SIZE),
 				_driver_factory(driver_factory),
@@ -164,11 +164,7 @@ namespace Uart {
 					unsigned uart_baudrate = 0;
 					try {
 						policy.attribute("baudrate").value(&uart_baudrate);
-					} catch (Xml_node::Nonexistent_attribute) {
-						PDBG("Missing \"baudrate\" attribute in policy definition");
-					}
-
-					PDBG("UART%d %d", uart_index, uart_baudrate);
+					} catch (Xml_node::Nonexistent_attribute) { }
 
 					return new (md_alloc())
 						Session_component(_driver_factory, uart_index, uart_baudrate);

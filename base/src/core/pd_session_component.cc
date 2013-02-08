@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,8 +26,7 @@ using namespace Genode;
 
 int Pd_session_component::bind_thread(Thread_capability thread)
 {
-	Cpu_thread_component *cpu_thread = dynamic_cast<Cpu_thread_component *>
-	                                   (_thread_ep->obj_by_cap(thread));
+	Object_pool<Cpu_thread_component>::Guard cpu_thread(_thread_ep->lookup_and_lock(thread));
 	if (!cpu_thread) return -1;
 
 	if (cpu_thread->bound()) {

@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -46,11 +46,13 @@ namespace Genode {
 			                                   RAM uncacheable respectively            */
 			bool   const _writable;         /* false if dataspace is read-only         */
 
-			List<Rm_region> _regions;    /* regions this is attached to */
+			List<Rm_region> _regions;       /* regions this is attached to */
 			Lock            _lock;
 
-			/* Holds the dataspace owner if a distinction between owner and
-			 * others is necessary on the dataspace, otherwise it is 0 */
+			/*
+			 * Holds the dataspace owner if a distinction between owner and
+			 * others is necessary on the dataspace, otherwise it is 0.
+			 */
 			Dataspace_owner const * _owner;
 
 		protected:

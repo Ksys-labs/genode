@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -25,7 +25,7 @@
 
 namespace Noux {
 
-	struct Terminal_io_channel : Io_channel, Signal_dispatcher
+	struct Terminal_io_channel : Io_channel, Signal_dispatcher_base
 	{
 		Terminal::Session &terminal;
 		Signal_receiver   &sig_rec;
@@ -185,14 +185,14 @@ namespace Noux {
 		}
 
 
-		/*********************************
-		 ** Signal_dispatcher interface **
-		 *********************************/
+		/**************************************
+		 ** Signal_dispatcher_base interface **
+		 **************************************/
 
 		/**
 		 * Called by Noux main loop on the occurrence of new STDIN input
 		 */
-		void dispatch()
+		void dispatch(unsigned)
 		{
 			Io_channel::invoke_all_notifiers();
 		}

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -30,6 +30,7 @@ using namespace Genode;
 
 void Ram_session_component::_export_ram_ds(Dataspace_component *ds) { }
 
+
 void Ram_session_component::_revoke_ram_ds(Dataspace_component *ds)
 {
 	size_t page_rounded_size = (ds->size() + get_page_size() - 1) & get_page_mask();
@@ -47,6 +48,7 @@ void Ram_session_component::_revoke_ram_ds(Dataspace_component *ds)
 
 	ds->assign_core_local_addr(0);
 }
+
 
 void Ram_session_component::_clear_ds(Dataspace_component *ds)
 {

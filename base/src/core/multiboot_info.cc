@@ -1,11 +1,11 @@
-/**
+/*
  * \brief  GRUB multi-boot information handling
  * \author Christian Helmuth
  * \date   2006-05-10
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -34,7 +34,6 @@ void Multiboot_info::print_debug()
 	printf("  mem_lower = %xu\n",  mbi->mem_lower);
 	printf("  mem_upper = %xu\n",  mbi->mem_upper);
 	printf("  boot_device = %x\n", mbi->boot_device);
-//	printf("  cmdline = %08p \"%s\"\n", mbi->cmdline, (char *)mbi->cmdline);
 	printf("  mods_count = %d\n",  mbi->mods_count);
 	printf("  mods_addr = %xu\n",  mbi->mods_addr);
 

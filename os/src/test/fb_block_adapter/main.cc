@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -23,6 +23,7 @@
 #include <block_session/rpc_object.h>
 #include <framebuffer_session/connection.h>
 #include <timer_session/connection.h>
+#include <base/semaphore.h>
 
 static Genode::size_t fb_size = 0;  /* framebuffer size */
 static Genode::addr_t fb_addr = 0;  /* start address of framebuffer */

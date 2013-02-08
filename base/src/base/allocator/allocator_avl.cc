@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -187,7 +187,7 @@ int Allocator_avl_base::add_range(addr_t new_addr, size_t new_size)
 	if (!new_block) return -4;
 
 	/* merge with predecessor */
-	if ((b = _find_by_address(new_addr - 1)) && !b->used()) {
+	if (new_addr != 0 && (b = _find_by_address(new_addr - 1)) && !b->used()) {
 
 		new_size += b->size();
 		new_addr  = b->addr();

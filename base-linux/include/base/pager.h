@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,20 +26,23 @@ namespace Genode {
 
 	struct Pager_object
 	{
-		Thread_capability _thread_cap;
+		Thread_capability         _thread_cap;
+		Signal_context_capability _sigh;
+
 
 		virtual ~Pager_object() { }
 
-		void exception_handler(Signal_context_capability) { }
+		void exception_handler(Signal_context_capability sigh) { _sigh = sigh; }
 
-		public:
+		/**
+		 * Remember thread cap so that rm_session can tell thread that
+		 * rm_client is gone.
+		 */
+		Thread_capability thread_cap() { return _thread_cap; } const
+		void thread_cap(Thread_capability cap) { _thread_cap = cap; }
 
-			/**
-			 * Remember thread cap so that rm_session can tell thread that
-			 * rm_client is gone.
-			 */
-			Thread_capability thread_cap() { return _thread_cap; } const
-			void thread_cap(Thread_capability cap) { _thread_cap = cap; }
+		/* required by lookup_and_lock, provided by Object_pool::Entry normally */
+		void release() { }
 	};
 
 	class Pager_activation_base { };
@@ -47,7 +50,7 @@ namespace Genode {
 	{
 		Pager_entrypoint(Cap_session *, Pager_activation_base *) { }
 
-		Pager_object *obj_by_cap(Pager_capability) { return 0; }
+		Pager_object *lookup_and_lock(Pager_capability) { return 0; }
 	};
 	template <int FOO> class Pager_activation : public Pager_activation_base { };
 }

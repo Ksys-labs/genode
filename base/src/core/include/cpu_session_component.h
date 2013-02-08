@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -46,15 +46,19 @@ namespace Genode {
 	{
 		private:
 
-			Platform_thread _platform_thread;
-
-			bool            _bound;            /* pd binding flag */
+			Platform_thread           _platform_thread;
+			bool                      _bound;            /* pd binding flag */
+			Signal_context_capability _sigh;             /* exception handler */
 
 		public:
 
-			Cpu_thread_component(const char *name, unsigned priority,
-			                     addr_t utcb)
-			: _platform_thread(name, priority, utcb), _bound(false) { }
+			Cpu_thread_component(const char *name, unsigned priority, addr_t utcb,
+			                     Signal_context_capability sigh)
+			:
+				_platform_thread(name, priority, utcb), _bound(false), _sigh(sigh)
+			{
+				update_exception_sigh();
+			}
 
 
 			/************************
@@ -64,6 +68,17 @@ namespace Genode {
 			inline Platform_thread * platform_thread() { return &_platform_thread; }
 			inline bool bound() const                  { return _bound; }
 			inline void bound(bool b)                  { _bound = b; }
+
+			void sigh(Signal_context_capability sigh)
+			{
+				_sigh = sigh;
+				update_exception_sigh();
+			}
+
+			/**
+			 * Propagate exception handler to platform thread
+			 */
+			void update_exception_sigh();
 	};
 
 
@@ -83,14 +98,10 @@ namespace Genode {
 			                                                  session */
 
 			/**
-			 * Lookup thread in CPU session by its capability
-			 *
-			 * \retval NULL  thread capability is invalid or
-			 *               does not belong to the CPU session
+			 * Exception handler that will be invoked unless overridden by a
+			 * call of 'Cpu_session::exception_handler'.
 			 */
-			Cpu_thread_component *_lookup_thread(Thread_capability thread) {
-				return dynamic_cast<Cpu_thread_component *>
-				       (_thread_ep->obj_by_cap(thread)); }
+			Signal_context_capability _default_exception_handler;
 
 			/**
 			 * Raw thread-killing functionality

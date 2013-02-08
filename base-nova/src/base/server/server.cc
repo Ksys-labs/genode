@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -25,6 +25,7 @@
 #include <nova/util.h>
 
 using namespace Genode;
+
 
 /***********************
  ** Server entrypoint **
@@ -59,21 +60,19 @@ void Rpc_entrypoint::_dissolve(Rpc_object_base *obj)
 	Nova::revoke(Nova::Obj_crd(obj->cap().local_name(), 0), false);
 
 	/* make sure nobody is able to find this object */
-	remove(obj);
+	remove_locked(obj);
 
 	/*
-	 * The activation may execute a blocking operation
-	 * in a dispatch function. Before resolving the
-	 * corresponding object, we need to ensure that
-	 * it is no longer used by an activation. Therefore,
-	 * we to need cancel an eventually blocking operation
-	 * and let the activation leave the context of the
-	 * object.
+	 * The activation may execute a blocking operation in a dispatch function.
+	 * Before resolving the corresponding object, we need to ensure that it is
+	 * no longer used by an activation. Therefore, we to need cancel an
+	 * eventually blocking operation and let the activation leave the context
+	 * of the object.
 	 */
 	_leave_server_object(obj);
 
 	/* wait until nobody is inside dispatch */
-	obj->lock();
+	obj->acquire();
 
 	/* De-announce object from cap_session */
 	_cap_session->free(obj->cap());
@@ -96,10 +95,17 @@ void Rpc_entrypoint::_activation_entry()
 
 	Rpc_entrypoint *ep = static_cast<Rpc_entrypoint *>(Thread_base::myself());
 
+	/* delay start if requested so */
+	if (ep->_curr_obj) {
+		ep->_delay_start.lock();
+		ep->_delay_start.unlock();
+	}
+
+	/* prepare ipc server object (copying utcb content to message buffer */
 	Ipc_server srv(&ep->_snd_buf, &ep->_rcv_buf);
 	ep->_rcv_buf.post_ipc(reinterpret_cast<Nova::Utcb *>(ep->utcb()));
 
-	/* destination of next reply */
+	/* destination of next reply - no effect on nova */
 	srv.dst(Native_capability(id_pt));
 
 	int opcode = 0;
@@ -110,34 +116,36 @@ void Rpc_entrypoint::_activation_entry()
 	srv.ret(ERR_INVALID_OBJECT);
 
 	/* atomically lookup and lock referenced object */
-	{
-		Lock::Guard lock_guard(ep->_curr_obj_lock);
+	ep->_curr_obj = ep->lookup_and_lock(id_pt);
+	if (!ep->_curr_obj) {
 
-		ep->_curr_obj = ep->obj_by_id(id_pt);
-		if (!ep->_curr_obj || !id_pt) {
-			/* Badge is used to suppress error message solely.
-			 * It's non zero during cleanup call of an
-			 * rpc_object_base object, see _leave_server_object.
-			 */
-			if (!srv.badge())
-				PERR("could not look up server object, "
-				     " return from call id_pt=%lx",
-				     id_pt);
-			ep->_curr_obj_lock.unlock();
-			srv << IPC_REPLY;
-		}
+		/*
+		 * Badge is used to suppress error message solely.
+		 * It's non zero during cleanup call of an
+		 * rpc_object_base object, see _leave_server_object.
+		 */
+		if (!srv.badge())
+			PERR("could not look up server object, "
+			     " return from call id_pt=%lx",
+			     id_pt);
 
-		ep->_curr_obj->lock();
+	} else {
+
+		/* dispatch request */
+		try { srv.ret(ep->_curr_obj->dispatch(opcode, srv, srv)); }
+		catch (Blocking_canceled) { }
+
+		Rpc_object_base * tmp = ep->_curr_obj;
+		ep->_curr_obj = 0;
+
+		tmp->release();
 	}
 
-	/* dispatch request */
-	try { srv.ret(ep->_curr_obj->dispatch(opcode, srv, srv)); }
-	catch (Blocking_canceled) { }
+	/* if we can't setup receive window, die in order to recognize the issue */
+	if (!ep->_rcv_buf.rcv_prepare_pt_sel_window((Nova::Utcb *)ep->utcb()))
+		/* printf doesn't work here since for IPC also rcv_prepare* is used */
+		nova_die();
 
-	ep->_curr_obj->unlock();
-	ep->_curr_obj = 0;
-
-	ep->_rcv_buf.rcv_prepare_pt_sel_window((Nova::Utcb *)ep->utcb());
 	srv << IPC_REPLY;
 }
 
@@ -181,10 +189,10 @@ void Rpc_entrypoint::activate()
 	 * construction time. However, it executes no code because processing
 	 * time is always provided by the caller of the server activation. To
 	 * delay the processing of requests until the 'activate' function is
-	 * called, we grab the '_curr_obj_lock' on construction and release it
+	 * called, we grab the '_delay_start' lock on construction and release it
 	 * here.
 	 */
-	_curr_obj_lock.unlock();
+	_delay_start.unlock();
 }
 
 
@@ -192,11 +200,11 @@ Rpc_entrypoint::Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
                                const char  *name, bool start_on_construction)
 :
 	Thread_base(name, stack_size),
-	_curr_obj(0),
-	_curr_obj_lock(Lock::LOCKED),
+	_curr_obj(start_on_construction ? 0 : (Rpc_object_base *)~0UL),
+	_delay_start(Lock::LOCKED),
 	_cap_session(cap_session)
 {
-	/**
+	/*
 	 * Create thread if we aren't running in core.
 	 *
 	 * For core this code can't be performed since the sessions aren't
@@ -233,7 +241,7 @@ Rpc_entrypoint::Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
 		request_event_portal(pager_cap, _tid.exc_pt_sel,
 		                     Nova::PT_SEL_RECALL);
 
-		/**
+		/*
 		 * Request native thread cap, _thread_cap only a token.
 		 * The native thread cap is required to attach new rpc objects
 		 * (to create portals bound to the ec)
@@ -245,7 +253,7 @@ Rpc_entrypoint::Rpc_entrypoint(Cap_session *cap_session, size_t stack_size,
 		_tid.ec_sel = ec_cap.local_name();
 	}
 	else
-		/**
+		/*
 		 * Required for core threads (creates local EC)
 		 */
 		Thread_base::start();

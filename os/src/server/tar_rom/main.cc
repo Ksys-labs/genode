@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -148,7 +148,10 @@ class Rom_session_component : public Genode::Rpc_object<Genode::Rom_session>
 			_tar_addr(tar_addr), _filename(filename), _file_addr(0), _file_size(0),
 			_tar_size(tar_size),
 			_file_ds(_init_file_ds())
-		{ }
+		{
+			if (!_file_ds.valid())
+				throw Genode::Root::Invalid_args();
+		}
 
 		/**
 		 * Destructor

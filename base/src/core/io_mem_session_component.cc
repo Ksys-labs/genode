@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -99,6 +99,7 @@ Io_mem_session_component::~Io_mem_session_component()
 {
 	if (verbose)
 		PDBG("I/O mem free [%lx,%lx)", _ds.phys_addr(), _ds.phys_addr() + _ds.size());
+
 	/* dissolve IO_MEM dataspace from service entry point */
 	_ds_ep->dissolve(&_ds);
 

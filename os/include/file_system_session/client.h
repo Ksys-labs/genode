@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -100,6 +100,10 @@ namespace File_system {
 				call<Rpc_move>(from_dir, from_name, to_dir, to_name);
 			}
 
+			void sigh(Node_handle node, Signal_context_capability sigh)
+			{
+				call<Rpc_sigh>(node, sigh);
+			}
 	};
 }
 

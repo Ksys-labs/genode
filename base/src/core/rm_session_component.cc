@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -43,7 +43,6 @@ namespace Genode {
 
 		addr_t _upper_bound() const {
 			return (_size_log2 == ~0UL) ? ~0 : (_base + (1 << _size_log2) - 1); }
-
 
 		/**
 		 * Default constructor, constructs invalid fault area
@@ -293,6 +292,7 @@ void Rm_faulter::fault(Rm_session_component *faulting_rm_session,
 
 void Rm_faulter::dissolve_from_faulting_rm_session()
 {
+	/* serialize access */
 	Lock::Guard lock_guard(_lock);
 
 	if (_faulting_rm_session)
@@ -326,13 +326,11 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 	Lock::Guard lock_guard(_lock);
 
 	/* offset must be positive and page-aligned */
-	if (offset < 0
-	 || align_addr(offset, get_page_size_log2()) != offset)
+	if (offset < 0 || align_addr(offset, get_page_size_log2()) != offset)
 		throw Invalid_args();
 
 	/* check dataspace validity */
-	Dataspace_component *dsc = dynamic_cast<Dataspace_component *>
-	                           (_ds_ep->obj_by_cap(ds_cap));
+	Object_pool<Dataspace_component>::Guard dsc(_ds_ep->lookup_and_lock(ds_cap));
 	if (!dsc) throw Invalid_dataspace();
 
 	if (!size) {
@@ -417,7 +415,7 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 
 	if (verbose)
 		PDBG("attach ds %p (a=%lx,s=%zx,o=%lx) @ [%lx,%lx)",
-		     dsc, dsc->phys_addr(), dsc->size(), offset, (addr_t)r, (addr_t)r + size);
+		     (Dataspace_component *)dsc, dsc->phys_addr(), dsc->size(), offset, (addr_t)r, (addr_t)r + size);
 
 	/* check if attach operation resolves any faulting region-manager clients */
 	for (Rm_faulter *faulter = _faulters.head(); faulter; ) {
@@ -563,20 +561,26 @@ void Rm_session_component::detach(Local_addr local_addr)
 
 Pager_capability Rm_session_component::add_client(Thread_capability thread)
 {
+	unsigned long badge;
+
+	{
+		/* lookup thread and setup correct parameters */
+		Object_pool<Cpu_thread_component>::Guard
+			cpu_thread(_thread_ep->lookup_and_lock(thread));
+		if (!cpu_thread) throw Invalid_thread();
+
+		/* determine identification of client when faulting */
+		badge = cpu_thread->platform_thread()->pager_object_badge();
+	}
+
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
-
-	/* lookup thread and setup correct parameters */
-	Cpu_thread_component *cpu_thread = dynamic_cast<Cpu_thread_component *>
-	                                   (_thread_ep->obj_by_cap(thread));
-	if (!cpu_thread) throw Invalid_thread();
-
-	/* determine identification of client when faulting */
-	unsigned long badge = cpu_thread->platform_thread()->pager_object_badge();
 
 	Rm_client *cl;
 	try { cl = new(&_client_slab) Rm_client(this, badge); }
 	catch (Allocator::Out_of_memory) { throw Out_of_metadata(); }
+	catch (Cpu_session::Thread_creation_failed) { throw Out_of_metadata(); }
+	catch (Thread_base::Stack_alloc_failed) { throw Out_of_metadata(); }
 
 	_clients.insert(cl);
 
@@ -756,18 +760,24 @@ Rm_session_component::~Rm_session_component()
 
 	/* remove all clients */
 	while (Rm_client *cl = _client_slab.raw()->first_object()) {
-		Thread_capability thread_cap = cl->thread_cap();                        
-		if (thread_cap.valid()) {                                               
-			/* lookup thread and reset pager pointer */
-			Cpu_thread_component *cpu_thread = dynamic_cast<Cpu_thread_component *>
-			                                   (_thread_ep->obj_by_cap(thread_cap));
-			if (cpu_thread)                                                     
-				cpu_thread->platform_thread()->pager(0);                        
-		}                                                                       
+		Thread_capability thread_cap = cl->thread_cap();
+		if (thread_cap.valid())
+			/* invalidate thread cap in rm_client object */
+			cl->thread_cap(Thread_capability());
 
 		_lock.unlock();
+
 		cl->dissolve_from_faulting_rm_session();
 		this->dissolve(cl);
+
+		{
+			/* lookup thread and reset pager pointer */
+			Object_pool<Cpu_thread_component>::Guard
+				cpu_thread(_thread_ep->lookup_and_lock(thread_cap));
+			if (cpu_thread)
+				cpu_thread->platform_thread()->pager(0);
+		}
+
 		_lock.lock();
 	}
 

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -80,7 +80,12 @@ inline int lx_kill(int pid, int signal)
 
 inline int lx_create_process(int (*entry)(void *), void *stack, void *arg)
 {
-	int flags = CLONE_VFORK | SIGCHLD;
+	/*
+	 * The low byte of the flags denotes the signal to be sent to the parent
+	 * when the process terminates. We want core to receive SIGCHLD signals on
+	 * this condition.
+	 */
+	int const flags = CLONE_VFORK | LX_SIGCHLD;
 	return lx_clone((int (*)(void *))entry, stack, flags, arg);
 }
 
@@ -94,6 +99,20 @@ inline int lx_setuid(unsigned int uid)
 inline int lx_setgid(unsigned int gid)
 {
 	return lx_syscall(SYS_setgid, gid);
+}
+
+
+/**
+ * Query PID of any terminated child
+ *
+ * This function is called be core after having received a SIGCHLD signal to
+ * determine the PID of a terminated Genode process.
+ *
+ * \return  PID of terminated process or -1 if no process was terminated
+ */
+inline int lx_pollpid()
+{
+	return lx_syscall(SYS_wait4, -1 /* any PID */, (int *)0, 1 /* WNOHANG */, 0);
 }
 
 

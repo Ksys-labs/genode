@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -31,10 +31,20 @@ using namespace Genode;
  * Memory pool used for for core-local meta data
  */
 static char _core_mem[80*1024*1024];
-static Lock _wait_for_exit_lock(Lock::LOCKED);  /* exit() sync */
 
 
-static void signal_handler(int signum)
+static Lock _wait_for_exit_lock(Lock::LOCKED);  /* wakeup of '_wait_for_exit' */
+static bool _do_exit = false;                   /* exit condition */
+
+
+static void sigint_handler(int signum)
+{
+	_wait_for_exit_lock.unlock();
+	_do_exit = true;
+}
+
+
+static void sigchld_handler(int signnum)
 {
 	_wait_for_exit_lock.unlock();
 }
@@ -44,7 +54,10 @@ Platform::Platform()
 : _core_mem_alloc(0)
 {
 	/* catch control-c */
-	lx_sigaction(2, signal_handler);
+	lx_sigaction(LX_SIGINT, sigint_handler);
+
+	/* catch SIGCHLD */
+	lx_sigaction(LX_SIGCHLD, sigchld_handler);
 
 	/* create resource directory under /tmp */
 	lx_mkdir(resource_path(), S_IRWXU);
@@ -64,9 +77,37 @@ Platform::Platform()
 
 void Platform::wait_for_exit()
 {
-	/* block until exit condition is satisfied */
-	try { _wait_for_exit_lock.lock(); }
-	catch (Blocking_canceled) { };
+	for (;;) {
+
+		/*
+		 * Block until a signal occurs.
+		 */
+		try { _wait_for_exit_lock.lock(); }
+		catch (Blocking_canceled) { };
+
+		/*
+		 * Each time, the '_wait_for_exit_lock' gets unlocked, we could have
+		 * received either a SIGINT or SIGCHLD. If a SIGINT was received, the
+		 * '_exit' condition will be set.
+		 */
+		if (_do_exit)
+			return;
+
+		/*
+		 * Reflect SIGCHLD as exception signal to the signal context of the CPU
+		 * session of the process. Because multiple children could have been
+		 * terminated, we iterate until 'pollpid' (wrapper around 'wait4')
+		 * returns -1.
+		 */
+		for (;;) {
+			int const pid = lx_pollpid();
+
+			if (pid == -1)
+				break;
+
+			Platform_thread::submit_exception(pid);
+		}
+	}
 }
 
 
@@ -111,23 +152,37 @@ Platform_env_base::Rm_session_mmap::_dataspace_size(Capability<Dataspace> ds_cap
 		return Dataspace_capability::deref(ds_cap)->size();
 
 	/* use RPC if called from a different thread */
-	if (!core_env()->entrypoint()->is_myself())
-		return Dataspace_client(ds_cap).size();
+	if (!core_env()->entrypoint()->is_myself()) {
+		/* release Rm_session_mmap::_lock during RPC */
+		_lock.unlock();
+		Genode::size_t size = Dataspace_client(ds_cap).size();
+		_lock.lock();
+		return size;
+	}
 
 	/* use local function call if called from the entrypoint */
-	Dataspace *ds = core_env()->entrypoint()->lookup(ds_cap);
+	Object_pool<Rpc_object_base>::Guard
+		ds_rpc(core_env()->entrypoint()->lookup_and_lock(ds_cap));
+	Dataspace * ds = dynamic_cast<Dataspace *>(&*ds_rpc);
 	return ds ? ds->size() : 0;
 }
 
 
 int Platform_env_base::Rm_session_mmap::_dataspace_fd(Capability<Dataspace> ds_cap)
 {
-	if (!core_env()->entrypoint()->is_myself())
-		return Linux_dataspace_client(ds_cap).fd().dst().socket;
+	if (!core_env()->entrypoint()->is_myself()) {
+		/* release Rm_session_mmap::_lock during RPC */
+		_lock.unlock();
+		int socket = Linux_dataspace_client(ds_cap).fd().dst().socket;
+		_lock.lock();
+		return socket;
+	}
 
 	Capability<Linux_dataspace> lx_ds_cap = static_cap_cast<Linux_dataspace>(ds_cap);
 
-	Linux_dataspace *ds = core_env()->entrypoint()->lookup(lx_ds_cap);
+	Object_pool<Rpc_object_base>::Guard
+		ds_rpc(core_env()->entrypoint()->lookup_and_lock(lx_ds_cap));
+	Linux_dataspace * ds = dynamic_cast<Linux_dataspace *>(&*ds_rpc);
 
 	return ds ? ds->fd().dst().socket : -1;
 }
@@ -135,10 +190,17 @@ int Platform_env_base::Rm_session_mmap::_dataspace_fd(Capability<Dataspace> ds_c
 
 bool Platform_env_base::Rm_session_mmap::_dataspace_writable(Dataspace_capability ds_cap)
 {
-	if (!core_env()->entrypoint()->is_myself())
-		return Dataspace_client(ds_cap).writable();
+	if (!core_env()->entrypoint()->is_myself()) {
+		/* release Rm_session_mmap::_lock during RPC */
+		_lock.unlock();
+		bool writable = Dataspace_client(ds_cap).writable();
+		_lock.lock();
+		return writable;
+	}
 
-	Dataspace *ds = core_env()->entrypoint()->lookup(ds_cap);
+	Object_pool<Rpc_object_base>::Guard
+		ds_rpc(core_env()->entrypoint()->lookup_and_lock(ds_cap));
+	Dataspace * ds = dynamic_cast<Dataspace *>(&*ds_rpc);
 
 	return ds ? ds->writable() : false;
 }

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -42,8 +42,6 @@ Region* Region_manager::find_region(Genode::addr_t *addr, Genode::size_t *size)
 
 void* Region_manager::attach(Genode::Dataspace_capability cap, const char* name)
 {
-	Genode::Dataspace_client dsc(cap);
-
 	/* Put it in the dataspace tree */
 	L4lx::Dataspace *ds =
 		L4lx::Env::env()->dataspaces()->insert(name, cap);

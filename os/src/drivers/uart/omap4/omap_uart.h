@@ -1,12 +1,12 @@
 /*
  * \brief  Driver for OMAP4 UARTs
  * \author Ivan Loskutov <ivan.loskutov@ksyslabs.org>
- * \date   2012-11-8
+ * \date   2012-11-08
  */
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,49 +36,50 @@ class Omap_uart : public Genode::Tl16c750_base, public Uart::Driver, public Geno
 		enum { IRQ_STACK_SIZE = 4096 };
 		Genode::Irq_activation _irq_activation;
 
-		void enable_rx_interrupt()
+		void _enable_rx_interrupt()
 		{
 			/* enable access to 'Uart_fcr' and 'Uart_ier' */
 			write<Uart_lcr::Reg_mode>(Uart_lcr::Reg_mode::OPERATIONAL);
+
 			/* enable rx interrupt, disable other interrupts and sleep mode */
 			write<Uart_ier>(Uart_ier::Rhr_it::bits(1)
-				              | Uart_ier::Thr_it::bits(0)
-				              | Uart_ier::Line_sts_it::bits(0)
-				              | Uart_ier::Modem_sts_it::bits(0)
-				              | Uart_ier::Sleep_mode::bits(0)
-				              | Uart_ier::Xoff_it::bits(0)
-				              | Uart_ier::Rts_it::bits(0)
-				              | Uart_ier::Cts_it::bits(0));
+			              | Uart_ier::Thr_it::bits(0)
+			              | Uart_ier::Line_sts_it::bits(0)
+			              | Uart_ier::Modem_sts_it::bits(0)
+			              | Uart_ier::Sleep_mode::bits(0)
+			              | Uart_ier::Xoff_it::bits(0)
+			              | Uart_ier::Rts_it::bits(0)
+			              | Uart_ier::Cts_it::bits(0));
 			/*
-			* Configure protocol formatting and thereby return to
-			* operational mode.
-			*/
+			 * Configure protocol formatting and thereby return to
+			 * operational mode.
+			 */
 			write<Uart_lcr>(Uart_lcr::Char_length::bits(Uart_lcr::Char_length::_8_BIT)
-				              | Uart_lcr::Nb_stop::bits(Uart_lcr::Nb_stop::_1_STOP_BIT)
-				              | Uart_lcr::Parity_en::bits(0)
-				              | Uart_lcr::Break_en::bits(0)
-				              | Uart_lcr::Div_en::bits(0));
+			              | Uart_lcr::Nb_stop::bits(Uart_lcr::Nb_stop::_1_STOP_BIT)
+			              | Uart_lcr::Parity_en::bits(0)
+			              | Uart_lcr::Break_en::bits(0)
+			              | Uart_lcr::Div_en::bits(0));
 		}
 
 	public:
 
 		/**
-		* Constructor
-		*/
+		 * Constructor
+		 */
 		Omap_uart(Genode::Attached_io_mem_dataspace *uart_mmio, int irq_number,
-				  unsigned baud_rate, Uart::Char_avail_callback &callback)
+		          unsigned baud_rate, Uart::Char_avail_callback &callback)
 		:
-		Tl16c750_base((Genode::addr_t)uart_mmio->local_addr<void>(), Genode::Board::TL16C750_CLOCK, baud_rate),
-		_uart_mmio(*uart_mmio),
-		_char_avail_callback(callback),
-		_irq_activation(irq_number, *this, IRQ_STACK_SIZE)
+			Tl16c750_base((Genode::addr_t)uart_mmio->local_addr<void>(), Genode::Board_base::TL16C750_CLOCK, baud_rate),
+			_uart_mmio(*uart_mmio),
+			_char_avail_callback(callback),
+			_irq_activation(irq_number, *this, IRQ_STACK_SIZE)
 		{
-			enable_rx_interrupt();
+			_enable_rx_interrupt();
 		}
 
-		/***************************
-		* * IRQ handler interface **
-		***************************/
+		/**
+		 * * IRQ handler interface **
+		 */
 		void handle_irq(int irq_number)
 		{
 			/* inform client about the availability of data */
@@ -87,33 +88,20 @@ class Omap_uart : public Genode::Tl16c750_base, public Uart::Driver, public Geno
 			_char_avail_callback();
 		}
 
-		/***************************
-		* * UART driver interface **
-		***************************/
-		void put_char(char c)
-		{
-			/* wait until serial port is ready */
-			while ( !read<Uart_lsr::Tx_fifo_empty>() );
+		/**
+		 * * UART driver interface **
+		 */
+		void put_char(char c) { Tl16c750_base::put_char(c); }
 
-			/* output character */
-			write<Uart_thr::Thr>(c);
-		}
+		bool char_avail() { return read<Uart_lsr::Rx_fifo_empty>(); }
 
-		bool char_avail()
-		{
-			return read<Uart_lsr::Rx_fifo_empty>();
-		}
+		char get_char() { return read<Uart_rhr::Rhr>(); }
 
-		char get_char()
+		void baud_rate(int bits_per_second)
 		{
-			return read<Uart_rhr::Rhr>();
-		}
-		
-		void baud_rate(int baud_rate)
-		{
-			init(Genode::Board::TL16C750_CLOCK, baud_rate);
-			enable_rx_interrupt();
+			_init(Genode::Board_base::TL16C750_CLOCK, bits_per_second);
+			_enable_rx_interrupt();
 		}
 };
 
-#endif // _OMAP_UART_H_
+#endif /* _OMAP_UART_H_ */

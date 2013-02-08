@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -63,7 +63,7 @@ namespace Genode {
 							if (try_again)
 								break;
 
-							PINF("upgrade quota donation for Env::RM session");
+							PINF("upgrading quota donation for Env::RM session");
 							env()->parent()->upgrade(_cap, "ram_quota=8K");
 							try_again = true;
 						}
@@ -84,7 +84,7 @@ namespace Genode {
 							if (try_again)
 								break;
 
-							PINF("upgrade quota donation for Env::RM session");
+							PINF("upgrading quota donation for Env::RM session");
 							env()->parent()->upgrade(_cap, "ram_quota=8K");
 							try_again = true;
 						}
@@ -115,7 +115,7 @@ namespace Genode {
 							if (try_again)
 								break;
 
-							PINF("upgrade quota donation for Env::RAM session");
+							PINF("upgrading quota donation for Env::RAM session");
 							env()->parent()->upgrade(_cap, "ram_quota=8K");
 							try_again = true;
 						}
@@ -145,7 +145,7 @@ namespace Genode {
 							if (try_again)
 								break;
 
-							PINF("upgrade quota donation for Env::CPU session");
+							PINF("upgrading quota donation for Env::CPU session");
 							env()->parent()->upgrade(_cap, "ram_quota=8K");
 							try_again = true;
 						}

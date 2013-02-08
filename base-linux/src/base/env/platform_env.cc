@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -18,6 +18,9 @@
 #include <linux_syscalls.h>
 
 using namespace Genode;
+
+
+
 
 
 /****************************************************
@@ -95,7 +98,9 @@ void Platform_env::Local_parent::close(Session_capability session)
 
 
 Platform_env::Local_parent::Local_parent(Parent_capability parent_cap)
-: Parent_client(parent_cap) { }
+: Parent_client(parent_cap)
+{
+}
 
 
 /******************
@@ -139,6 +144,19 @@ Platform_env::Local_parent &Platform_env::_parent()
 {
 	static Local_parent local_parent(obtain_parent_cap());
 	return local_parent;
+}
+
+
+Platform_env::Platform_env()
+:
+	Platform_env_base(static_cap_cast<Ram_session>(_parent().session("Env::ram_session", "")),
+	                  static_cap_cast<Cpu_session>(_parent().session("Env::cpu_session", "")),
+	                  static_cap_cast<Pd_session> (_parent().session("Env::pd_session",  ""))),
+	_heap(Platform_env_base::ram_session(), Platform_env_base::rm_session())
+{
+	/* register TID and PID of the main thread at core */
+	cpu_session()->thread_id(parent()->main_thread_cap(),
+	                         lx_getpid(), lx_gettid());
 }
 
 

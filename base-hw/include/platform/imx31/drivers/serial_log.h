@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -15,7 +15,7 @@
 #define _INCLUDE__PLATFORM__IMX31__DRIVERS__SERIAL_LOG_H_
 
 /* Genode includes */
-#include <drivers/board.h>
+#include <board.h>
 #include <drivers/uart/imx31_uart_base.h>
 
 namespace Genode

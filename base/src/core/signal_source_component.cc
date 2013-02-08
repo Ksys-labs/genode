@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -24,6 +24,13 @@ using namespace Genode;
 /*****************************
  ** Signal-source component **
  *****************************/
+
+void Signal_source_component::release(Signal_context_component *context)
+{
+	if (context && context->is_enqueued())
+		_signal_queue.remove(context);
+}
+
 
 void Signal_source_component::submit(Signal_context_component *context,
                                      Ipc_ostream              *ostream,

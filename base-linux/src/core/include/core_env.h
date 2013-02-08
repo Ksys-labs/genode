@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -126,13 +126,6 @@ namespace Genode {
 			{
 				enum { STACK_SIZE = 2048 * sizeof(Genode::addr_t) };
 
-				template <typename T>
-				T *lookup(Capability<T> cap)
-				{
-					Rpc_object_base *obj = obj_by_cap(cap);
-					return obj ? dynamic_cast<T *>(obj) : 0;
-				}
-
 				Entrypoint(Cap_session *cap_session)
 				:
 					Rpc_entrypoint(cap_session, STACK_SIZE, "entrypoint")
@@ -160,6 +153,7 @@ namespace Genode {
 				Platform_env_base(Ram_session_capability(),
 				                  Cpu_session_capability(),
 				                  Pd_session_capability()),
+				_cap_session(platform()->core_mem_alloc(), "ram_quota=4K"),
 				_entrypoint(&_cap_session),
 				_ram_session(&_entrypoint, &_entrypoint,
 				             platform()->ram_alloc(), platform()->core_mem_alloc(),

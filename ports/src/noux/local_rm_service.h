@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -120,9 +120,8 @@ namespace Noux {
 
 			void close(Genode::Session_capability session)
 			{
-				Rm_session_component *rm_session =
-					dynamic_cast<Rm_session_component *>(_ep.obj_by_cap(session));
-
+				Object_pool<Rm_session_component>::Guard
+					rm_session(_ep.lookup_and_lock(session));
 				if (!rm_session) {
 					PWRN("Unexpected call of close with non-RM-session argument");
 					return;

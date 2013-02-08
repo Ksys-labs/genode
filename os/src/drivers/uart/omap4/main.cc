@@ -1,12 +1,12 @@
 /*
  * \brief  Driver for OMAP4 UARTs
  * \author Ivan Loskutov <ivan.loskutov@ksyslabs.org>
- * \date   2012-11-8
+ * \date   2012-11-08
  */
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -53,6 +53,12 @@ int main(int argc, char **argv)
 		{
 			if (index > UARTS_NUM)
 				throw Uart::Driver_factory::Not_available();
+			
+			if (baudrate == 0)
+			{
+				PDBG("Baudrate is not defined. Use default 115200");
+				baudrate = BAUD_115200;
+			}
 
 			Omap_uart_cfg *cfg  = &omap_uart_cfg[index];
 			Omap_uart     *uart =  created[index];

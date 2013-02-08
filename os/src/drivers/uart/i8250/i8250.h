@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -138,9 +138,9 @@ class I8250 : public Uart::Driver, public Genode::Irq_handler
 			return _inb<TRB>();
 		}
 
-		void baud_rate(int baud_rate)
+		void baud_rate(int bits_per_second)
 		{
-			_init_comport(baud_rate);
+			_init_comport(bits_per_second);
 		}
 };
 

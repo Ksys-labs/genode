@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -107,7 +107,7 @@ namespace Noux {
 
 					Dataspace_capability ds;
 
-					Dataspace_info *info = _ds_registry.lookup_info(curr->ds);
+					Object_pool<Dataspace_info>::Guard info(_ds_registry.lookup_info(curr->ds));
 
 					if (info) {
 
@@ -163,7 +163,7 @@ namespace Noux {
 					return;
 				}
 
-				Dataspace_info *info = _ds_registry.lookup_info(region->ds);
+				Object_pool<Dataspace_info>::Guard info(_ds_registry.lookup_info(region->ds));
 				if (!info) {
 					PERR("attempt to write to unknown dataspace type");
 					for (;;);

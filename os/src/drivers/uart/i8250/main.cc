@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -72,10 +72,11 @@ int main(int argc, char **argv)
 			if (index < 1 || index >= UART_NUM)
 				throw Uart::Driver_factory::Not_available();
 
+			enum { BAUD = 115200 };
 			if (baudrate == 0)
 			{
-				PDBG("Baudrate is not defined. Use default 115200");
-				baudrate = 115200;
+				PINF("Baudrate is not defined. Use default 115200");
+				baudrate = BAUD;
 			}
 
 			I8250 *uart =  created[index];

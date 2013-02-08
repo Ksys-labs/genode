@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -151,7 +151,7 @@ namespace Genode
 			/**
 			 * Return badge for faulting thread
 			 */
-			unsigned long badge() const { return _pagefault.thread_id; }
+			unsigned badge() const { return _pagefault.thread_id; }
 
 			/**
 			 * Return true if last fault was a write fault

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -949,11 +949,18 @@ namespace {
 					PDBG("TIOCGETA - argp=0x%p", argp);
 				::termios *termios = (::termios *)argp;
 
+				termios->c_iflag = 0;
+				termios->c_oflag = 0;
+				termios->c_cflag = 0;
 				/*
 				 * Set 'ECHO' flag, needed by libreadline. Otherwise, echoing
 				 * user input doesn't work in bash.
 				 */
 				termios->c_lflag = ECHO;
+				memset(termios->c_cc, _POSIX_VDISABLE, sizeof(termios->c_cc));
+				termios->c_ispeed = 0;
+				termios->c_ospeed = 0;
+
 				return 0;
 			}
 

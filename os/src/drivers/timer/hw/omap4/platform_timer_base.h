@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -18,7 +18,7 @@
 #include <io_mem_session/connection.h>
 #include <util/mmio.h>
 #include <irq_session/connection.h>
-#include <drivers/board.h>
+#include <drivers/board_base.h>
 
 namespace Genode
 {
@@ -31,7 +31,7 @@ namespace Genode
 		 * Timer tics per microsecond
 		 */
 		static float tics_per_us() {
-			return (float)Board::SYS_CLK / 1000000; }
+			return (float)Board_base::SYS_CLK / 1000000; }
 
 		/**
 		 * Microsecodns per timer tic

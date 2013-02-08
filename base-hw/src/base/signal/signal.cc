@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -51,7 +51,7 @@ Signal_receiver::Signal_receiver()
 				PDBG("Failed to alloc signal receiver");
 				break;
 			}
-			PINF("upgrade quota donation for Signal session");
+			PINF("upgrading quota donation for Signal session");
 			env()->parent()->upgrade(s->cap(), "ram_quota=4K");
 			session_upgraded = 1;
 		}
@@ -84,12 +84,12 @@ Signal_context_capability Signal_receiver::manage(Signal_context * const c)
 	Signal_connection * const s = signal_connection();
 	while (1) {
 		try {
-			c->_cap = s->alloc_context(_cap, (unsigned long)c);
+			c->_cap = s->alloc_context(_cap, (unsigned)c);
 			break;
 		} catch (Signal_session::Out_of_metadata)
 		{
 			/* upgrade session quota and try again, but only once */
-			PINF("upgrade quota donation for Signal session");
+			PINF("upgrading quota donation for Signal session");
 			if (session_upgraded) return Signal_context_capability();
 			env()->parent()->upgrade(s->cap(), "ram_quota=4K");
 			session_upgraded = 1;

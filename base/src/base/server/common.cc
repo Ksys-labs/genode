@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -21,7 +21,7 @@ using namespace Genode;
 void Rpc_entrypoint::_dissolve(Rpc_object_base *obj)
 {
 	/* make sure nobody is able to find this object */
-	remove(obj);
+	remove_locked(obj);
 
 	/*
 	 * The activation may execute a blocking operation in a dispatch function.
@@ -32,7 +32,7 @@ void Rpc_entrypoint::_dissolve(Rpc_object_base *obj)
 	_leave_server_object(obj);
 
 	/* wait until nobody is inside dispatch */
-	obj->lock();
+	obj->acquire();
 
 	_cap_session->free(obj->cap());
 

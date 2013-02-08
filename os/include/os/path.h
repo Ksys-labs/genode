@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -229,7 +229,9 @@ namespace Genode {
 
 			void import(char const *path, char const *pwd = 0) { _import(path, pwd); }
 
-			char  *base() { return _path; }
+			char       *base()       { return _path; }
+			char const *base() const { return _path; }
+
 			size_t max_len() { return _path_max_len; }
 
 			void remove_trailing(char c) { remove_trailing(c, _path); }

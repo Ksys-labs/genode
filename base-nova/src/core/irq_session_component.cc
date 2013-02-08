@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -75,10 +75,21 @@ class Irq_thread : public Thread_base
 				throw Cpu_session::Thread_creation_failed();
 			}
 
-			/* map startup portal from main thread */
-			map_local((Utcb *)Thread_base::myself()->utcb(),
-			          Obj_crd(PT_SEL_STARTUP, 0),
-			          Obj_crd(_tid.exc_pt_sel + PT_SEL_STARTUP, 0));
+			/* remap startup portal from main thread */
+			if (map_local((Utcb *)Thread_base::myself()->utcb(),
+			              Obj_crd(PT_SEL_STARTUP, 0),
+			              Obj_crd(_tid.exc_pt_sel + PT_SEL_STARTUP, 0))) {
+				PERR("could not create startup portal");
+				throw Cpu_session::Thread_creation_failed();
+			}
+
+			/* remap debugging page fault portal for core threads */
+			if (map_local((Utcb *)Thread_base::myself()->utcb(),
+			              Obj_crd(PT_SEL_PAGE_FAULT, 0),
+			              Obj_crd(_tid.exc_pt_sel + PT_SEL_PAGE_FAULT, 0))) {
+				PERR("could not create page fault portal");
+				throw Cpu_session::Thread_creation_failed();
+			}
 
 			/* create SC */
 			unsigned sc_sel = cap_selector_allocator()->alloc();
@@ -106,11 +117,11 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 		{
 			/* alloc slector where IRQ will be mapped */
 			_irq_sel = cap_selector_allocator()->alloc();
-		
+
 			/* since we run in APIC mode translate IRQ 0 (PIT) to 2 */
 			if (!_irq_number)
 				_irq_number = 2;
-	
+
 			/* map IRQ number to selector */
 			int ret = map_local((Nova::Utcb *)Thread_base::myself()->utcb(),
 			                    Nova::Obj_crd(platform_specific()->gsi_base_sel() + _irq_number, 0),
@@ -120,7 +131,7 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 				PERR("Could not map IRQ %ld", _irq_number);
 				return false;
 			}
-		
+
 			/* assign IRQ to CPU */
 			enum { CPU = 0 };
 			Nova::assign_gsi(_irq_sel, 0, CPU);

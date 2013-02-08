@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -75,10 +75,11 @@ namespace Genode {
 
 			struct Raw
 			{
-				Dst    dst;
- 				/*
-				 * It is obsolete and unused in NOVA,
-				 * however still used by generic base part
+				Dst dst;
+
+				/*
+				 * It is obsolete and unused in NOVA, however still used by
+				 * generic base part
 				 */
 				addr_t local_name;
 			};

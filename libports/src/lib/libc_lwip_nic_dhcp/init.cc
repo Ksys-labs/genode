@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -19,12 +19,15 @@
 #include <util/string.h>
 
 #include <lwip/genode.h>
+
 extern "C" {
-	#include <lwip/sockets.h>
-	#include <lwip/api.h>
+#include <lwip/sockets.h>
+#include <lwip/api.h>
 }
 
+
 extern void create_lwip_plugin();
+
 
 void __attribute__((constructor)) init_nic_dhcp(void)
 {
@@ -69,7 +72,7 @@ void __attribute__((constructor)) init_nic_dhcp(void)
 		}
 		
 		PDBG("interface: ip_addr=%s netmask=%s gateway=%s ",
-				ip_addr_str, netmask_str, gateway_str
+		     ip_addr_str, netmask_str, gateway_str
 		);
 
 		genode_int32_t ip, nm, gw;
@@ -77,7 +80,7 @@ void __attribute__((constructor)) init_nic_dhcp(void)
 		ip = inet_addr(ip_addr_str);
 		nm = inet_addr(netmask_str);
 		gw = inet_addr(gateway_str);
-		
+
 		if (ip == INADDR_NONE || nm == INADDR_NONE || gw == INADDR_NONE) {
 			PERR("Invalid interface config.");
 			throw;
@@ -90,6 +93,7 @@ void __attribute__((constructor)) init_nic_dhcp(void)
 	catch (...) {
 		PINF("Using DHCP for interface configuration.");
 	}
+
 	/* make sure the libc_lwip plugin has been created */
 	create_lwip_plugin();
 

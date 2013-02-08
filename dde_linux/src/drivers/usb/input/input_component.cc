@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -45,7 +45,7 @@ namespace Input {
  * Input event call-back function
  */
 static void input_callback(enum input_event_type type,
-                           unsigned keycode,
+                           unsigned code,
                            int absolute_x, int absolute_y,
                            int relative_x, int relative_y)
 {
@@ -58,7 +58,7 @@ static void input_callback(enum input_event_type type,
 	}
 
 	try {
-		ev_queue.add(Input::Event(t, keycode,
+		ev_queue.add(Input::Event(t, code,
 		                          absolute_x, absolute_y,
 		                          relative_x, relative_y));
 	} catch (Input_ring_buffer::Overflow) {

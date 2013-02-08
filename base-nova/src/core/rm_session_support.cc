@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -23,6 +23,7 @@
 using namespace Genode;
 
 static const bool verbose = false;
+
 
 void Rm_client::unmap(addr_t core_local_base, addr_t virt_base, size_t size)
 {
@@ -48,7 +49,7 @@ void Rm_client::unmap(addr_t core_local_base, addr_t virt_base, size_t size)
 			                + (0x1000 << crd.order()); /* size of mapping */
 		} else {
 
-			/* This can happen if the region has never been touched */
+			/* this can happen if the region has never been touched */
 
 			if (verbose)
 				PINF("Nothing mapped at local: %08lx virt: %08lx",

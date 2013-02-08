@@ -96,9 +96,9 @@ int main()
 
 	PLOG("Now, I will bind ...");
 	struct sockaddr_in in_addr;
-    in_addr.sin_family = AF_INET;
-    in_addr.sin_port = htons(80);
-    in_addr.sin_addr.s_addr = INADDR_ANY;
+	in_addr.sin_family = AF_INET;
+	in_addr.sin_port = htons(80);
+	in_addr.sin_addr.s_addr = INADDR_ANY;
 	if(lwip_bind(s, (struct sockaddr*)&in_addr, sizeof(in_addr))) {
 		PERR("bind failed!");
 		return -1;

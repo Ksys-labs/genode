@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -47,11 +47,6 @@ void Thread_base::_thread_start()
 	 * transparently retried after a signal gets received.
 	 */
 	lx_sigaction(LX_SIGUSR1, empty_signal_handler);
-
-	/*
-	 * Prevent children from becoming zombies. (SIG_IGN = 1)
-	 */
-	lx_sigaction(LX_SIGCHLD, (void (*)(int))1);
 
 	Thread_base * const thread = Thread_base::myself();
 

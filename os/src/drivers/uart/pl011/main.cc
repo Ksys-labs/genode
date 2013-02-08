@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -45,10 +45,10 @@ int main(int argc, char **argv)
 				created[i] = 0;
 		}
 
-		Uart::Driver *create(unsigned index,
+		Uart::Driver *create(unsigned index, unsigned /* baudrate */,
 		                     Uart::Char_avail_callback &callback)
 		{
-			PDBG("Setting baudrate is not supported yet. Use default 115200.");
+			PINF("Setting baudrate is not supported yet. Use default 115200.");
 			/*
 			 * We assume the underlying kernel uses UART0 and, therefore, start at
 			 * index 1 for the user-level driver.

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -113,6 +113,7 @@ void Session_component::_free_ipv4_node()
 	}
 }
 
+
 struct Scanner_policy_number
 {
 	static bool identifier_char(char c, unsigned  i )
@@ -120,7 +121,10 @@ struct Scanner_policy_number
 		return Genode::is_digit(c) && c !='.';
 	}
 };
+
+
 typedef ::Genode::Token<Scanner_policy_number> Token;
+
 
 Ipv4_packet::Ipv4_address Session_component::ip_from_string(const char *ip)
 {
@@ -131,8 +135,8 @@ Ipv4_packet::Ipv4_address Session_component::ip_from_string(const char *ip)
 	int         cnt = 0;
 	unsigned char ipb[4] = {0};
 
-	while(t)
-	{
+	while(t) {
+
 		if (t.type() == Token::WHITESPACE || t[0] == '.') {
 			t = t.next();
 			continue;
@@ -150,8 +154,8 @@ Ipv4_packet::Ipv4_address Session_component::ip_from_string(const char *ip)
 			break;
 		cnt++;
 	}
-	if (cnt == 4)
-	{
+
+	if (cnt == 4) {
 		ip_addr.addr[0] = ipb[0];
 		ip_addr.addr[1] = ipb[1];
 		ip_addr.addr[2] = ipb[2];
@@ -169,7 +173,7 @@ Session_component::Session_component(Genode::Allocator          *allocator,
                                      Genode::size_t              rx_buf_size,
                                      Ethernet_frame::Mac_address vmac,
                                      Nic::Connection            *session,
-									 Genode::Rpc_entrypoint     &ep,
+                                     Genode::Rpc_entrypoint     &ep,
                                      char                       *ip_addr)
 : Guarded_range_allocator(allocator, amount),
   Tx_rx_communication_buffers(tx_buf_size, rx_buf_size),
@@ -192,7 +196,7 @@ Session_component::Session_component(Genode::Allocator          *allocator,
 		
 		Ipv4_packet::Ipv4_address ip = ip_from_string(ip_addr);
 		
-		if ( ip == Ipv4_packet::Ipv4_address()) {
+		if (ip == Ipv4_packet::Ipv4_address()) {
 			PDBG("Empty or error ip address. Skipped.");
 		} else {
 			

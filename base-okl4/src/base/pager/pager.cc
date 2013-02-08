@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -37,7 +37,8 @@ void Pager_activation_base::entry()
 		reply_pending = false;
 
 		/* lookup referenced object */
-		Pager_object *obj = _ep ? _ep->obj_by_id(pager.badge()) : 0;
+		Object_pool<Pager_object>::Guard _obj(_ep ? _ep->lookup_and_lock(pager.badge()) : 0);
+		Pager_object *obj = _obj;
 
 		/* handle request */
 		if (obj) {
@@ -102,7 +103,7 @@ Pager_entrypoint::Pager_entrypoint(Cap_session *, Pager_activation_base *a)
 
 void Pager_entrypoint::dissolve(Pager_object *obj)
 {
-	remove(obj);
+	remove_locked(obj);
 }
 
 
