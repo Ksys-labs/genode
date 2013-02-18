@@ -3,17 +3,29 @@
 #
 
 set build_components {
-	core init
+	core
+	init
+	
 	drivers/timer
-	server/nitpicker server/liquid_framebuffer app/launchpad app/scout
-	test/nitpicker server/nitlog
-	drivers/framebuffer drivers/pci drivers/input
+	drivers/framebuffer
+	drivers/usb
+	drivers/i2c
+	drivers/gpio
+	drivers/sd_card
+
+	server/nic_bridge
+	server/nitpicker
+	server/nit_fb
+	server/terminal
+	server/terminal_log
+
+	test/mms-touchscreen
+	test/i2c-tuna
+	test/omap4-gpiomux
+	test/tuna-hwctl
 }
 
-lappend_if [have_spec usb] build_components drivers/usb
-
 build $build_components
-
 create_boot_directory
 
 #
@@ -38,30 +50,190 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
 
-	<start name="omap4_fb_drv">
+	<start name="fb_drv">
+		<binary name="omap4_fb_drv" />
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>
 
 	<start name="usb_drv">
-		<resource name="RAM" quantum="12M"/>
-		<provides><service name="Input"/></provides>
-		<config> <hid/> </config>
+		<resource name="RAM" quantum="40M"/>
+		<provides>
+			<service name="Input"/>
+			<service name="Nic"/>
+		</provides>
+		<config>
+			<hid/>
+			<nic mac="2e:60:90:0c:4e:01" />
+		</config>
 	</start>
 
-	<start name="timer">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Timer"/></provides>
+	<start name="nic_bridge">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="Nic"> <child name="usb_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
 	</start>
-	<start name="nitpicker">
-		<resource name="RAM" quantum="4M"/>
+
+	<start name="omap4_i2c3">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="3" />
+	</start>
+
+	<start name="omap4_gpio">
+		<binary name="omap4_gpio_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="Gpio"/></provides>
+		<config>
+			<gpio num="46" mode="O" value="0" />
+			<gpio num="19" mode="O" value="1" />
+		</config>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_gpiomux">
+		<binary name="omap4_gpiomux_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="GpioMux"/></provides>
+		<route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-omap4-gpiomux">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="touchscreen">
+		<binary name="test-mms-touchscreen" />
+		<resource name="RAM" quantum="1M" />
+		<provides>
+			<service name="Input"/>
+		</provides>
+		<route>
+			<service name="I2C"> <child name="omap4_i2c3" /> </service>
+			<service name="Gpio"> <child name="omap4_gpio"/> </service>
+			<service name="GpioMux"> <child name="omap4_gpiomux"/> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<!-- framebuffer multiplexing -->
+	
+	<start name="nitpicker_root">
+		<binary name="nitpicker" />
+		<resource name="RAM" quantum="22M"/>
 		<provides><service name="Nitpicker"/></provides>
+		<route>
+			<service name="Input">       <child name="touchscreen"/> </service>
+			<service name="Framebuffer"> <child name="fb_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
 	</start>
-	<start name="launchpad">
-		<resource name="RAM" quantum="40M"/>
-		<config args="ram_quota=2000000" />
+
+	<start name="main_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="10M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="0" width="720" height="1000"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
 	</start>
+
+	<start name="log_fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="10M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="1000" width="720" height="280"/>
+		<route>
+			<service name="Nitpicker"> <child name="nitpicker_root"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="log_term">
+		<binary name="terminal"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Terminal"/></provides>
+		<route>
+			<service name="Input">       <child name="log_fb"/> </service>
+			<service name="Framebuffer"> <child name="log_fb"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="main_log">
+		<binary name="terminal_log" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="LOG"/></provides>
+		<route>
+			<service name="Terminal"> <child name="log_term"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="omap4_i2c4">
+		<binary name="omap_i2c_drv" />
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="I2C"/></provides>
+		<config bus_number="4" />
+	</start>
+	
+	<start name="test-i2c-tuna">
+		<resource name="RAM" quantum="1M" />
+		<route>
+			<service name="I2C"> <child name="omap4_i2c4" /> </service>
+			<service name="Timer"> <child name="timer" /> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="sd_card">
+		<binary name="sd_card_drv" />
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="Block"/></provides>
+		<route>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-tuna-hwctl">
+		<resource name="RAM" quantum="80M"/>
+		<route>
+			<service name="Input">       <child name="main_fb"/> </service>
+			<service name="Framebuffer"> <child name="main_fb"/> </service>
+			<service name="LOG"> <child name="main_log"/> </service>
+			<any-service> <any-child/> <parent/> </any-service>
+		</route>
+	</start>
+
 </config>}
 
 install_config $config
@@ -74,16 +246,33 @@ install_config $config
 set boot_modules {
 	core init
 	timer
-	nitpicker liquid_fb launchpad scout
-	testnit nitlog
+	nic_bridge
+	nitpicker
+	nit_fb
+	terminal
+	terminal_log
+	omap4_fb_drv
+	usb_drv
+	test-mms-touchscreen
+	omap_i2c_drv
+	test-i2c-tuna
+	omap4_gpio_drv
+	omap4_gpiomux_drv
+	test-omap4-gpiomux
+	sd_card_drv
+	test-tuna-hwctl
+	dejavusans.lib.so
+	freetype.lib.so
+	ld.lib.so
+	libc.lib.so
+	libc_lock_pipe.lib.so
+	libm.lib.so
+	libpng.lib.so
+	jpeg.lib.so
+	qt_core.lib.so
+	qt_gui.lib.so
+	zlib.lib.so
+	stdcxx.lib.so
 }
 
-# platform-specific modules
-lappend_if [have_spec omap4] boot_modules omap4_fb_drv
-lappend_if [have_spec usb]   boot_modules usb_drv
-
-build_boot_image $boot_modules
-
-append qemu_args " -m 256 "
-
-run_genode_until forever
+build_boot_image  [join $boot_modules " "]
