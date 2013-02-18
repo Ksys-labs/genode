@@ -19,12 +19,11 @@
 #include <util/mmio.h>
 
 /* local includes */
+#define ON_TUNA 1
+
 #include <dss.h>
 #include <dispc.h>
 #include <hdmi.h>
-
-#define ON_TUNA 1
-
 
 namespace Framebuffer {
 	using namespace Genode;
@@ -133,15 +132,95 @@ bool Framebuffer::Driver::init(Framebuffer::Driver::Mode   mode,
                                Framebuffer::addr_t         phys_base)
 {
 	/* enable display core clock and set divider to 1 */
-	#if 0
+	#if ON_TUNA
+	_dispc.write<Dispc::Divisor::Lcd>(1);
+	#else
 	_dispc.write<Dispc::Divisor::Lcd>(2);
-	_dispc.write<Dispc::Divisor::Enable>(1);
 	#endif
-	
+	_dispc.write<Dispc::Divisor::Enable>(1);
+
+	#if ON_TUNA
 	_dispc.write<Dispc::Control1::Lcd_enable>(0);
+	#endif
 
 	/* set load mode */
 	_dispc.write<Dispc::Config1::Load_mode>(Dispc::Config1::Load_mode::DATA_EVERY_FRAME);
+
+	#if !ON_TUNA
+	_hdmi.write<Hdmi::Video_cfg::Start>(0);
+
+	if (!_hdmi.issue_pwr_pll_command(Hdmi::Pwr_ctrl::ALL_OFF, _delayer)) {
+		PERR("Powering off HDMI timed out\n");
+		return false;
+	}
+
+	if (!_hdmi.issue_pwr_pll_command(Hdmi::Pwr_ctrl::BOTH_ON_ALL_CLKS, _delayer)) {
+		PERR("Powering on HDMI timed out\n");
+		return false;
+	}
+
+	if (!_hdmi.reset_pll(_delayer)) {
+		PERR("Resetting HDMI PLL timed out\n");
+		return false;
+	}
+
+	_hdmi.write<Hdmi::Pll_control::Mode>(Hdmi::Pll_control::Mode::MANUAL);
+
+	_hdmi.write<Hdmi::Cfg1::Regm>(270);
+	_hdmi.write<Hdmi::Cfg1::Regn>(15);
+
+	_hdmi.write<Hdmi::Cfg2::Highfreq_div_by_2>(0);
+	_hdmi.write<Hdmi::Cfg2::Refen>(1);
+	_hdmi.write<Hdmi::Cfg2::Clkinen>(0);
+	_hdmi.write<Hdmi::Cfg2::Refsel>(3);
+	_hdmi.write<Hdmi::Cfg2::Freq_divider>(2);
+
+	_hdmi.write<Hdmi::Cfg4::Regm2>(1);
+	_hdmi.write<Hdmi::Cfg4::Regmf>(0x35555);
+
+	if (!_hdmi.pll_go(_delayer)) {
+		PERR("HDMI PLL GO timed out");
+		return false;
+	}
+
+	if (!_hdmi.issue_pwr_phy_command(Hdmi::Pwr_ctrl::LDOON, _delayer)) {
+		PERR("HDMI Phy power on timed out");
+		return false;
+	}
+
+	_hdmi.write<Hdmi::Txphy_tx_ctrl::Freqout>(1);
+	_hdmi.write<Hdmi::Txphy_digital_ctrl>(0xf0000000);
+
+	if (!_hdmi.issue_pwr_phy_command(Hdmi::Pwr_ctrl::TXON, _delayer)) {
+		PERR("HDMI Txphy power on timed out");
+		return false;
+	}
+
+	_hdmi.write<Hdmi::Video_timing_h::Bp>(160);
+	_hdmi.write<Hdmi::Video_timing_h::Fp>(24);
+	_hdmi.write<Hdmi::Video_timing_h::Sw>(136);
+
+	_hdmi.write<Hdmi::Video_timing_v::Bp>(29);
+	_hdmi.write<Hdmi::Video_timing_v::Fp>(3);
+	_hdmi.write<Hdmi::Video_timing_v::Sw>(6);
+
+	_hdmi.write<Hdmi::Video_cfg::Packing_mode>(Hdmi::Video_cfg::Packing_mode::PACK_24B);
+
+	_hdmi.write<Hdmi::Video_size::X>(width(mode));
+	_hdmi.write<Hdmi::Video_size::Y>(height(mode));
+
+	_hdmi.write<Hdmi::Video_cfg::Vsp>(0);
+	_hdmi.write<Hdmi::Video_cfg::Hsp>(0);
+	_hdmi.write<Hdmi::Video_cfg::Interlacing>(0);
+	_hdmi.write<Hdmi::Video_cfg::Tm>(1);
+
+	_dss.write<Dss::Ctrl::Venc_hdmi_switch>(Dss::Ctrl::Venc_hdmi_switch::HDMI);
+
+	_dispc.write<Dispc::Size_tv::Width>(width(mode) - 1);
+	_dispc.write<Dispc::Size_tv::Height>(height(mode) - 1);
+
+	_hdmi.write<Hdmi::Video_cfg::Start>(1);
+	#endif
 
 	Dispc::Gfx_attributes::access_t pixel_format = 0;
 	switch (format) {
@@ -149,19 +228,18 @@ bool Framebuffer::Driver::init(Framebuffer::Driver::Mode   mode,
 	}
 	_dispc.write<Dispc::Gfx_attributes::Format>(pixel_format);
 	
-	//_dispc.write<Dispc::Size_tv::Width>(width(mode) - 1);
-	//_dispc.write<Dispc::Size_tv::Height>(height(mode) - 1);
-
 	_dispc.write<Dispc::Gfx_ba0>(phys_base);
 	_dispc.write<Dispc::Gfx_ba1>(phys_base);
 
-	//_dispc.write<Dispc::Gfx_size::Sizex>(width(mode) - 1);
-	//_dispc.write<Dispc::Gfx_size::Sizey>(height(mode) - 1);
+	#if !ON_TUNA
+	_dispc.write<Dispc::Gfx_size::Sizex>(width(mode) - 1);
+	_dispc.write<Dispc::Gfx_size::Sizey>(height(mode) - 1);
+	#endif
 
 	_dispc.write<Dispc::Global_buffer>(0x6d2240);
 	_dispc.write<Dispc::Gfx_attributes::Enable>(1);
 
-	#if 0
+	#if !ON_TUNA
 	_dispc.write<Dispc::Gfx_attributes::Channelout>(Dispc::Gfx_attributes::Channelout::TV);
 	_dispc.write<Dispc::Gfx_attributes::Channelout2>(Dispc::Gfx_attributes::Channelout2::PRIMARY_LCD);
 	#endif
@@ -169,6 +247,13 @@ bool Framebuffer::Driver::init(Framebuffer::Driver::Mode   mode,
 	#if 1
 	_dispc.write<Dispc::Control1::Lcd_enable>(1);
 	_dispc.write<Dispc::Control1::Go_lcd>(1);
+	#endif
+
+	#if !ON_TUNA
+	if (!_dispc.wait_for<Dispc::Control1::Go_tv>(Dispc::Control1::Go_tv::HW_UPDATE_DONE, _delayer)) {
+		PERR("Go_tv timed out");
+		return false;
+	}
 	#endif
 
 	return true;

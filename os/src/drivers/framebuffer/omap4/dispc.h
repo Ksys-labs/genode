@@ -47,7 +47,11 @@ struct Dispc : Genode::Mmio
 		};
 	};
 
+#if ON_TUNA
 	struct Size_tv : Register<0x7c, 32>
+#else
+	struct Size_tv : Register<0x78, 32>
+#endif
 	{
 		struct Width  : Bitfield<0, 11>  { };
 		struct Height : Bitfield<16, 11> { };
@@ -62,7 +66,12 @@ struct Dispc : Genode::Mmio
 	/**
 	 * Configures the size of the graphics window
 	 */
+
+#if ON_TUNA
 	struct Gfx_size : Register<0x24, 32>
+#else
+	struct Gfx_size : Register<0x8c, 32>
+#endif
 	{
 		struct Sizex : Bitfield<0,11>  { };
 		struct Sizey : Bitfield<16,11> { };
