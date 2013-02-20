@@ -1,8 +1,8 @@
-Index: kernel/fiasco/src/Kconfig
-===================================================================
---- kernel/fiasco/src/Kconfig	(revision 40)
-+++ kernel/fiasco/src/Kconfig	(working copy)
-@@ -685,6 +685,14 @@
+diff --git kernel/fiasco/src/Kconfig kernel/fiasco/src/Kconfig
+index f6e98c5..998d31e 100644
+--- kernel/fiasco/src/Kconfig
++++ kernel/fiasco/src/Kconfig
+@@ -676,6 +676,14 @@ config POWERSAVE_GETCHAR
  	  prevent some P4 processors from being overheated. This option
  	  requires a working timer IRQ to wakeup getchar periodically.
  
@@ -17,27 +17,25 @@ Index: kernel/fiasco/src/Kconfig
  choice
  	prompt "Warn levels"
  	default WARN_WARNING
-Index: kernel/fiasco/src/kern/ia32/config-ia32.cpp
-===================================================================
---- kernel/fiasco/src/kern/ia32/config-ia32.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/ia32/config-ia32.cpp	(working copy)
-@@ -86,6 +86,12 @@
- //  static const bool hlt_works_ok = false;
-   static bool hlt_works_ok;
+diff --git kernel/fiasco/src/kern/arm/thread-arm.cpp kernel/fiasco/src/kern/arm/thread-arm.cpp
+index a781088..af1b16a 100644
+--- kernel/fiasco/src/kern/arm/thread-arm.cpp
++++ kernel/fiasco/src/kern/arm/thread-arm.cpp
+@@ -617,6 +617,10 @@ Thread::condition_valid(Unsigned32 insn, Unsigned32 psr)
+   return (v[insn >> 28] >> (psr >> 28)) & 1;
+ }
  
-+#ifdef CONFIG_USER_SINGLE_STEP
-+  static const bool user_single_step = true;
-+#else
-+  static const bool user_single_step = false;
-+#endif
++IMPLEMENT inline
++void Thread::user_single_step(bool)
++{}
 +
-   // the default uart to use for serial console
-   static const unsigned default_console_uart = 1;
-   static const unsigned default_console_uart_baudrate = 115200;
-Index: kernel/fiasco/src/kern/ia32/32/entry-native.S
-===================================================================
---- kernel/fiasco/src/kern/ia32/32/entry-native.S	(revision 40)
-+++ kernel/fiasco/src/kern/ia32/32/entry-native.S	(working copy)
+ // ------------------------------------------------------------------------
+ IMPLEMENTATION [arm && armv6plus]:
+ 
+diff --git kernel/fiasco/src/kern/ia32/32/entry-native.S kernel/fiasco/src/kern/ia32/32/entry-native.S
+index 5fb9958..1b99652 100644
+--- kernel/fiasco/src/kern/ia32/32/entry-native.S
++++ kernel/fiasco/src/kern/ia32/32/entry-native.S
 @@ -46,6 +46,30 @@
  	jmp	slowtraps
  .endm
@@ -69,7 +67,7 @@ Index: kernel/fiasco/src/kern/ia32/32/entry-native.S
  	.p2align 4
  	.globl	entry_vec01_debug
  entry_vec01_debug:
-@@ -59,6 +83,15 @@
+@@ -59,6 +83,15 @@ entry_vec01_debug:
  	cmpl	$entry_sys_fast_ipc_log, (%esp)
  	je	2f
  #endif
@@ -85,7 +83,7 @@ Index: kernel/fiasco/src/kern/ia32/32/entry-native.S
  1:	pushl	$0
  	pushl	$1
  	pusha
-@@ -227,11 +260,17 @@
+@@ -226,10 +259,16 @@ alien_sys_fast_ipc_log:
  	.p2align(4)
  	.global entry_sys_fast_ipc_c
  entry_sys_fast_ipc_c:
@@ -95,19 +93,35 @@ Index: kernel/fiasco/src/kern/ia32/32/entry-native.S
  	pop	%esp
  	pushl	$(GDT_DATA_USER|SEL_PL_U)	/* user ss */
  	pushl	%ebp				// push user SP (get in ebp)
- 	// Fake user eflags, set IOPL to 3
- 	pushl	$(EFLAGS_IOPL_U | EFLAGS_IF)
+ 	pushf                                   // fake user eflags
 +
 +	RESTORE_USER_TRAP1
 +
  	cld
  	// Fake user cs. This cs value is never used with exception
  	// that the thread is ex_regs'd before we leave with sysexit.
-Index: kernel/fiasco/src/kern/ia32/thread-ia32.cpp
-===================================================================
---- kernel/fiasco/src/kern/ia32/thread-ia32.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/ia32/thread-ia32.cpp	(working copy)
-@@ -189,6 +189,10 @@
+diff --git kernel/fiasco/src/kern/ia32/config-ia32.cpp kernel/fiasco/src/kern/ia32/config-ia32.cpp
+index 8a32b75..2e03a17 100644
+--- kernel/fiasco/src/kern/ia32/config-ia32.cpp
++++ kernel/fiasco/src/kern/ia32/config-ia32.cpp
+@@ -86,6 +86,12 @@ public:
+ //  static const bool hlt_works_ok = false;
+   static bool hlt_works_ok;
+ 
++#ifdef CONFIG_USER_SINGLE_STEP
++  static const bool user_single_step = true;
++#else
++  static const bool user_single_step = false;
++#endif
++
+   // the default uart to use for serial console
+   static const unsigned default_console_uart = 1;
+   static const unsigned default_console_uart_baudrate = 115200;
+diff --git kernel/fiasco/src/kern/ia32/thread-ia32.cpp kernel/fiasco/src/kern/ia32/thread-ia32.cpp
+index f494a4d..1cb91dc 100644
+--- kernel/fiasco/src/kern/ia32/thread-ia32.cpp
++++ kernel/fiasco/src/kern/ia32/thread-ia32.cpp
+@@ -188,6 +188,10 @@ Thread::handle_slow_trap(Trap_state *ts)
        goto generic_debug;
      }
  
@@ -118,7 +132,7 @@ Index: kernel/fiasco/src/kern/ia32/thread-ia32.cpp
    if (from_user && _space.user_mode())
      {
        if (ts->_trapno == 14 && Kmem::is_io_bitmap_page_fault(ts->_cr2))
-@@ -438,7 +442,8 @@
+@@ -435,7 +439,8 @@ Thread::send_exception_arch(Trap_state *ts)
    // thread (not alien) and it's a debug trap,
    // debug traps for aliens are always reflected as exception IPCs
    if (!(state() & Thread_alien)
@@ -128,7 +142,7 @@ Index: kernel/fiasco/src/kern/ia32/thread-ia32.cpp
      return 0; // we do not handle this
  
    if (ts->_trapno == 3)
-@@ -491,6 +496,11 @@
+@@ -488,6 +493,11 @@ Thread::user_ip(Mword ip)
      }
  }
  
@@ -140,7 +154,7 @@ Index: kernel/fiasco/src/kern/ia32/thread-ia32.cpp
  //----------------------------------------------------------------------------
  IMPLEMENTATION [(ia32,amd64,ux) && !io]:
  
-@@ -819,3 +829,16 @@
+@@ -840,3 +850,16 @@ PRIVATE static inline
  int
  Thread::call_nested_trap_handler(Trap_state *)
  { return -1; }
@@ -157,60 +171,11 @@ Index: kernel/fiasco/src/kern/ia32/thread-ia32.cpp
 +
 +  regs()->flags(enable ? user_flags() | EFLAGS_TF : user_flags() & ~EFLAGS_TF);
 +}
-Index: kernel/fiasco/src/kern/thread_object.cpp
-===================================================================
---- kernel/fiasco/src/kern/thread_object.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/thread_object.cpp	(working copy)
-@@ -520,6 +520,8 @@
-   if (o_ip) *o_ip = user_ip();
-   if (o_flags) *o_flags = user_flags();
- 
-+  (ops & Exr_single_step) ? user_single_step(true) : user_single_step(false);
-+
-   // Changing the run state is only possible when the thread is not in
-   // an exception.
-   if (!(ops & Exr_cancel) && (state() & Thread_in_exception))
-Index: kernel/fiasco/src/kern/thread.cpp
-===================================================================
---- kernel/fiasco/src/kern/thread.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/thread.cpp	(working copy)
-@@ -72,6 +72,7 @@
-   {
-     Exr_cancel            = 0x10000,
-     Exr_trigger_exception = 0x20000,
-+    Exr_single_step       = 0x40000,
-   };
- 
-   enum Vcpu_ctl_flags
-@@ -139,6 +140,8 @@
- 
-   inline Mword user_flags() const;
- 
-+  inline void user_single_step(bool);
-+
-   /** nesting level in debugger (always critical) if >1 */
-   static Per_cpu<unsigned long> nested_trap_recover;
-   static void handle_remote_requests_irq() asm ("handle_remote_cpu_requests");
-Index: kernel/fiasco/src/kern/arm/thread-arm.cpp
-===================================================================
---- kernel/fiasco/src/kern/arm/thread-arm.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/arm/thread-arm.cpp	(working copy)
-@@ -590,6 +590,10 @@
-   return (v[insn >> 28] >> (psr >> 28)) & 1;
- }
- 
-+IMPLEMENT inline
-+void Thread::user_single_step(bool)
-+{}
-+
- // ------------------------------------------------------------------------
- IMPLEMENTATION [arm && armv6plus]:
- 
-Index: kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp
-===================================================================
---- kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp	(revision 40)
-+++ kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp	(working copy)
-@@ -308,6 +308,10 @@
+diff --git kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp
+index 9161841..9e1053d 100644
+--- kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp
++++ kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp
+@@ -308,6 +308,10 @@ Thread::user_ip(Mword ip)
      }
  }
  
@@ -221,3 +186,37 @@ Index: kernel/fiasco/src/kern/ppc32/thread-ppc32.cpp
  PUBLIC inline NEEDS ["trap_state.h"]
  int
  Thread::send_exception_arch(Trap_state * /*ts*/)
+diff --git kernel/fiasco/src/kern/thread.cpp kernel/fiasco/src/kern/thread.cpp
+index cf78462..6e814dd 100644
+--- kernel/fiasco/src/kern/thread.cpp
++++ kernel/fiasco/src/kern/thread.cpp
+@@ -73,6 +73,7 @@ public:
+   {
+     Exr_cancel            = 0x10000,
+     Exr_trigger_exception = 0x20000,
++    Exr_single_step       = 0x40000,
+   };
+ 
+   enum Vcpu_ctl_flags
+@@ -140,6 +141,8 @@ public:
+ 
+   inline Mword user_flags() const;
+ 
++  inline void user_single_step(bool);
++
+   /** nesting level in debugger (always critical) if >1 */
+   static Per_cpu<unsigned long> nested_trap_recover;
+   static void handle_remote_requests_irq() asm ("handle_remote_cpu_requests");
+diff --git kernel/fiasco/src/kern/thread_object.cpp kernel/fiasco/src/kern/thread_object.cpp
+index 05314ef..335f3a2 100644
+--- kernel/fiasco/src/kern/thread_object.cpp
++++ kernel/fiasco/src/kern/thread_object.cpp
+@@ -527,6 +527,8 @@ Thread_object::ex_regs(Address ip, Address sp,
+   if (o_ip) *o_ip = user_ip();
+   if (o_flags) *o_flags = user_flags();
+ 
++  (ops & Exr_single_step) ? user_single_step(true) : user_single_step(false);
++
+   // Changing the run state is only possible when the thread is not in
+   // an exception.
+   if (!(ops & Exr_cancel) && (state() & Thread_in_exception))

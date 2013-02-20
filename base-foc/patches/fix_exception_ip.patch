@@ -1,9 +1,9 @@
-Index: kernel/fiasco/src/kern/arm/thread-arm.cpp
-===================================================================
---- kernel/fiasco/src/kern/arm/thread-arm.cpp	(revision 38)
-+++ kernel/fiasco/src/kern/arm/thread-arm.cpp	(working copy)
-@@ -258,6 +258,10 @@
-                 && handle_copro_fault[copro](opcode, ts))
+diff --git kernel/fiasco/src/kern/arm/thread-arm.cpp kernel/fiasco/src/kern/arm/thread-arm.cpp
+index 8dc4cbf..76d3a9f 100644
+--- kernel/fiasco/src/kern/arm/thread-arm.cpp
++++ kernel/fiasco/src/kern/arm/thread-arm.cpp
+@@ -315,6 +315,10 @@ extern "C" {
+             if (handle_copro_fault[copro](opcode, ts))
                return;
            }
 +

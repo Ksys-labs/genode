@@ -1,7 +1,7 @@
-Index: l4/pkg/sigma0/server/src/init.cc
-===================================================================
---- l4/pkg/sigma0/server/src/init.cc	(revision 38)
-+++ l4/pkg/sigma0/server/src/init.cc	(working copy)
+diff --git l4/pkg/sigma0/server/src/init.cc l4/pkg/sigma0/server/src/init.cc
+index c2608ce..ebd8d47 100644
+--- l4/pkg/sigma0/server/src/init.cc
++++ l4/pkg/sigma0/server/src/init.cc
 @@ -27,6 +27,7 @@
  #include "ioports.h"
  #include "mem_man_test.h"
@@ -10,7 +10,7 @@ Index: l4/pkg/sigma0/server/src/init.cc
  
  /* started as the L4 sigma0 task from crt0.S */
  
-@@ -61,6 +62,10 @@
+@@ -61,6 +62,10 @@ init(l4_kernel_info_t *info)
    l4_debugger_set_object_name(L4_BASE_FACTORY_CAP, "root factory");
    l4_debugger_set_object_name(L4_BASE_THREAD_CAP,  "sigma0");
  

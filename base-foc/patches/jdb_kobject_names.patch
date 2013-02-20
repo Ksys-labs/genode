@@ -1,8 +1,8 @@
-Index: kernel/fiasco/src/jdb/jdb_kobject_names.cpp
-===================================================================
---- kernel/fiasco/src/jdb/jdb_kobject_names.cpp	(revision 38)
-+++ kernel/fiasco/src/jdb/jdb_kobject_names.cpp	(working copy)
-@@ -43,7 +43,7 @@
+diff --git kernel/fiasco/src/jdb/jdb_kobject_names.cpp kernel/fiasco/src/jdb/jdb_kobject_names.cpp
+index 813990e..8983f69 100644
+--- kernel/fiasco/src/jdb/jdb_kobject_names.cpp
++++ kernel/fiasco/src/jdb/jdb_kobject_names.cpp
+@@ -43,7 +43,7 @@ IMPLEMENTATION:
  
  enum
  {

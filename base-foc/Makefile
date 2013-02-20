@@ -7,7 +7,7 @@
 VERBOSE    ?= @
 ECHO        = @echo
 SVN_URI     = http://svn.tudos.org/repos/oc/tudos/trunk
-SVN_REV     = 40
+SVN_REV     = 47
 CONTRIB_DIR = contrib
 PATCHES     = $(shell find patches -name *.patch)
 
