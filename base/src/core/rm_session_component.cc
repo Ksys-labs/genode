@@ -2,6 +2,7 @@
  * \brief  Implementation of the RM session interface
  * \author Christian Helmuth
  * \author Norman Feske
+ * \author Alexander Boettcher
  * \date   2006-07-17
  *
  * FIXME arg_string and quota missing
@@ -173,34 +174,59 @@ int Rm_client::pager(Ipc_pager &pager)
 		print_page_fault("page fault", pf_addr, pf_ip, pf_type, badge());
 
 	Rm_session_component            *curr_rm_session = member_rm_session();
-	addr_t                           curr_rm_base = 0;
-	Dataspace_component             *src_dataspace = 0;
+	Rm_session_component            *sub_rm_session  = 0; 
+	addr_t                           curr_rm_base    = 0;
+	Dataspace_component             *src_dataspace   = 0;
 	Rm_session_component::Fault_area src_fault_area;
 	Rm_session_component::Fault_area dst_fault_area(pf_addr);
 	bool lookup;
 
-	/* traverse potentially nested dataspaces until we hit a leaf dataspace */
 	unsigned level;
 	enum { MAX_NESTING_LEVELS = 5 };
-	for (level = 0; level < MAX_NESTING_LEVELS; level++) {
 
+	/* helper guard to release the rm_session lock on return */
+	class Guard {
+		private:
+
+			Rm_session_component ** _release_session;
+			unsigned * _level;
+
+		public:
+
+			explicit Guard(Rm_session_component ** rs, unsigned * level)
+			: _release_session(rs), _level(level) {}
+
+			~Guard() {
+				if ((*_level > 0) && (*_release_session))
+					(*_release_session)->release();
+			}
+	} release_guard(&curr_rm_session, &level);
+
+	/* traverse potentially nested dataspaces until we hit a leaf dataspace */
+	for (level = 0; level < MAX_NESTING_LEVELS; level++) {
 		lookup = curr_rm_session->reverse_lookup(curr_rm_base,
 		                                        &dst_fault_area,
 		                                        &src_dataspace,
-		                                        &src_fault_area);
-		if (!lookup)
-			break;
-
+		                                        &src_fault_area,
+		                                        &sub_rm_session);
 		/* check if we need to traverse into a nested dataspace */
-		Rm_session_component *sub_rm_session = src_dataspace->sub_rm_session();
 		if (!sub_rm_session)
 			break;
+
+		if (!lookup) {
+			sub_rm_session->release();
+			break;
+		}
 
 		/* set up next iteration */
 
 		curr_rm_base = dst_fault_area.fault_addr()
 		             - src_fault_area.fault_addr() + src_dataspace->map_src_addr();
+
+		if (level > 0)
+			curr_rm_session->release();
 		curr_rm_session = sub_rm_session;
+		sub_rm_session  = 0;
 	}
 
 	if (level == MAX_NESTING_LEVELS) {
@@ -290,13 +316,13 @@ void Rm_faulter::fault(Rm_session_component *faulting_rm_session,
 }
 
 
-void Rm_faulter::dissolve_from_faulting_rm_session()
+void Rm_faulter::dissolve_from_faulting_rm_session(Rm_session_component * caller)
 {
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
 
 	if (_faulting_rm_session)
-		_faulting_rm_session->discard_faulter(this);
+		_faulting_rm_session->discard_faulter(this, _faulting_rm_session != caller);
 
 	_faulting_rm_session = 0;
 }
@@ -588,10 +614,44 @@ Pager_capability Rm_session_component::add_client(Thread_capability thread)
 }
 
 
+void Rm_session_component::remove_client(Pager_capability pager_cap)
+{
+
+	Rm_client * cl = dynamic_cast<Rm_client *>(_pager_ep->lookup_and_lock(pager_cap));
+	if (!cl) return;
+
+	/*
+	 * Rm_client is derived from Pager_object. If the Pager_object is also
+	 * derived from Thread_base then the Rm_client object must be
+	 * destructed without holding the rm_session_object lock. The native
+	 * platform specific Thread_base implementation has to take care that
+	 * all in-flight page handling requests are finished before
+	 * destruction. (Either by waiting until the end of or by
+	 * <deadlock free> cancellation of the last in-flight request.
+	 * This operation can also require taking the rm_session_object lock.
+	 */
+	{
+		Lock::Guard lock_guard(_lock);
+		_clients.remove(cl);
+	}
+
+	/* call platform specific dissolve routines */
+	_pager_ep->dissolve(cl);
+
+	{
+		Lock::Guard lock_guard(_lock);
+		cl->dissolve_from_faulting_rm_session(this);
+	}
+
+	destroy(&_client_slab, cl);
+}
+
+
 bool Rm_session_component::reverse_lookup(addr_t                dst_base,
                                           Fault_area           *dst_fault_area,
                                           Dataspace_component **src_dataspace,
-                                          Fault_area           *src_fault_area)
+                                          Fault_area           *src_fault_area,
+                                          Rm_session_component **sub_rm_session)
 {
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
@@ -639,7 +699,16 @@ bool Rm_session_component::reverse_lookup(addr_t                dst_base,
 	/* constrain source fault area by the source dataspace dimensions */
 	src_fault_area->constrain(src_base, (*src_dataspace)->size());
 
-	return src_fault_area->valid() && dst_fault_area->valid();
+	bool lookup = src_fault_area->valid() && dst_fault_area->valid();
+
+	if (!lookup)
+		return lookup;
+
+	/* lookup and lock nested dataspace if required */
+	Native_capability session_cap = (*src_dataspace)->sub_rm_session();
+	*sub_rm_session = dynamic_cast<Rm_session_component *>(_session_ep->lookup_and_lock(session_cap));
+
+	return lookup;
 }
 
 
@@ -650,7 +719,7 @@ void Rm_session_component::fault(Rm_faulter *faulter, addr_t pf_addr,
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
 
-	/* remeber fault state in faulting thread */
+	/* remember fault state in faulting thread */
 	faulter->fault(this, Rm_session::State(pf_type, pf_addr));
 
 	/* enqueue faulter */
@@ -661,12 +730,13 @@ void Rm_session_component::fault(Rm_faulter *faulter, addr_t pf_addr,
 }
 
 
-void Rm_session_component::discard_faulter(Rm_faulter *faulter)
+void Rm_session_component::discard_faulter(Rm_faulter *faulter, bool do_lock)
 {
-	/* serialize access */
-	Lock::Guard lock_guard(_lock);
-
-	_faulters.remove(faulter);
+	if (do_lock) {
+		Lock::Guard lock_guard(_lock);
+		_faulters.remove(faulter);
+	} else
+		_faulters.remove(faulter);
 }
 
 
@@ -692,52 +762,24 @@ Rm_session::State Rm_session_component::state()
 	return faulter->fault_state();
 }
 
-
-void Rm_session_component::dissolve(Rm_client *cl)
-{
-	{
-		Lock::Guard lock_guard(_lock);
-		_pager_ep->dissolve(cl);
-		_clients.remove(cl);
-	}
-
-	/*
-	 * Rm_client is derived from Pager_object. If the Pager_object is also
-	 * derived from Thread_base then the Rm_client object must be
-	 * destructed without holding the rm_session_object lock. The native
-	 * platform specific Thread_base implementation has to take care that
-	 * all in-flight page handling requests are finished before
-	 * destruction. (Either by waiting until the end of or by
-	 * <deadlock free> cancellation of the last in-flight request.
-	 * This operation can also require taking the rm_session_object lock.
-	 *
-	 * Since _client_slab insertion/deletion also must be performed
-	 * synchronized but can't be protected by the rm_session_object lock
-	 * because of the described potential dead_lock situation, we have
-	 * to use a synchronized allocator object to perform insertion and 
-	 * deletion of Rm_clients.
-	 */
-	destroy(&_client_slab, cl);
-}
-
-
 static Dataspace_capability _type_deduction_helper(Dataspace_capability cap) {
 	return cap; }
 
 
 Rm_session_component::Rm_session_component(Rpc_entrypoint   *ds_ep,
                                            Rpc_entrypoint   *thread_ep,
+                                           Rpc_entrypoint   *session_ep,
                                            Allocator        *md_alloc,
                                            size_t            ram_quota,
                                            Pager_entrypoint *pager_ep,
                                            addr_t            vm_start,
                                            size_t            vm_size)
 :
-	_ds_ep(ds_ep), _thread_ep(thread_ep),
+	_ds_ep(ds_ep), _thread_ep(thread_ep), _session_ep(session_ep),
 	_md_alloc(md_alloc, ram_quota),
 	_client_slab(&_md_alloc), _ref_slab(&_md_alloc),
 	_map(&_md_alloc), _pager_ep(pager_ep),
-	_ds(this, vm_size), _ds_cap(_type_deduction_helper(ds_ep->manage(&_ds)))
+	_ds(vm_size), _ds_cap(_type_deduction_helper(ds_ep->manage(&_ds)))
 {
 	/* configure managed VM area */
 	_map.add_range(vm_start, vm_size);
@@ -746,20 +788,48 @@ Rm_session_component::Rm_session_component(Rpc_entrypoint   *ds_ep,
 
 Rm_session_component::~Rm_session_component()
 {
-	_lock.lock();
+	/* dissolve all clients from pager entrypoint */
+	Rm_client *cl;
+	do {
+		{
+			Lock::Guard lock_guard(_lock);
+			cl = _clients.first();
+			if (!cl) break;
+
+			_clients.remove(cl);
+		}
+
+		/* call platform specific dissolve routines */
+		_pager_ep->dissolve(cl);
+	} while (cl);
+
+	/* detach all regions */
+	Rm_region_ref *ref;
+	do {
+		void * local_addr;
+		{
+			Lock::Guard lock_guard(_lock);
+			ref = _ref_slab.first_object();
+			if (!ref) break;
+			local_addr = reinterpret_cast<void *>(ref->region()->base());
+		}
+		detach(local_addr);
+	} while (ref);
 
 	/* revoke dataspace representation */
 	_ds_ep->dissolve(&_ds);
 
-	/* remove all faulters with pending page faults at this rm session */
-	while (Rm_faulter *faulter = _faulters.head()) {
-		_lock.unlock();
-		faulter->dissolve_from_faulting_rm_session();
-		_lock.lock();
-	}
+	/* serialize access */
+	_lock.lock();
 
-	/* remove all clients */
+	/* remove all faulters with pending page faults at this rm session */
+	while (Rm_faulter *faulter = _faulters.head())
+		faulter->dissolve_from_faulting_rm_session(this);
+
+	/* remove all clients, invalidate rm_client pointers in cpu_thread objects */
 	while (Rm_client *cl = _client_slab.raw()->first_object()) {
+		cl->dissolve_from_faulting_rm_session(this);
+
 		Thread_capability thread_cap = cl->thread_cap();
 		if (thread_cap.valid())
 			/* invalidate thread cap in rm_client object */
@@ -767,24 +837,16 @@ Rm_session_component::~Rm_session_component()
 
 		_lock.unlock();
 
-		cl->dissolve_from_faulting_rm_session();
-		this->dissolve(cl);
-
 		{
 			/* lookup thread and reset pager pointer */
 			Object_pool<Cpu_thread_component>::Guard
 				cpu_thread(_thread_ep->lookup_and_lock(thread_cap));
-			if (cpu_thread)
+			if (cpu_thread && (cpu_thread->platform_thread()->pager() == cl))
 				cpu_thread->platform_thread()->pager(0);
 		}
 
-		_lock.lock();
-	}
+		destroy(&_client_slab, cl);
 
-	/* detach all regions */
-	while (Rm_region_ref *r = _ref_slab.first_object()) {
-		_lock.unlock();
-		detach((void *)r->region()->base());
 		_lock.lock();
 	}
 

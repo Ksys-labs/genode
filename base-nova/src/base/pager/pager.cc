@@ -63,7 +63,20 @@ void Pager_object::_page_fault_handler()
 	int ret = obj->pager(ipc_pager);
 
 	if (ret) {
-		obj->client_recall();
+		if (obj->client_recall() != Nova::NOVA_OK) {
+			char client_name[Context::NAME_LEN];
+			myself->name(client_name, sizeof(client_name));
+
+			PWRN("unresolvable page fault since recall failed, '%s'",
+			     client_name);
+
+			Native_capability pager_obj = obj->Object_pool<Pager_object>::Entry::cap();
+			revoke(pager_obj.dst(), true);
+
+			revoke(Obj_crd(obj->exc_pt_sel(), NUM_INITIAL_PT_LOG2), false);
+
+			obj->_state.dead = true;
+		}
 		utcb->set_msg_word(0);
 		utcb->mtd = 0;
 	}
@@ -79,12 +92,19 @@ void Pager_object::_exception_handler(addr_t portal_id)
 	Utcb         *utcb = _check_handler(myself, obj);
 	addr_t fault_ip    = utcb->ip;
 
-	if (obj->submit_exception_signal()) 
-		/* Somebody takes care don't die - just recall and block */
-		obj->client_recall();
+	if (obj->submit_exception_signal()) {
+		/* somebody takes care don't die - just recall and block */
+		if (obj->client_recall() != Nova::NOVA_OK) {
+			PERR("recall failed exception_handler");
+			nova_die();
+		}
+	}
 	else {
-		PWRN("unresolvable exception at ip 0x%lx, exception portal 0x%lx",
-		     fault_ip, portal_id);
+		char client_name[Context::NAME_LEN];
+		myself->name(client_name, sizeof(client_name));
+
+		PWRN("unresolvable exception at ip 0x%lx, exception portal 0x%lx, "
+		     "'%s'", fault_ip, portal_id, client_name);
 
 		Nova::revoke(Obj_crd(portal_id, 0));
 		obj->_state.dead = true;
@@ -126,13 +146,13 @@ void Pager_object::_recall_handler()
 		utcb->flags = obj->_state.thread.eflags | 0x100UL;
 		utcb->mtd = Nova::Mtd(Mtd::EFL).value();
 	} else
-	if (!obj->_state.singlestep && singlestep_state) {
-		utcb->flags = obj->_state.thread.eflags & ~0x100UL;
-		utcb->mtd = Nova::Mtd(Mtd::EFL).value();
-	} else
-		utcb->mtd = 0;
+		if (!obj->_state.singlestep && singlestep_state) {
+			utcb->flags = obj->_state.thread.eflags & ~0x100UL;
+			utcb->mtd = Nova::Mtd(Mtd::EFL).value();
+		} else
+			utcb->mtd = 0;
 	utcb->set_msg_word(0);
-	
+
 	reply(myself->stack_top());
 }
 
@@ -200,11 +220,46 @@ uint8_t Pager_object::client_recall()
 }
 
 
+void Pager_object::cleanup_call()
+{
+	/*
+	 * Revoke all portals of Pager_object from others.
+	 * The portals will be finally revoked during thread destruction.
+	 */
+	revoke(Obj_crd(exc_pt_sel(), NUM_INITIAL_PT_LOG2), false);
+
+	Utcb *utcb = (Utcb *)Thread_base::myself()->utcb();
+	if (reinterpret_cast<Utcb *>(this->utcb()) == utcb) return;
+
+	/* if pager is blocked wake him up */
+	wake_up();
+
+	utcb->set_msg_word(0);
+	if (uint8_t res = call(_pt_cleanup))
+		PERR("%8p - cleanup call to pager (%8p) failed res=%d",
+		     utcb, this->utcb(), res);
+}
+
+static uint8_t create_portal(addr_t pt, addr_t pd, addr_t ec, Mtd mtd,
+	                         addr_t eip)
+{
+	uint8_t res = create_pt(pt, pd, ec, mtd, eip);
+
+	if (res == NOVA_OK)
+		revoke(Obj_crd(pt, 0, Obj_crd::RIGHT_PT_CTRL));
+
+	return res;	
+}
+
 Pager_object::Pager_object(unsigned long badge)
-: Thread_base("pager", PF_HANDLER_STACK_SIZE), _badge(badge)
+: Thread_base("pager:", PF_HANDLER_STACK_SIZE), _badge(badge)
 {
 	class Create_exception_pt_failed { };
 	uint8_t res;
+
+	/* construct pager name out of client name */
+	strncpy(_context->name + 6, reinterpret_cast<char const *>(badge),
+	        sizeof(_context->name) - 6);
 
 	addr_t pd_sel        = __core_pd_sel;
 	_pt_cleanup          = cap_selector_allocator()->alloc();
@@ -219,8 +274,8 @@ Pager_object::Pager_object(unsigned long badge)
 
 	/* create portal for exception handlers 0x0 - 0xd */
 	for (unsigned i = 0; i < PT_SEL_PAGE_FAULT; i++) {
-		res = create_pt(exc_pt_sel() + i, pd_sel, _tid.ec_sel,
-		                Mtd(0), (addr_t)_exception_handler);
+		res = create_portal(exc_pt_sel() + i, pd_sel, _tid.ec_sel, Mtd(0),
+		                    (addr_t)_exception_handler);
 		if (res) {
 			PERR("could not create exception portal, error = %u\n", res);
 			throw Create_exception_pt_failed();
@@ -232,9 +287,8 @@ Pager_object::Pager_object(unsigned long badge)
 		revoke(Obj_crd(exc_pt_sel() + PT_SEL_PAGE_FAULT, 0));
 
 	/* create portal for page-fault handler */
-	res = create_pt(exc_pt_sel() + PT_SEL_PAGE_FAULT, pd_sel,
-	                _tid.ec_sel, Mtd(Mtd::QUAL | Mtd::EIP),
-	                (mword_t)_page_fault_handler);
+	res = create_portal(exc_pt_sel() + PT_SEL_PAGE_FAULT, pd_sel, _tid.ec_sel,
+	                    Mtd(Mtd::QUAL | Mtd::EIP), (mword_t)_page_fault_handler);
 	if (res) {
 		PERR("could not create page-fault portal, error = %u\n", res);
 		class Create_page_fault_pt_failed { };
@@ -243,8 +297,8 @@ Pager_object::Pager_object(unsigned long badge)
 
 	/* create portal for exception handlers 0xf - 0x19 */
 	for (unsigned i = PT_SEL_PAGE_FAULT + 1; i < PT_SEL_PARENT; i++) {
-		res = create_pt(exc_pt_sel() + i, pd_sel, _tid.ec_sel,
-		                Mtd(0), (addr_t)_exception_handler);
+		res = create_portal(exc_pt_sel() + i, pd_sel, _tid.ec_sel, Mtd(0),
+		                    (addr_t)_exception_handler);
 		if (res) {
 			PERR("could not create exception portal, error = %u\n", res);
 			throw Create_exception_pt_failed();
@@ -252,8 +306,8 @@ Pager_object::Pager_object(unsigned long badge)
 	}
 
 	/* create portal for startup handler */
-	res = create_pt(exc_pt_sel() + PT_SEL_STARTUP, pd_sel, _tid.ec_sel,
-	                Mtd(Mtd::ESP | Mtd::EIP), (mword_t)_startup_handler);
+	res = create_portal(exc_pt_sel() + PT_SEL_STARTUP, pd_sel, _tid.ec_sel,
+	                    Mtd(Mtd::ESP | Mtd::EIP), (mword_t)_startup_handler);
 	if (res) {
 		PERR("could not create startup portal, error = %u\n",
 		     res);
@@ -263,8 +317,8 @@ Pager_object::Pager_object(unsigned long badge)
 
 	/* create portal for recall handler */
 	Mtd mtd(Mtd::ESP | Mtd::EIP | Mtd::ACDB | Mtd::EFL | Mtd::EBSD | Mtd::FSGS);
-	res = create_pt(exc_pt_sel() + PT_SEL_RECALL, pd_sel, _tid.ec_sel,
-	                mtd, (addr_t)_recall_handler);
+	res = create_portal(exc_pt_sel() + PT_SEL_RECALL, pd_sel, _tid.ec_sel,
+	                    mtd, (addr_t)_recall_handler);
 	if (res) {
 		PERR("could not create recall portal, error = %u\n", res);
 		class Create_recall_pt_failed { };
@@ -272,8 +326,8 @@ Pager_object::Pager_object(unsigned long badge)
 	}
 
 	/* create portal for final cleanup call used during destruction */
-	res = create_pt(_pt_cleanup, pd_sel, _tid.ec_sel, Mtd(0),
-	                reinterpret_cast<addr_t>(_invoke_handler));
+	res = create_portal(_pt_cleanup, pd_sel, _tid.ec_sel, Mtd(0),
+	                    reinterpret_cast<addr_t>(_invoke_handler));
 	if (res) {
 		PERR("could not create pager cleanup portal, error = %u\n", res);
 		class Create_cleanup_pt_failed { };
@@ -290,40 +344,24 @@ Pager_object::Pager_object(unsigned long badge)
 
 Pager_object::~Pager_object()
 {
-	/*
-	 * Revoke all portals of Pager_object from others.
-	 * The portals will be finally revoked during thread destruction.
-	 */
-	revoke(Obj_crd(exc_pt_sel(), NUM_INITIAL_PT_LOG2), false);
-
 	/* revoke semaphore cap to signal valid state after recall */
-	addr_t sm_cap = _sm_state_notify;
+	addr_t sm_cap    = _sm_state_notify;
 	_sm_state_notify = Native_thread::INVALID_INDEX;
-	/* wake up client blocked in a thread::pause call */
+
+	/* if pager is blocked wake him up */
 	sm_ctrl(sm_cap, SEMAPHORE_UP);
 	revoke(Obj_crd(sm_cap, 0));
 
-	/* if pager is blocked wake him up */
-	wake_up();
-
-	/*
-	 * Make sure nobody is in the handler anymore by doing an IPC to a
-	 * local cap pointing to same serving thread (if not running in the
-	 * context of the serving thread). When the call returns
-	 * we know that nobody is handled by this object anymore, because
-	 * all remotely available portals had been revoked beforehand.
-	 */
-	Utcb *utcb = (Utcb *)Thread_base::myself()->utcb();
-	if (reinterpret_cast<Utcb *>(&_context->utcb) != utcb) {
-		utcb->set_msg_word(0);
-		if (uint8_t res = call(_pt_cleanup))
-			PERR("failure - cleanup call failed res=%d", res);
-	}
+	/* take care nobody is handled anymore by this object */
+	cleanup_call();
 
 	/* revoke portal used for the cleanup call */
 	revoke(Obj_crd(_pt_cleanup, 0));
+
+	Native_capability pager_obj = ::Object_pool<Pager_object>::Entry::cap();
 	cap_selector_allocator()->free(_pt_cleanup, 0);
 	cap_selector_allocator()->free(sm_cap, 0);
+	cap_selector_allocator()->free(pager_obj.local_name(), 0);
 }
 
 
@@ -346,17 +384,15 @@ Pager_capability Pager_entrypoint::manage(Pager_object *obj)
 
 void Pager_entrypoint::dissolve(Pager_object *obj)
 {
+	Native_capability pager_obj = obj->Object_pool<Pager_object>::Entry::cap();
+
 	/* cleanup at cap session */
-	_cap_session->free(obj->Object_pool<Pager_object>::Entry::cap());
+	_cap_session->free(pager_obj);
 
 	/* cleanup locally */
-	Native_capability pager_pt =
-		obj->Object_pool<Pager_object>::Entry::cap();
-
-	revoke(pager_pt.dst(), true);
-
-	cap_selector_allocator()->free(pager_pt.local_name(), 0);
+	revoke(pager_obj.dst(), true);
 
 	remove_locked(obj);
+	obj->cleanup_call();
 }
 

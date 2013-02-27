@@ -91,6 +91,11 @@ class Irq_thread : public Thread_base
 				throw Cpu_session::Thread_creation_failed();
 			}
 
+			/* default: we don't accept any mappings or translations */
+			Utcb * utcb_obj = reinterpret_cast<Utcb *>(Thread_base::utcb());
+			utcb_obj->crd_rcv = Obj_crd();
+			utcb_obj->crd_xlt = Obj_crd();
+
 			/* create SC */
 			unsigned sc_sel = cap_selector_allocator()->alloc();
 			res = create_sc(sc_sel, pd_sel, _tid.ec_sel, Qpd());
@@ -109,7 +114,8 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 {
 	private:
 
-		long _irq_sel; /* IRQ cap selector */
+		Genode::addr_t _irq_sel; /* IRQ cap selector */
+		Genode::addr_t _dev_mem; /* used when MSI or HPET is used */
 
 	protected:
 
@@ -134,9 +140,16 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 
 			/* assign IRQ to CPU */
 			enum { CPU = 0 };
-			Nova::assign_gsi(_irq_sel, 0, CPU);
+			addr_t msi_addr = 0;
+			addr_t msi_data = 0;
+			uint8_t res = Nova::assign_gsi(_irq_sel, _dev_mem, CPU, msi_addr, msi_data);
 
-			return true;
+			if (res != Nova::NOVA_OK)
+				PERR("Error: assign_pci failed -irq:dev:msi_addr:msi_data "
+				     "%lx:%lx:%lx:%lx", _irq_number, _dev_mem, msi_addr,
+				     msi_data);
+
+			return res == Nova::NOVA_OK;
 		}
 
 		void _wait_for_irq()
@@ -149,7 +162,9 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 
 	public:
 
-		Irq_proxy_component(long irq_number) : Irq_proxy(irq_number)
+		Irq_proxy_component(long irq_number)
+		:
+			Irq_proxy(irq_number), _dev_mem(0)
 		{
 			_start();
 		}

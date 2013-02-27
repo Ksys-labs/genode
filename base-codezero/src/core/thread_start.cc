@@ -43,13 +43,13 @@ void Thread_base::_deinit_platform_thread() { }
  * \return           new thread ID, or
  *                   negative error code
  */
-inline int create_thread(int space_no,
+inline int create_thread(unsigned space_no,
                          void *sp, void *ip,
                          int pager_tid = 1)
 {
 	using namespace Codezero;
 
-	struct task_ids ids = { 1, space_no, TASK_ID_INVALID };
+	struct task_ids ids = { 1U, space_no, TASK_ID_INVALID };
 
 	/* allocate new thread at the kernel */
 	unsigned long flags = THREAD_CREATE | TC_SHARE_SPACE | TC_SHARE_GROUP;
@@ -67,6 +67,7 @@ inline int create_thread(int space_no,
 
 	/* setup thread context */
 	struct exregs_data exregs;
+	memset(&exregs, 0, sizeof(exregs));
 	exregs_set_stack(&exregs, (unsigned long)sp);
 	exregs_set_pc   (&exregs, (unsigned long)ip);
 	exregs_set_pager(&exregs, pager_tid);
@@ -104,12 +105,14 @@ void Thread_base::start()
 	_tid.pt = new(platform()->core_mem_alloc()) Platform_thread(_context->name);
 
 	_tid.l4id = create_thread(1, &_context->stack[-4], (void *)&_thread_start);
-	if (_tid.l4id.tid < 0)
-		PERR("create_thread returned %d", _tid.l4id.tid);
+
+	if (_tid.l4id < 0)
+		PERR("create_thread returned %d", _tid.l4id);
 
 	if (verbose_thread_start)
 		printf("core started local thread \"%s\" with ID %d\n",
-		       _context->name, _tid.l4id.tid);
+		       _context->name, _tid.l4id);
+
 }
 
 

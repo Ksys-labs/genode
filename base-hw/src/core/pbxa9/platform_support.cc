@@ -12,10 +12,10 @@
  */
 
 /* core includes */
-#include <board.h>
 #include <platform.h>
-#include <cpu/cortex_a9.h>
-#include <pic/cortex_a9_no_trustzone.h>
+#include <board.h>
+#include <cpu.h>
+#include <pic.h>
 
 
 using namespace Genode;
@@ -36,7 +36,7 @@ Native_region * Platform::_irq_regions(unsigned const i)
 {
 	static Native_region _regions[] =
 	{
-		{ 0, Cortex_a9_no_trustzone::Pic::MAX_INTERRUPT_ID + 1 }
+		{ 0, Kernel::Pic::MAX_INTERRUPT_ID + 1 }
 	};
 	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
 }
