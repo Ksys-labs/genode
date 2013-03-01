@@ -96,7 +96,7 @@ void Atapi_device::read_capacity()
 	_block_size  = bswap32(buffer[1]);
 
 	if (verbose)
-		PDBG("First block: %u last block %u, block size %u",
+		PDBG("First block: %lu last block %lu, block size %u",
 		     _block_start, _block_end, _block_size);
 }
 
