@@ -103,12 +103,27 @@ void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val)
 static int pci_read(struct pci_bus *bus, unsigned int devfn, int where,
 	int size, u32 *value)
 {
+	if (!bus) {
+		printk("%s: bus is NULL\n", __func__);
+		return -1;
+	}
+
+	if (!value) {
+		printk("%s: value is NULL\n", __func__);
+		return -1;
+	}
+	
 	return genode_pci_read(bus->sysdata, devfn, where, size, value);
 }
 
 static int pci_write(struct pci_bus *bus, unsigned int devfn, int where,
 	int size, u32 value)
 {
+	if (!bus) {
+		printk("%s: bus is NULL\n", __func__);
+		return -1;
+	}
+
 	return genode_pci_write(bus->sysdata, devfn, where, size, value);
 }
 

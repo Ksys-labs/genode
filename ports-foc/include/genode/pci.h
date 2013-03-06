@@ -31,9 +31,9 @@ extern "C" {
 
 L4_CV unsigned genode_read_pci_config(unsigned char bus, unsigned char slot,
 	unsigned char func, unsigned char offset);
-L4_CV int genode_pci_read(void *bus, unsigned devfn, int where, int size,
+L4_CV int genode_pci_read(void *bus, unsigned devfn, unsigned where, unsigned size,
 	unsigned *value);
-L4_CV int genode_pci_write(void *bus, unsigned devfn, int where, int size,
+L4_CV int genode_pci_write(void *bus, unsigned devfn, unsigned where, unsigned size,
 	unsigned value);
 L4_CV void genode_pci_init_l4lx(void **busses);
 

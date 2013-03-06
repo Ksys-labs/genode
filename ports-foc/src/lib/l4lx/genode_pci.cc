@@ -25,7 +25,6 @@ namespace Fiasco {
 
 static Pci::Connection *pci;
 
-//XXX: remove this
 #define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
 #define PCI_FUNC(devfn)         ((devfn) & 0x07)
 
@@ -37,9 +36,14 @@ extern "C" {
 		return 0;
 	}
 
-	int genode_pci_read(void *data, unsigned devfn, int where, int size,
-		unsigned *value)
+	int genode_pci_read(void *data, unsigned devfn, unsigned where,
+		unsigned size, unsigned *value)
 	{
+		if (!data) {
+			PERR("%s: data is NULL", __func__);
+			return -1;
+		}
+
 		PINF("%s: devfn=%04x where=%04x size=%04x\n",
 			__func__, devfn, where, size);
 
@@ -50,32 +54,60 @@ extern "C" {
 		Pci::Device_client **devs = (Pci::Device_client**)data;
 		Pci::Device_client *dev = devs[slot];
 
-		if (dev) {
-			PINF("Found slot");
+		if (!dev) {
+			PERR("%s: device %x not found", __func__, slot);
+			return -1;
+		}
 
 		enum Pci::Device::Access_size sz = Pci::Device::ACCESS_8BIT;
 			
-			switch (size) {
-				case 2:
-					sz = Pci::Device::ACCESS_16BIT;
-					break;
-				case 4:
-					sz = Pci::Device::ACCESS_32BIT;
-					break;
-			}
-			*value = dev->config_read(where, sz);
-			return 0;
+		switch (size) {
+			case 2:
+				sz = Pci::Device::ACCESS_16BIT;
+				break;
+			case 4:
+				sz = Pci::Device::ACCESS_32BIT;
+				break;
 		}
-
-		return -1;
+		*value = dev->config_read(where, sz);
+		return 0;
 	}
 
-	int genode_pci_write(void *bus, unsigned devfn, int where, int size,
-		unsigned value)
+	int genode_pci_write(void *data, unsigned devfn, unsigned where,
+		unsigned size, unsigned value)
 	{
+		if (!data) {
+			PERR("%s: data is NULL", __func__);
+			return -1;
+		}
+
 		PINF("%s: devfn=%04x where=%04x size=%04x\n",
 			__func__, devfn, where, size);
-		return -1;
+
+		unsigned char fn = PCI_FUNC(devfn);
+		unsigned char slot = PCI_SLOT(devfn);
+		PINF("%s: fn=%x slot=%x", __func__, fn, slot);
+
+		Pci::Device_client **devs = (Pci::Device_client**)data;
+		Pci::Device_client *dev = devs[slot];
+
+		if (!dev) {
+			PERR("%s: device %x not found", __func__, slot);
+			return -1;
+		}
+
+		enum Pci::Device::Access_size sz = Pci::Device::ACCESS_8BIT;
+			
+		switch (size) {
+			case 2:
+				sz = Pci::Device::ACCESS_16BIT;
+				break;
+			case 4:
+				sz = Pci::Device::ACCESS_32BIT;
+				break;
+		}
+		dev->config_write(where, value, sz);
+		return 0;
 	}
 
 	void genode_pci_init_l4lx(void **busses) {
@@ -83,8 +115,12 @@ extern "C" {
 		static Pci::Connection _pci;
 		pci = &_pci;
 
-		Pci::Device_client ***devs = (Pci::Device_client***)busses;
+		if (!busses) {
+			PINF("%s: busses is NULL", __func__);
+			return;
+		}
 
+		Pci::Device_client ***devs = (Pci::Device_client***)busses;
 		Pci::Device_capability cap = pci->first_device();
 
 		while (cap.valid()) {
