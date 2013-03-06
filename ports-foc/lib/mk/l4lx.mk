@@ -7,6 +7,7 @@ SRC_CC  += env.cc \
            genode_framebuffer.cc \
            genode_input.cc \
            genode_net.cc \
+		   genode_pci.cc \
            genode_terminal.cc \
            l4_io.cc \
            l4_log.cc \

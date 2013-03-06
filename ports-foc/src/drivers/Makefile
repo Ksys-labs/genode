@@ -3,3 +3,4 @@ obj-$(CONFIG_RTC_CLASS) += genode_rtc.o
 obj-$(CONFIG_FB)        += genode_fb.o
 obj-$(CONFIG_BLOCK)     += genode_block.o
 obj-$(CONFIG_NET)       += genode_net.o
+obj-$(CONFIG_PCI_GENODE) += genode_pci.o
