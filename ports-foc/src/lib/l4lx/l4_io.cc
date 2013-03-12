@@ -79,7 +79,15 @@ extern "C" {
 	long l4io_search_iomem_region(l4_addr_t phys, l4_addr_t size,
 	                              l4_addr_t *rstart, l4_addr_t *rsize)
 	{
-		PWRN("%s: Not implemented yet!", __func__);
+		PWRN("%s: Not implemented yet! phys=%lx size=%lx",
+			__func__, phys, size);
+
+		//*rstart = (phys & ~(0x1000 - 1));
+		//*rsize = (size + (phys - *rstart));
+
+		*rstart = phys;
+		*rsize = size;
+
 		return 0;
 	}
 
@@ -87,14 +95,23 @@ extern "C" {
 	long l4io_request_iomem(l4_addr_t phys, unsigned long size, int flags,
 	                        l4_addr_t *virt)
 	{
-		PWRN("%s: Not implemented yet!", __func__);
+		using namespace Genode;
+		PWRN("%s: Not implemented yet! phys=%lx size=%lx",
+			__func__, phys, size);
+		
+		Io_mem_connection *iomem = new (env()->heap()) Io_mem_connection(phys, size);
+		L4lx::Dataspace *ds =
+			L4lx::Env::env()->dataspaces()->insert("iomem", iomem->dataspace());
+		*virt = (l4_addr_t)L4lx::Env::env()->rm()->attach(ds);
 		return 0;
 	}
 
 
 	long l4io_release_iomem(l4_addr_t virt, unsigned long size)
 	{
+		using namespace Genode;
 		PWRN("%s: Not implemented yet!", __func__);
+		//L4lx::Env::env()->rm()->detach(virt);
 		return 0;
 	}
 
@@ -116,8 +133,9 @@ extern "C" {
 	int l4io_has_resource(enum l4io_resource_types_t type,
 	                      l4vbus_paddr_t start, l4vbus_paddr_t end)
 	{
-		PWRN("%s: Not implemented yet!", __func__);
-		return 0;
+		PWRN("%s: Not implemented yet! type=%lx start=%lx end=%lx",
+			__func__, type, start, end);
+		return 1;
 	}
 
 }

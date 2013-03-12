@@ -46,8 +46,12 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 {
 	int err;
 
-	if ((err = pci_enable_resources(dev, mask)) < 0)
+	printk("%s: dev=%x\n", __func__, dev);
+
+	if ((err = pci_enable_resources(dev, mask)) < 0) {
+		printk("%s: failed to enable resources\n");
 		return err;
+	}
 
 	//XXX: enable IRQ
 	return 0;
@@ -58,6 +62,8 @@ resource_size_t pcibios_align_resource(void *data, const struct resource * res,
 				       resource_size_t align)
 {
 	resource_size_t start = res->start;
+	
+	printk("%s: data=%x\n", __func__, data);
 
 	if (res->flags & IORESOURCE_IO && start & 0x300)
 		start = (start + 0x3ff) & ~0x3ff;
@@ -70,6 +76,9 @@ resource_size_t pcibios_align_resource(void *data, const struct resource * res,
 int pci_mmap_page_range(struct pci_dev *dev, struct vm_area_struct *vma,
 			enum pci_mmap_state mmap_state, int write_combine)
 {
+
+	printk("%s: dev=%x", __func__, dev);
+
 	return -EINVAL;
 }
 

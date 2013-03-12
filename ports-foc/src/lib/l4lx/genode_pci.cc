@@ -44,12 +44,8 @@ extern "C" {
 			return -1;
 		}
 
-		PINF("%s: devfn=%04x where=%04x size=%04x\n",
-			__func__, devfn, where, size);
-
 		unsigned char fn = PCI_FUNC(devfn);
 		unsigned char slot = PCI_SLOT(devfn);
-		PINF("%s: fn=%x slot=%x", __func__, fn, slot);
 
 		Pci::Device_client **devs = (Pci::Device_client**)data;
 		Pci::Device_client *dev = devs[slot];
@@ -81,12 +77,8 @@ extern "C" {
 			return -1;
 		}
 
-		PINF("%s: devfn=%04x where=%04x size=%04x\n",
-			__func__, devfn, where, size);
-
 		unsigned char fn = PCI_FUNC(devfn);
 		unsigned char slot = PCI_SLOT(devfn);
-		PINF("%s: fn=%x slot=%x", __func__, fn, slot);
 
 		Pci::Device_client **devs = (Pci::Device_client**)data;
 		Pci::Device_client *dev = devs[slot];
