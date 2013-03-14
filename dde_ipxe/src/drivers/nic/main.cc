@@ -18,11 +18,17 @@
 #include <cap_session/connection.h>
 #include <nic/component.h>
 
+#include <os/config.h>
+#include <util/token.h>
+#include <util/string.h>
+
+
 /* DDE */
 extern "C" {
 #include <dde_ipxe/nic.h>
 }
 
+struct nic_config nic_cfg;
 
 namespace Ipxe {
 
@@ -111,6 +117,19 @@ namespace Ipxe {
 
 Ipxe::Driver * Ipxe::Driver::instance = 0;
 
+inline bool is_hex(char c)
+{
+	return Genode::digit(c, true) != -1;
+}
+
+struct Scanner_policy_number
+{
+	static bool identifier_char(char c, unsigned  i )
+	{
+		return is_hex(c) && c !='.' && c !=':';
+	}
+};
+typedef Genode::Token<Scanner_policy_number> TokenNumb;
 
 int main(int, char **)
 {
@@ -118,6 +137,65 @@ int main(int, char **)
 
 	printf("--- iPXE NIC driver started ---\n");
 
+	nic_cfg.is_configured = 0;
+	try {
+		Genode::Xml_node nic_node = Genode::config()->xml_node().sub_node("nic");
+		char     pci_dev[16] = {0};
+
+		do {
+			try {
+				nic_node.attribute("device").value(pci_dev, sizeof(pci_dev));
+			}
+			catch(Genode::Xml_node::Nonexistent_attribute)
+			{
+				PWRN("Missing \"device\" attribute. Ignore node.");
+				break;
+			}
+
+			char tmp[3];
+			PDBG("%s",pci_dev);
+			
+			TokenNumb     t(pci_dev);
+			unsigned long val[3] = {0};
+			int cnt = 0;
+			
+			while(t)
+			{
+				if (t.type() == TokenNumb::WHITESPACE || t[0] == '.' || t[0] == ':') {
+					t = t.next();
+					continue;
+				}
+				t.string(tmp, sizeof(tmp));
+
+				unsigned long  tmpc = 0;
+				Genode::ascii_to(tmp, &tmpc, 16);
+
+				val[cnt] = tmpc & 0xFF;
+
+				t = t.next();
+
+				if (cnt == 3)
+					break;
+				cnt++;
+			}
+			// bus
+			nic_cfg.bus = val[0];
+
+			// dev
+			nic_cfg.dev = val[1];
+
+			// func
+			nic_cfg.func = val[2];
+			
+			nic_cfg.is_configured = 1;
+
+			PDBG("nic device=%02x:%02x.%x", nic_cfg.bus, nic_cfg.dev, nic_cfg.func);
+
+		} while(0);
+	}
+	catch (...) {
+		PDBG("No Nic config");
+	}
 	/**
 	 * Factory used by 'Nic::Root' at session creation/destruction time
 	 */

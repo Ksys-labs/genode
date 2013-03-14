@@ -57,11 +57,21 @@ extern int dde_ipxe_nic_tx(unsigned if_index, const char *packet, unsigned packe
  */
 extern int dde_ipxe_nic_get_mac_addr(unsigned if_index, char *out_mac_addr);
 
+
 /**
  * Initialize network sub-system
  *
  * \return  number of network devices
  */
 extern int dde_ipxe_nic_init(void);
+
+struct nic_config {
+	unsigned bus;
+	unsigned dev;
+	unsigned func;
+	unsigned is_configured;
+};
+
+extern struct nic_config nic_cfg;
 
 #endif /* _DDE_IPXE__NIC_H_ */
