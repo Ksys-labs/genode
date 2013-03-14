@@ -1,12 +1,14 @@
 #
 # L4Linux support library
 #
+
 SRC_CC  += env.cc \
            dataspace.cc \
            genode_block.cc \
            genode_framebuffer.cc \
            genode_input.cc \
            genode_net.cc \
+           genode_netsrv.cc \
            genode_terminal.cc \
            l4_io.cc \
            l4_log.cc \

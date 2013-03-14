@@ -8,7 +8,7 @@ VERBOSE        ?= @
 ECHO            = @echo
 TARGET         ?= l4linux
 
-PATCH-l4linux   = $(addprefix patches/,l4lx_genode.patch icmp_align.patch tcp_mem.patch)
+PATCH-l4linux   = $(addprefix patches/,l4lx_genode.patch icmp_align.patch tcp_mem.patch genode_net_srv_kconfig.patch)
 REV-l4linux     = 25
 REPO-l4linux    = http://svn.tudos.org/repos/oc/l4linux/trunk
 
