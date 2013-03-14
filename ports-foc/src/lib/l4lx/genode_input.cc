@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -107,18 +107,18 @@ extern "C" {
 			}
 		case Event::PRESS:
 			{
-				if (ev->keycode() < BTN_MISC)
-					genode_input_event(keyb, EV_KEY, ev->keycode(), 1);
+				if (ev->code() < BTN_MISC)
+					genode_input_event(keyb, EV_KEY, ev->code(), 1);
 				else
-					genode_input_event(mouse, EV_KEY, ev->keycode(), 1);
+					genode_input_event(mouse, EV_KEY, ev->code(), 1);
 				return;
 			}
 		case Event::RELEASE:
 			{
-				if (ev->keycode() < BTN_MISC)
-					genode_input_event(keyb, EV_KEY, ev->keycode(), 0);
+				if (ev->code() < BTN_MISC)
+					genode_input_event(keyb, EV_KEY, ev->code(), 0);
 				else
-					genode_input_event(mouse, EV_KEY, ev->keycode(), 0);
+					genode_input_event(mouse, EV_KEY, ev->code(), 0);
 				return;
 			}
 		case Event::WHEEL:
@@ -141,18 +141,18 @@ extern "C" {
 		if (!genode_input_event)
 			return;
 
-		if ( mouse && keyboard && input()) {
-			int num = 0;
-			{
-				Linux::Irq_guard guard;
+		unsigned long flags;
+		l4x_irq_save(&flags);
 
-				num = input()->flush();
-			}
+		if ( mouse && keyboard && input()) {
+			int num = input()->flush();
+			l4x_irq_restore(flags);
 			for (int i = 0; i < num; i++) {
 				Input::Event ev = buffer()[i];
 				handle_event(mouse, keyboard, &ev);
 			}
-		}
+		} else
+			l4x_irq_restore(flags);
 	}
 
 } //extern "C"

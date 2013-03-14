@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -64,53 +64,25 @@ namespace Init {
 
 
 	/**
-	 * Policy for prepending the chroot path of the child
+	 * Policy for handling platform-specific PD-session arguments
 	 *
-	 * This policy is effective only on the Linux base platform.
-	 *
-	 * By applying this policy, the chroot path of the child gets supplied
-	 * to PD session requests.
+	 * This policy is used onthe Linux base platform for prepending the chroot
+	 * path of the child. By applying this policy, the chroot path of the child
+	 * gets supplied to PD session requests.
 	 */
-	class Child_policy_prepend_chroot_path
+	class Child_policy_pd_args
 	{
 		private:
 
-			char const *_root_prefix;
+			Genode::Native_pd_args const *_pd_args;
 
 		public:
 
-			Child_policy_prepend_chroot_path(const char *root_prefix)
-			: _root_prefix(root_prefix) { }
+			Child_policy_pd_args(Genode::Native_pd_args const *pd_args)
+			: _pd_args(pd_args) { }
 
-			/**
-			 * Filter arguments of session request
-			 *
-			 * This function prepends the '_root' to the 'root' session
-			 * argument of PD sessions initiated through the child (not the
-			 * child's PD session).
-			 */
 			void filter_session_args(const char *session, char *args,
-			                         Genode::size_t args_len)
-			{
-				using namespace Genode;
-
-				/*
-				 * Specify 'Genode' namespace to remove possible ambiguity of
-				 * 'strcmp' when including the header along with libc headers.
-				 */
-				if (Genode::strcmp(session, "PD") != 0)
-					return;
-
-				char path[Parent::Session_args::MAX_SIZE];
-				Arg_string::find_arg(args, "root").string(path, sizeof(path), "");
-
-				char value[Parent::Session_args::MAX_SIZE];
-				Genode::snprintf(value, sizeof(value),
-				                 "\"%s%s\"",
-				                 _root_prefix, path);
-
-				Arg_string::set_arg(args, args_len, "root", value);
-			}
+			                         Genode::size_t args_len);
 	};
 
 
@@ -199,7 +171,7 @@ namespace Init {
 				Local_rom_service(Genode::Rom_session_capability rom_cap, bool valid)
 				: Genode::Service("ROM"), _rom_cap(rom_cap), _valid(valid) { }
 
-				Genode::Session_capability session(const char *args)
+				Genode::Session_capability session(const char * /*args*/)
 				{
 					if (!_valid)
 						throw Invalid_args();
@@ -207,7 +179,7 @@ namespace Init {
 					return _rom_cap;
 				}
 
-				void upgrade(Genode::Session_capability, const char *args) { }
+				void upgrade(Genode::Session_capability, const char * /*args*/) { }
 				void close(Genode::Session_capability) { }
 
 			} _local_rom_service;
@@ -367,7 +339,7 @@ namespace Init {
 			bool announce_service(const char              *service_name,
 			                      Genode::Root_capability  root,
 			                      Genode::Allocator       *alloc,
-			                      Genode::Server          *server)
+			                      Genode::Server          * /*server*/)
 			{
 				if (_child_services->find(service_name)) {
 					PWRN("%s: service %s is already registered",

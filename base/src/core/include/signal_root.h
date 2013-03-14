@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -37,6 +37,7 @@ namespace Genode {
 
 			Rpc_entrypoint *entrypoint() { return &_ep; }
 	};
+
 
 	class Signal_root : private Signal_handler,
 	                    public Root_component<Signal_session_component>

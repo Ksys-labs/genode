@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,10 +22,12 @@
 namespace Genode {
 
 	class Signal_context;
+	class Signal_receiver;
 
 
-	typedef Capability<Signal_context> Signal_context_capability;
-	typedef Capability<Signal_source>  Signal_source_capability;
+	typedef Capability<Signal_receiver> Signal_receiver_capability;
+	typedef Capability<Signal_context>  Signal_context_capability;
+	typedef Capability<Signal_source>   Signal_source_capability;
 
 
 	struct Signal_session : Session

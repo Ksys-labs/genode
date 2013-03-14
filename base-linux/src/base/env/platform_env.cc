@@ -5,17 +5,50 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
+/* Genode includes */
 #include <util/arg_string.h>
-#include <base/platform_env.h>
 #include <base/thread.h>
+#include <linux_dataspace/client.h>
+#include <linux_syscalls.h>
+
+/* local includes */
+#include <platform_env.h>
 
 using namespace Genode;
+
+
+/****************************************************
+ ** Support for Platform_env_base::Rm_session_mmap **
+ ****************************************************/
+
+Genode::size_t
+Platform_env_base::Rm_session_mmap::_dataspace_size(Dataspace_capability ds)
+{
+	if (ds.valid())
+		return Dataspace_client(ds).size();
+
+	return Dataspace_capability::deref(ds)->size();
+}
+
+
+int Platform_env_base::Rm_session_mmap::_dataspace_fd(Dataspace_capability ds)
+{
+	return Linux_dataspace_client(ds).fd().dst().socket;
+}
+
+
+bool
+Platform_env_base::Rm_session_mmap::_dataspace_writable(Dataspace_capability ds)
+{
+	return Dataspace_client(ds).writable();
+}
+
 
 /********************************
  ** Platform_env::Local_parent **
@@ -65,7 +98,9 @@ void Platform_env::Local_parent::close(Session_capability session)
 
 
 Platform_env::Local_parent::Local_parent(Parent_capability parent_cap)
-: Parent_client(parent_cap) { }
+: Parent_client(parent_cap)
+{
+}
 
 
 /******************
@@ -81,7 +116,7 @@ extern char **lx_environ;
 /**
  * Read environment variable as long value
  */
-unsigned long Platform_env::_get_env_ulong(const char *key)
+static unsigned long get_env_ulong(const char *key)
 {
 	for (char **curr = lx_environ; curr && *curr; curr++) {
 
@@ -91,6 +126,37 @@ unsigned long Platform_env::_get_env_ulong(const char *key)
 	}
 
 	return 0;
+}
+
+
+static Parent_capability obtain_parent_cap()
+{
+	long local_name = get_env_ulong("parent_local_name");
+
+	/* produce typed capability manually */
+	typedef Native_capability::Dst Dst;
+	Dst const dst(PARENT_SOCKET_HANDLE);
+	return reinterpret_cap_cast<Parent>(Native_capability(dst, local_name));
+}
+
+
+Platform_env::Local_parent &Platform_env::_parent()
+{
+	static Local_parent local_parent(obtain_parent_cap());
+	return local_parent;
+}
+
+
+Platform_env::Platform_env()
+:
+	Platform_env_base(static_cap_cast<Ram_session>(_parent().session("Env::ram_session", "")),
+	                  static_cap_cast<Cpu_session>(_parent().session("Env::cpu_session", "")),
+	                  static_cap_cast<Pd_session> (_parent().session("Env::pd_session",  ""))),
+	_heap(Platform_env_base::ram_session(), Platform_env_base::rm_session())
+{
+	/* register TID and PID of the main thread at core */
+	cpu_session()->thread_id(parent()->main_thread_cap(),
+	                         lx_getpid(), lx_gettid());
 }
 
 
@@ -123,5 +189,12 @@ namespace Genode {
 			ncs.client_sd = cpu->client_sd(thread->cap()).dst().socket;
 		}
 		return ncs;
+	}
+
+	void destroy_server_socket_pair(Native_connection_state const &ncs)
+	{
+		/* close local file descriptor if it is valid */
+		if (ncs.server_sd != -1) lx_close(ncs.server_sd);
+		if (ncs.client_sd != -1) lx_close(ncs.client_sd);
 	}
 }

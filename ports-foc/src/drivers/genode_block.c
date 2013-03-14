@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -62,7 +62,7 @@ static void genode_blk_request(struct request_queue *q)
 	struct request *req;
 	unsigned long  queue_offset;
 	void          *buf;
-	unsigned long  offset;
+	unsigned long long  offset;
 	unsigned long  nbytes;
 	short          write;
 	struct genode_blk_device* dev;
@@ -88,10 +88,7 @@ static void genode_blk_request(struct request_queue *q)
 
 			/* stop_queue needs disabled interrupts */
 			local_irq_save(flags);
-			local_irq_disable();
 			blk_stop_queue(q);
-			local_irq_restore(flags);
-			local_irq_enable();
 
 			dev->stopped = 1;
 
@@ -99,17 +96,14 @@ static void genode_blk_request(struct request_queue *q)
 			 * This function is called with the request queue lock held, unlock to
 			 * enable VCPU IRQs
 			 */
-			spin_unlock_irq(q->queue_lock);
+			spin_unlock_irqrestore(q->queue_lock, flags);
 			/* block until new responses are available */
 			down(&dev->queue_wait);
-			spin_lock_irq(q->queue_lock);
+			spin_lock_irqsave(q->queue_lock, flags);
 
 			/* start_queue needs disabled interrupts */
-			local_irq_save(flags);
-			local_irq_disable();
 			blk_start_queue(q);
 			local_irq_restore(flags);
-			local_irq_enable();
 		}
 
 		if (write) {
@@ -161,7 +155,7 @@ static int genode_blk_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 	struct genode_blk_device *dev  = bdev->bd_disk->private_data;
 	unsigned long             size = dev->blk_cnt * dev->blk_sz *
 	                                 (dev->blk_sz / KERNEL_SECTOR_SIZE);
-	geo->cylinders = size << 5;
+	geo->cylinders = size >> 7;
 	geo->heads     = 4;
 	geo->sectors   = 32;
 	return 0;
@@ -179,8 +173,11 @@ static struct block_device_operations genode_blk_ops = {
 
 static irqreturn_t event_interrupt(int irq, void *data)
 {
+	unsigned long flags;
 	struct genode_blk_device *dev = (struct genode_blk_device *)data;
+	spin_lock_irqsave(dev->queue->queue_lock, flags);
 	genode_block_collect_responses(dev->idx);
+	spin_unlock_irqrestore(dev->queue->queue_lock, flags);
 	return IRQ_HANDLED;
 }
 

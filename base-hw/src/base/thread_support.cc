@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -42,6 +42,7 @@ void Thread_base::_thread_start()
 {
 	Thread_base::myself()->_thread_bootstrap();
 	Thread_base::myself()->entry();
+	Thread_base::myself()->_join_lock.unlock();
 	Genode::sleep_forever();
 }
 
@@ -60,6 +61,7 @@ void Thread_base::_deinit_platform_thread()
 
 	/* destroy object at the CPU session */
 	env()->cpu_session()->kill_thread(_thread_cap);
+	env()->rm_session()->remove_client(_pager_cap);
 }
 
 
@@ -75,8 +77,8 @@ void Thread_base::start()
 	env()->pd_session()->bind_thread(_thread_cap);
 
 	/* create new pager object and assign it to the new thread */
-	Pager_capability pager_cap = env()->rm_session()->add_client(_thread_cap);
-	env()->cpu_session()->set_pager(_thread_cap, pager_cap);
+	_pager_cap = env()->rm_session()->add_client(_thread_cap);
+	env()->cpu_session()->set_pager(_thread_cap, _pager_cap);
 
 	/* attach UTCB */
 	try {

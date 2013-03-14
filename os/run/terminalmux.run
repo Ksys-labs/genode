@@ -1,0 +1,112 @@
+#
+# Build
+#
+
+# generic components
+set build_components {
+	core init
+	drivers/timer drivers/uart server/terminalmux
+	test/terminal test/terminal_echo
+}
+
+build $build_components
+create_boot_directory
+
+
+#
+# Config
+#
+
+set config  {
+	<config>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="RAM"/>
+			<service name="IRQ"/>
+			<service name="IO_MEM"/>
+			<service name="IO_PORT"/>
+			<service name="CAP"/>
+			<service name="PD"/>
+			<service name="RM"/>
+			<service name="CPU"/>
+			<service name="LOG"/>
+			<service name="SIGNAL"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<start name="timer">
+			<resource name="RAM" quantum="1M"/>
+			<provides><service name="Timer"/></provides>
+		</start>
+		<start name="uart_drv">
+			<resource name="RAM" quantum="1M"/>
+			<provides>
+				<service name="Uart"/>
+				<service name="Terminal"/>
+			</provides>
+			<config>
+				<policy label="terminalmux" uart="1"/>
+			</config>
+		</start>
+		<start name="terminalmux">
+			<resource name="RAM" quantum="1M"/>
+			<provides>
+				<service name="Uart"/>
+				<service name="Terminal"/>
+			</provides>
+			<config>
+				<policy label="test-terminal1" channel="0"/>
+				<policy label="test-terminal2" channel="1"/>
+				<policy label="test-terminal_echo" channel="2"/>
+			</config>
+			<route>
+				<service name="Terminal"> <child name="uart_drv"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+		<start name="test-terminal1">
+			<binary name="test-terminal"/>
+			<config><channel num="1"/></config>
+			<resource name="RAM" quantum="1M"/>
+			<route>
+				<service name="Terminal"> <child name="terminalmux"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+		<start name="test-terminal2">
+			<binary name="test-terminal"/>
+			<config><channel num="2"/></config>
+			<resource name="RAM" quantum="1M"/>
+			<route>
+				<service name="Terminal"> <child name="terminalmux"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+		<start name="test-terminal_echo">
+			<resource name="RAM" quantum="1M"/>
+			<route>
+				<service name="Terminal"> <child name="terminalmux"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+	</config>
+}
+
+install_config $config
+
+#
+# Boot modules
+#
+
+# generic modules
+set boot_modules {
+	core init
+	timer uart_drv terminalmux test-terminal test-terminal_echo
+}
+
+build_boot_image $boot_modules
+append qemu_args " -serial mon:stdio"
+append qemu_args " -serial pty"
+run_genode_until forever
+

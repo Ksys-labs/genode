@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -28,6 +28,7 @@ enum {
 	ECHO_EXC_BASE   = 0
 };
 
+
 inline void *echo_stack_top()
 {
 	static char echo_stack[ECHO_STACK_SIZE];
@@ -44,11 +45,13 @@ static void echo_reply()
 	Nova::Crd snd_rcv(echo()->utcb()->msg[0]);
 	Nova::mword_t offset = echo()->utcb()->msg[1];
 	bool kern_pd         = echo()->utcb()->msg[2];
+	bool dma_mem         = echo()->utcb()->msg[3];
 
 	/* reset message transfer descriptor */
 	echo()->utcb()->set_msg_word(0);
 	/* append capability-range as message-transfer item */
-	bool res = echo()->utcb()->append_item(snd_rcv, offset, kern_pd);
+	bool res = echo()->utcb()->append_item(snd_rcv, offset, kern_pd, false,
+	                                       false, dma_mem);
 
 	/* set return code, 0 means failure */
 	echo()->utcb()->msg[0] = res;
@@ -78,6 +81,7 @@ Echo::Echo(Genode::addr_t utcb_addr)
 	/* set up echo portal to ourself */
 	res = create_pt(_pt_sel, pd_sel, _ec_sel, Mtd(0), (mword_t)echo_reply);
 	if (res) { ((void (*)())(res*0x10001UL))(); }
+	revoke(Obj_crd(_pt_sel, 0, Obj_crd::RIGHT_PT_CTRL));
 
 	/* echo thread doesn't receive anything, it transfers items during reply */
 	utcb()->crd_rcv = utcb()->crd_xlt = 0;

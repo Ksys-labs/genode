@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -254,6 +254,69 @@ void Platform_pd::space_pager(Platform_thread *thread)
 void Platform_pd::_setup_address_space()
 {
 	PERR("not yet implemented");
+}
+
+
+static const bool verbose_unmap = false;
+
+
+static void unmap_log2_range(unsigned pd_id, addr_t base, size_t size_log2)
+{
+	using namespace Okl4;
+
+	L4_Fpage_t fpage = L4_FpageLog2(base, size_log2);
+	L4_FpageAddRightsTo(&fpage, L4_FullyAccessible);
+	int ret = L4_UnmapFpage(L4_SpaceId(pd_id), fpage);
+	if (ret != 1)
+		PERR("could not unmap page at %p from space %x (Error Code %ld)",
+		     (void *)base, pd_id, L4_ErrorCode());
+}
+
+
+void Platform_pd::flush(addr_t addr, size_t size)
+{
+	using namespace Okl4;
+
+	L4_Word_t remaining_size = size;
+	L4_Word_t size_log2      = get_page_size_log2();
+
+	if (verbose_unmap)
+		printf("PD %d: unmap [%lx,%lx)\n", _pd_id, addr, addr + size);
+
+	/*
+	 * Let unmap granularity ('size_log2') grow
+	 */
+	while (remaining_size >= (1UL << size_log2)) {
+
+		enum { SIZE_LOG2_MAX = 22 /* 4M */ };
+
+		/* issue 'unmap' for the current address if flexpage aligned */
+		if (addr & (1 << size_log2)) {
+			unmap_log2_range(_pd_id, addr, size_log2);
+
+			remaining_size -= 1 << size_log2;
+			addr           += 1 << size_log2;
+		}
+
+		/* increase flexpage size */
+		size_log2++;
+	}
+
+	/*
+	 * Let unmap granularity ('size_log2') shrink
+	 */
+	while (remaining_size > 0) {
+
+		if (remaining_size >= (1UL << size_log2)) {
+			unmap_log2_range(_pd_id, addr, size_log2);
+
+			remaining_size -= 1 << size_log2;
+			addr           += 1 << size_log2;
+		}
+
+		/* decrease flexpage size */
+		size_log2--;
+	}
 }
 
 

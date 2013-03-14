@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -62,7 +62,8 @@ static inline Okl4::L4_ThreadId_t thread_get_my_global_id()
  *************/
 
 Mapping::Mapping(addr_t dst_addr, addr_t src_addr,
-                 bool write_combined, unsigned l2size, bool rw)
+                 bool write_combined, bool io_mem,
+                 unsigned l2size, bool rw)
 :
 	_fpage(L4_FpageLog2(dst_addr, l2size)),
 	/*

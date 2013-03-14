@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -66,7 +66,7 @@ void *calloc(unsigned nmemb, unsigned size)
 void *memcpy(void *dest, const void *src, unsigned n);
 */
 char *strcpy(char *dest, const char *src)
-	{ printf("%s: not implemented\n", __func__); return 0; }
+	{ return strncpy(dest, src, ~0); }
 char *strcat(char *dest, const char *src)
 	{ printf("%s: not implemented\n", __func__); return 0; }
 

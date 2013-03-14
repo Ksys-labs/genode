@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -162,7 +162,7 @@ namespace Genode
 					ITEM_WIDTH      = _ITEM_WIDTH,
 					ITEM_WIDTH_LOG2 = Item::WIDTH_LOG2,
 					MAX_INDEX       = ITEMS - 1,
-					ITEM_MASK       = (1 << ITEM_WIDTH) - 1,
+					ITEM_MASK       = (1ULL << ITEM_WIDTH) - 1,
 				};
 
 				/* analogous to 'Mmio::Register::Register_base' */

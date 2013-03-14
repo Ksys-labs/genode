@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -79,6 +79,7 @@ namespace Noux {
 					bool     write(Sysio *sysio, Vfs_handle *handle) { return _msg("write"); }
 					bool      read(Sysio *sysio, Vfs_handle *handle) { return _msg("read"); }
 					bool ftruncate(Sysio *sysio, Vfs_handle *handle) { return _msg("ftruncate"); }
+					bool     ioctl(Sysio *sysio, Vfs_handle *handle) { return _msg("ioctl"); }
 				};
 				static Pseudo_file_io_service fs;
 				return &fs;

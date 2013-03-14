@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -15,17 +15,21 @@
 #define _INCLUDE__KERNEL__SYSCALLS_H_
 
 /* Genode includes */
-#include <base/syscall.h>
-
-class Software_tlb;
+#include <base/syscall_types.h>
 
 namespace Genode
 {
 	class Platform_thread;
+	class Tlb;
 }
 
 namespace Kernel
 {
+	typedef Genode::Tlb             Tlb;
+	typedef Genode::addr_t          addr_t;
+	typedef Genode::size_t          size_t;
+	typedef Genode::Platform_thread Platform_thread;
+
 	/**
 	 * Unique opcodes of all syscalls supported by the kernel
 	 */
@@ -35,19 +39,20 @@ namespace Kernel
 
 		/* execution control */
 		NEW_THREAD = 1,
-		DELETE_THREAD = 24,
+		DELETE_THREAD = 26,
 		START_THREAD = 2,
 		PAUSE_THREAD = 3,
 		RESUME_THREAD = 4,
+		RESUME_FAULTER = 28,
 		GET_THREAD = 5,
 		CURRENT_THREAD_ID = 6,
 		YIELD_THREAD = 7,
-		READ_REGISTER = 18,
-		WRITE_REGISTER = 19,
+		READ_THREAD_STATE = 18,
+		WRITE_THREAD_STATE = 19,
 
 		/* interprocess communication */
 		REQUEST_AND_WAIT = 8,
-		REPLY_AND_WAIT = 9,
+		REPLY = 9,
 		WAIT_FOR_REQUEST = 10,
 
 		/* management of resource protection-domains */
@@ -66,28 +71,66 @@ namespace Kernel
 		/* asynchronous signalling */
 		NEW_SIGNAL_RECEIVER = 20,
 		NEW_SIGNAL_CONTEXT = 21,
+		KILL_SIGNAL_CONTEXT = 30,
 		AWAIT_SIGNAL = 22,
 		SUBMIT_SIGNAL = 23,
+		SIGNAL_PENDING = 27,
+		ACK_SIGNAL = 29,
 
 		/* vm specific */
-		NEW_VM = 25,
-		RUN_VM = 26,
+		NEW_VM = 24,
+		RUN_VM = 25,
 	};
+
+	/*****************************************************************
+	 ** Syscall with 1 to 6 arguments                               **
+	 **                                                             **
+	 ** These functions must not be inline to ensure that objects,  **
+	 ** wich are referenced by arguments, are tagged as "used" even **
+	 ** though only the pointer gets handled in here.               **
+	 *****************************************************************/
+
+	Syscall_ret syscall(Syscall_arg arg_0);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3,
+	                    Syscall_arg arg_4);
+
+	Syscall_ret syscall(Syscall_arg arg_0,
+	                    Syscall_arg arg_1,
+	                    Syscall_arg arg_2,
+	                    Syscall_arg arg_3,
+	                    Syscall_arg arg_4,
+	                    Syscall_arg arg_5);
 
 	/**
 	 * Virtual range of the mode transition region in every PD
 	 */
-	Genode::addr_t mode_transition_virt_base();
-	Genode::size_t mode_transition_size();
+	addr_t mode_transition_virt_base();
+	size_t mode_transition_size();
 
 	/**
 	 * Get sizes of the kernel objects
 	 */
-	Genode::size_t thread_size();
-	Genode::size_t pd_size();
-	Genode::size_t signal_context_size();
-	Genode::size_t signal_receiver_size();
-	Genode::size_t vm_size();
+	size_t thread_size();
+	size_t pd_size();
+	size_t signal_context_size();
+	size_t signal_receiver_size();
+	size_t vm_size();
 
 	/**
 	 * Get alignment constraints of the kernel objects
@@ -107,8 +150,8 @@ namespace Kernel
 	 * Restricted to core threads. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
-	inline int new_pd(void * const dst)
-	{ return syscall(NEW_PD, (Syscall_arg)dst); }
+	inline int new_pd(void * const dst) {
+		return syscall(NEW_PD, (Syscall_arg)dst); }
 
 
 	/**
@@ -126,8 +169,8 @@ namespace Kernel
 	 *
 	 * Restricted to core threads.
 	 */
-	inline void update_pd(unsigned long const pd_id)
-	{ syscall(UPDATE_PD, (Syscall_arg)pd_id); }
+	inline void update_pd(unsigned const pd_id) {
+		syscall(UPDATE_PD, (Syscall_arg)pd_id); }
 
 
 	/**
@@ -143,8 +186,9 @@ namespace Kernel
 	 * Restricted to core threads. Regaining of the supplied memory can be done
 	 * through 'delete_thread'.
 	 */
-	inline int new_thread(void * const dst, Genode::Platform_thread * const pt)
-	{ return syscall(NEW_THREAD, (Syscall_arg)dst, (Syscall_arg)pt); }
+	inline int
+	new_thread(void * const dst, Platform_thread * const pt) {
+		return syscall(NEW_THREAD, (Syscall_arg)dst, (Syscall_arg)pt); }
 
 	/**
 	 * Delete an existing thread
@@ -165,21 +209,18 @@ namespace Kernel
 	 * \param ip  initial instruction pointer
 	 * \param sp  initial stack pointer
 	 *
-	 * \retval >0  success, return value is the software TLB of the thread
+	 * \retval >0  success, return value is the TLB of the thread
 	 * \retval  0  the targeted thread wasn't started or was already started
 	 *             when this gets called (in both cases it remains untouched)
 	 *
 	 * Restricted to core threads.
 	 */
-	inline Software_tlb *
-	start_thread(Genode::Platform_thread * const phys_pt, void * ip, void * sp,
-	             unsigned int cpu_no)
+	inline Tlb * start_thread(Platform_thread * const phys_pt, void * ip,
+	                          void * sp, unsigned cpu_no)
 	{
-		return (Software_tlb *)syscall(START_THREAD,
-		                               (Syscall_arg)phys_pt,
-		                               (Syscall_arg)ip,
-		                               (Syscall_arg)sp,
-		                               (Syscall_arg)cpu_no);
+		return (Tlb *)syscall(START_THREAD, (Syscall_arg)phys_pt,
+		                              (Syscall_arg)ip, (Syscall_arg)sp,
+		                              (Syscall_arg)cpu_no);
 	}
 
 
@@ -195,8 +236,8 @@ namespace Kernel
 	 *
 	 * If the caller doesn't target itself, this is restricted to core threads.
 	 */
-	inline int pause_thread(unsigned long const id = 0)
-	{ return syscall(PAUSE_THREAD, id); }
+	inline int pause_thread(unsigned const id = 0) {
+		return syscall(PAUSE_THREAD, id); }
 
 
 	/**
@@ -209,8 +250,17 @@ namespace Kernel
 	 * \retval <0  if targeted thread doesn't participate in CPU
 	 *             scheduling after
 	 */
-	inline int resume_thread(unsigned long const id = 0)
-	{ return syscall(RESUME_THREAD, id); }
+	inline int resume_thread(unsigned const id = 0) {
+		return syscall(RESUME_THREAD, id); }
+
+
+	/**
+	 * Continue thread after a pagefault that could be resolved
+	 *
+	 * \param id  ID of the targeted thread
+	 */
+	inline void resume_faulter(unsigned const id = 0) {
+		syscall(RESUME_FAULTER, id); }
 
 
 	/**
@@ -219,8 +269,8 @@ namespace Kernel
 	 * \param id  if this thread ID is set and valid this will resume the
 	 *            targeted thread additionally
 	 */
-	inline void yield_thread(unsigned long const id = 0)
-	{ syscall(YIELD_THREAD, id); }
+	inline void yield_thread(unsigned const id = 0) {
+		syscall(YIELD_THREAD, id); }
 
 
 	/**
@@ -236,8 +286,8 @@ namespace Kernel
 	 *
 	 * Restricted to core threads.
 	 */
-	inline Genode::Platform_thread * get_thread(unsigned long const id = 0)
-	{ return (Genode::Platform_thread *)syscall(GET_THREAD, id); }
+	inline Platform_thread * get_thread(unsigned const id = 0) {
+		return (Platform_thread *)syscall(GET_THREAD, id); }
 
 
 	/**
@@ -251,9 +301,8 @@ namespace Kernel
 	 * If the receiver exists, this blocks execution until a dedicated reply
 	 * message has been send by the receiver. The receiver may never do so.
 	 */
-	inline unsigned long request_and_wait(unsigned long const id,
-	                                      unsigned long const size)
-	{ return (unsigned long)syscall(REQUEST_AND_WAIT, id, size); }
+	inline size_t request_and_wait(unsigned const id, size_t const size) {
+		return (size_t)syscall(REQUEST_AND_WAIT, id, size); }
 
 
 	/**
@@ -261,19 +310,21 @@ namespace Kernel
 	 *
 	 * \return  size of received request (beginning with the callers UTCB base)
 	 */
-	inline unsigned long wait_for_request()
-	{ return (unsigned long)syscall(WAIT_FOR_REQUEST); }
+	inline size_t wait_for_request() {
+		return (size_t)syscall(WAIT_FOR_REQUEST); }
 
 
 	/**
-	 * Send reply of the last received request and wait for next request
+	 * Reply to last IPC request
 	 *
-	 * \param size  reply-message size (beginning with the callers UTCB base)
+	 * \param size           reply size (beginning with the callers UTCB base)
+	 * \param await_request  if the call shall await and fetch next request
 	 *
-	 * \return  size of received request (beginning with the callers UTCB base)
+	 * \return  request size (beginning with the callers UTCB base)
+	 *          if await_request was set
 	 */
-	inline unsigned long reply_and_wait(unsigned long const size)
-	{ return (unsigned long)syscall(REPLY_AND_WAIT, size); }
+	inline size_t reply(size_t const size, bool const await_request) {
+		return (size_t)syscall(REPLY, size, await_request); }
 
 
 	/**
@@ -290,9 +341,8 @@ namespace Kernel
 	 *
 	 * Restricted to core threads.
 	 */
-	inline void set_pager(unsigned long const pager_id,
-	                      unsigned long const faulter_id)
-	{ syscall(SET_PAGER, pager_id, faulter_id); }
+	inline void set_pager(unsigned const pager_id, unsigned const faulter_id) {
+		syscall(SET_PAGER, pager_id, faulter_id); }
 
 	/**
 	 * Print a char 'c' to the kernels serial ouput
@@ -309,8 +359,8 @@ namespace Kernel
 	 *
 	 * Restricted to core threads.
 	 */
-	inline bool allocate_irq(unsigned long const id)
-	{ return syscall(ALLOCATE_IRQ, (Syscall_arg)id); }
+	inline bool allocate_irq(unsigned const id) {
+		return syscall(ALLOCATE_IRQ, (Syscall_arg)id); }
 
 
 	/**
@@ -322,8 +372,8 @@ namespace Kernel
 	 *
 	 * Restricted to core threads.
 	 */
-	inline bool free_irq(unsigned long const id)
-	{ return syscall(FREE_IRQ, (Syscall_arg)id); }
+	inline bool free_irq(unsigned const id)	{
+		return syscall(FREE_IRQ, (Syscall_arg)id); }
 
 
 	/**
@@ -336,41 +386,31 @@ namespace Kernel
 
 
 	/**
-	 * Get the current value of a register of a specific CPU context
+	 * Copy the current state of a thread to the callers UTCB
 	 *
-	 * \param thread_id  ID of the thread that owns the targeted context
-	 * \param reg_id     platform-specific ID of the targeted register
+	 * \param thread_id  ID of the targeted thread
 	 *
 	 * Restricted to core threads. One can also read from its own context,
 	 * or any thread that is active in the meantime. In these cases
-	 * be aware of the fact, that the result reflects the context
+	 * be aware of the fact, that the result reflects the thread
 	 * state that were backed at the last kernel entry of the thread.
+	 * The copy might be incoherent when this function returns because
+	 * the caller might get scheduled away before then.
 	 */
-	inline unsigned long read_register(unsigned long const thread_id,
-	                                   unsigned long const reg_id)
-	{
-		return syscall(READ_REGISTER, (Syscall_arg)thread_id,
-		               (Syscall_arg)reg_id);
-	}
+	inline void read_thread_state(unsigned const thread_id) {
+		syscall(READ_THREAD_STATE, (Syscall_arg)thread_id); }
 
 
 	/**
-	 * Write a value to a register of a specific CPU context
+	 * Override the state of a thread with the callers UTCB content
 	 *
-	 * \param thread_id  ID of the thread that owns the targeted context
-	 * \param reg_id     platform-specific ID of the targeted register
-	 * \param value      value that shall be written to the register
+	 * \param thread_id  ID of the targeted thread
 	 *
 	 * Restricted to core threads. One can also write to its own context, or
 	 * to that of a thread that is active in the meantime.
 	 */
-	inline void write_register(unsigned long const thread_id,
-	                           unsigned long const reg_id,
-	                           unsigned long const value)
-	{
-		syscall(WRITE_REGISTER, (Syscall_arg)thread_id, (Syscall_arg)reg_id,
-		        (Syscall_arg)value);
-	}
+	inline void write_thread_state(unsigned const thread_id) {
+		syscall(WRITE_THREAD_STATE, (Syscall_arg)thread_id); }
 
 
 	/**
@@ -384,8 +424,8 @@ namespace Kernel
 	 * Restricted to core threads. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
-	inline unsigned long new_signal_receiver(void * dst)
-	{ return syscall(NEW_SIGNAL_RECEIVER, (Syscall_arg)dst); }
+	inline unsigned new_signal_receiver(void * dst) {
+		return syscall(NEW_SIGNAL_RECEIVER, (Syscall_arg)dst); }
 
 
 	/**
@@ -404,9 +444,8 @@ namespace Kernel
 	 * Core-only syscall. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
-	inline unsigned long new_signal_context(void * dst,
-	                                        unsigned long receiver_id,
-	                                        unsigned long imprint)
+	inline unsigned new_signal_context(void * dst, unsigned receiver_id,
+	                                   unsigned imprint)
 	{
 		return syscall(NEW_SIGNAL_CONTEXT, (Syscall_arg)dst,
 		               (Syscall_arg)receiver_id, (Syscall_arg)imprint);
@@ -418,16 +457,26 @@ namespace Kernel
 	 *
 	 * \param receiver_id  ID of the targeted receiver kernel-object
 	 *
-	 * When this call returns, an instance of 'Signal' is located at the base
-	 * of the callers UTCB. It holds information about wich context was
-	 * triggered how often. It is granted that every occurence of a signal is
-	 * provided through this function, exactly till it gets delivered through
-	 * this function. If multiple threads listen at the same receiver and/or
-	 * multiple contexts trigger simultanously there is no assertion about
-	 * wich thread receives the 'Signal' instance of wich context.
+	 * When this call returns, an instance of 'Signal::Data' is located at the
+	 * base of the callers UTCB. It's granted that every occurence of a signal
+	 * is provided through this function, exactly till it gets delivered through
+	 * this function. If multiple threads listen at the same receiver, and/or
+	 * multiple contexts of the receiver trigger simultanously, there is no
+	 * assertion about wich thread receives, and from wich context. But
+	 * deliveries belonging to the same context are serialized through
+	 * 'ack_signal', to enable synchronization in 'kill_signal'.
 	 */
-	inline void await_signal(unsigned long receiver_id)
-	{ syscall(AWAIT_SIGNAL, (Syscall_arg)receiver_id); }
+	inline void await_signal(unsigned receiver_id) {
+		syscall(AWAIT_SIGNAL, (Syscall_arg)receiver_id); }
+
+
+	/**
+	 * Get summarized state of all contexts of a signal receiver
+	 *
+	 * \param receiver_id  ID of the targeted receiver kernel-object
+	 */
+	inline bool signal_pending(unsigned receiver_id) {
+		return syscall(SIGNAL_PENDING, (Syscall_arg)receiver_id); }
 
 
 	/**
@@ -436,26 +485,49 @@ namespace Kernel
 	 * \param context_id  ID of the targeted context kernel-object
 	 * \param num         how often the context shall be triggered by this call
 	 */
-	inline void submit_signal(unsigned long context_id, int num)
-	{ syscall(SUBMIT_SIGNAL, (Syscall_arg)context_id, (Syscall_arg)num); }
-
+	inline void submit_signal(unsigned context_id, int num) {
+		syscall(SUBMIT_SIGNAL, (Syscall_arg)context_id, (Syscall_arg)num); }
 
 	/**
-	 * Create a new vm that is stopped initially
+	 * Acknowledge the processing of the last signal of a signal context
 	 *
-	 * \param dst          physical base of an appropriate portion of memory
-	 *                     that is thereupon allocated to the kernel
-	 * \param state        location of the cpu state of the VM
-	 * \param context_id   ID of the targeted signal context
+	 * \param context_id  kernel name of the targeted signal context
 	 *
-	 * \retval >0  ID of the new vm
-	 * \retval  0  if no new vm was created
+	 * Should be called after all signal objects, that reference the targeted
+	 * signal context in userland are destructed. The signal context wont
+	 * deliver a new signal until the old signal is acknowledged.
+	 */
+	inline void ack_signal(unsigned context_id) {
+		syscall(ACK_SIGNAL, (Syscall_arg)context_id); }
+
+	/**
+	 * Destruct a signal context
+	 *
+	 * \param context_id  kernel name of the targeted signal context
+	 *
+	 * Blocks the caller until the last delivered signal of the targeted
+	 * context is acknowledged. Then the context gets destructed, losing
+	 * all submits that were not delivered when this syscall occured.
+	 */
+	inline void kill_signal_context(unsigned context_id) {
+		syscall(KILL_SIGNAL_CONTEXT, (Syscall_arg)context_id); }
+
+	/**
+	 * Create a new virtual-machine that is stopped initially
+	 *
+	 * \param dst         physical base of an appropriate portion of memory
+	 *                    that is thereupon allocated to the kernel
+	 * \param state       location of the CPU state of the VM
+	 * \param context_id  ID of the targeted signal context
+	 *
+	 * \retval >0  ID of the new VM
+	 * \retval  0  if no new VM was created
 	 *
 	 * Restricted to core threads. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
 	inline int new_vm(void * const dst, void * const state,
-	                  unsigned long context_id)
+	                  unsigned context_id)
 	{
 		return syscall(NEW_VM, (Syscall_arg)dst, (Syscall_arg)state,
 		               (Syscall_arg)context_id);
@@ -465,9 +537,11 @@ namespace Kernel
 	/**
 	 * Execute a virtual-machine (again)
 	 *
-	 * \param id  ID of the targeted vm
+	 * \param id  ID of the targeted VM
+	 *
+	 * Restricted to core threads.
 	 */
-	inline void run_vm(unsigned long const id = 0) {
+	inline void run_vm(unsigned const id) {
 		syscall(RUN_VM, (Syscall_arg)id); }
 }
 

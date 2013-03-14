@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,7 +26,7 @@ using namespace Codezero;
 unsigned long Platform_timer::max_timeout() { return 1000; }
 
 
-unsigned long Platform_timer::curr_time()
+unsigned long Platform_timer::curr_time() const
 {
 	Genode::Lock::Guard lock_guard(_lock);
 	return _curr_time_usec;

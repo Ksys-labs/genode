@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,14 +26,15 @@
 #include <base/signal.h>
 #include <base/rpc_server.h>
 #include <util/list.h>
+#include <util/fifo.h>
 
 /* core includes */
 #include <platform.h>
 #include <dataspace_component.h>
 #include <util.h>
+#include <address_space.h>
 
 namespace Genode {
-
 
 	class Dataspace_component;
 	class Rm_session_component;
@@ -101,7 +102,7 @@ namespace Genode {
 	 * be able to handle faults by arbitrary clients (not only its own
 	 * clients), it maintains the list head of faulters.
 	 */
-	class Rm_faulter : public List<Rm_faulter>::Element
+	class Rm_faulter : public Fifo<Rm_faulter>::Element
 	{
 		private:
 
@@ -134,7 +135,7 @@ namespace Genode {
 			 * This function must be called when destructing region-manager
 			 * sessions to prevent dangling pointers in '_faulters' lists.
 			 */
-			void dissolve_from_faulting_rm_session();
+			void dissolve_from_faulting_rm_session(Rm_session_component *);
 
 			/**
 			 * Return true if page fault occurred in specified address range
@@ -184,6 +185,10 @@ namespace Genode {
 	class Rm_client : public Pager_object, public Rm_member, public Rm_faulter,
 	                  public List<Rm_client>::Element
 	{
+		private:
+
+			Weak_ptr<Address_space> _address_space;
+
 		public:
 
 			/**
@@ -193,8 +198,11 @@ namespace Genode {
 			 * \param badge    pager-object badge used of identifying the client
 			 *                 when a page-fault occurs
 			 */
-			Rm_client(Rm_session_component *session, unsigned long badge) :
-				Pager_object(badge), Rm_member(session), Rm_faulter(this) { }
+			Rm_client(Rm_session_component *session, unsigned long badge,
+			          Weak_ptr<Address_space> &address_space)
+			:
+				Pager_object(badge), Rm_member(session), Rm_faulter(this),
+				_address_space(address_space) { }
 
 			int pager(Ipc_pager &pager);
 
@@ -202,6 +210,11 @@ namespace Genode {
 			 * Flush memory mappings for the specified virtual address range
 			 */
 			void unmap(addr_t core_local_base, addr_t virt_base, size_t size);
+
+			bool has_same_address_space(Rm_client const &other)
+			{
+				return other._address_space == _address_space;
+			}
 	};
 
 
@@ -211,6 +224,7 @@ namespace Genode {
 
 			Rpc_entrypoint *_ds_ep;
 			Rpc_entrypoint *_thread_ep;
+			Rpc_entrypoint *_session_ep;
 
 			Allocator_guard    _md_alloc;
 			Signal_transmitter _fault_notifier;  /* notification mechanism for
@@ -238,24 +252,25 @@ namespace Genode {
 			{
 				private:
 
-					Rm_session_component *_rm_session_component;
+					Native_capability _rm_session_cap;
 
 				public:
 
 					/**
 					 * Constructor
 					 */
-					Rm_dataspace_component(Rm_session_component *rsc, size_t size)
+					Rm_dataspace_component(size_t size)
 					:
-						Dataspace_component(size, 0, false, false, 0),
-						_rm_session_component(rsc) { _managed = true; }
+						Dataspace_component(size, 0, false, false, 0)
+						{ _managed = true; }
 
 
 					/***********************************
 					 ** Dataspace component interface **
 					 ***********************************/
 
-					Rm_session_component *sub_rm_session() { return _rm_session_component; }
+					Native_capability sub_rm_session() { return _rm_session_cap; }
+					void sub_rm_session(Native_capability _cap) { _rm_session_cap = _cap; }
 			};
 
 
@@ -268,7 +283,7 @@ namespace Genode {
 			                                                detach, pagefaults */
 			List<Rm_region_ref>           _regions;      /* region list for destruction */
 
-			List<Rm_faulter>              _faulters;     /* list of threads that faulted at
+			Fifo<Rm_faulter>              _faulters;     /* list of threads that faulted at
 			                                                the region-manager session and wait
 			                                                for fault resolution */
 			List<Rm_client>               _clients;      /* list of RM clients using this RM
@@ -285,6 +300,7 @@ namespace Genode {
 			 */
 			Rm_session_component(Rpc_entrypoint   *ds_ep,
 			                     Rpc_entrypoint   *thread_ep,
+			                     Rpc_entrypoint   *session_ep,
 			                     Allocator        *md_alloc,
 			                     size_t            ram_quota,
 			                     Pager_entrypoint *pager_ep,
@@ -300,10 +316,11 @@ namespace Genode {
 			 *
 			 * \return true  lookup succeeded
 			 */
-			bool reverse_lookup(addr_t                dst_base,
-			                    Fault_area           *dst_fault_region,
-			                    Dataspace_component **src_dataspace,
-			                    Fault_area           *src_fault_region);
+			bool reverse_lookup(addr_t                 dst_base,
+			                    Fault_area            *dst_fault_region,
+			                    Dataspace_component  **src_dataspace,
+			                    Fault_area            *src_fault_region,
+			                    Rm_session_component **sub_rm_session);
 
 			/**
 			 * Register fault
@@ -321,7 +338,7 @@ namespace Genode {
 			/**
 			 * Dissolve faulter from region-manager session
 			 */
-			void discard_faulter(Rm_faulter *faulter);
+			void discard_faulter(Rm_faulter *faulter, bool do_lock);
 
 			List<Rm_client> *clients() { return &_clients; }
 			
@@ -335,11 +352,6 @@ namespace Genode {
 			 */
 			void upgrade_ram_quota(size_t ram_quota) { _md_alloc.upgrade(ram_quota); }
 
-			/**
-			 * Dissolves client from region-manager session
-			 */
-			void dissolve(Rm_client *cl);
-
 
 			/**************************************
 			 ** Region manager session interface **
@@ -348,6 +360,7 @@ namespace Genode {
 			Local_addr       attach        (Dataspace_capability, size_t, off_t, bool, Local_addr, bool);
 			void             detach        (Local_addr);
 			Pager_capability add_client    (Thread_capability);
+			void             remove_client (Pager_capability);
 			void             fault_handler (Signal_context_capability handler);
 			State            state         ();
 			Dataspace_capability dataspace () { return _ds_cap; }

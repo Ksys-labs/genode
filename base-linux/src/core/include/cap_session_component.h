@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -32,6 +32,8 @@ namespace Genode {
 			}
 
 		public:
+
+			Cap_session_component(Allocator *md_alloc, const char *args) {}
 
 			Native_capability alloc(Native_capability ep)
 			{

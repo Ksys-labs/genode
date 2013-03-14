@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -19,7 +19,7 @@
 #include <platform.h>
 #include <platform_thread.h>
 #include <assert.h>
-#include <software_tlb.h>
+#include <tlb.h>
 
 using namespace Genode;
 
@@ -34,7 +34,7 @@ void Rm_client::unmap(addr_t core_local_base, addr_t virt_base, size_t size)
 	/* get software TLB of the thread that we serve */
 	Platform_thread * const pt = Kernel::get_thread(badge());
 	assert(pt);
-	Software_tlb * const tlb = pt->software_tlb();
+	Tlb * const tlb = pt->tlb();
 	assert(tlb);
 
 	/* update all translation caches */
@@ -57,27 +57,31 @@ void Ipc_pager::resolve_and_wait_for_fault()
 	/* valid mapping? */
 	assert(_mapping.valid());
 
-	/* do we need extra space to resolve pagefault? */
-	Software_tlb * const tlb = _pagefault.software_tlb;
-	enum Mapping_attributes { X = 1, K = 0, G = 0 };
-	unsigned sl2 = tlb->insert_translation(_mapping.virt_address,
-	               _mapping.phys_address, _mapping.size_log2,
-	               _mapping.writable, X, K, G);
+	/* prepare mapping */
+	Tlb * const tlb = _pagefault.tlb;
+	Page_flags::access_t const flags =
+	Page_flags::resolve_and_wait_for_fault(_mapping.writable,
+	                                       _mapping.write_combined,
+	                                       _mapping.io_mem);
+
+	/* insert mapping into TLB */
+	unsigned sl2;
+	sl2 = tlb->insert_translation(_mapping.virt_address, _mapping.phys_address,
+	                              _mapping.size_log2, flags);
 	if (sl2)
 	{
 		/* try to get some natural aligned space */
 		void * space;
-		assert(platform()->ram_alloc()->alloc_aligned(1<<sl2, &space, sl2));
+		assert(platform()->ram_alloc()->alloc_aligned(1<<sl2, &space, sl2).is_ok());
 
 		/* try to translate again with extra space */
 		sl2 = tlb->insert_translation(_mapping.virt_address,
 		                              _mapping.phys_address,
-		                              _mapping.size_log2,
-		                              _mapping.writable, X, K, G, space);
+		                              _mapping.size_log2, flags, space);
 		assert(!sl2);
 	}
-	/* try to wake up faulter */
-	assert(!Kernel::resume_thread(_pagefault.thread_id));
+	/* wake up faulter */
+	Kernel::resume_faulter(_pagefault.thread_id);
 
 	/* wait for next page fault */
 	wait_for_fault();

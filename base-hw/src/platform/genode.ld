@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -109,10 +109,10 @@ SECTIONS
 	} : rw
 
 	.bss : {
-		_bss_start = .;
+		_bss_start = ALIGN(4);
 		*(.bss .bss.* .gnu.linkonce.b.* COMMON)
 	}
-	_bss_end = .;
+	_bss_end = ALIGN(4);
 	_prog_img_end = .;
 
 	/DISCARD/ : {

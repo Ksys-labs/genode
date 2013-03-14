@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -175,6 +175,12 @@ void Platform_thread::cancel_blocking()
 unsigned long Platform_thread::pager_object_badge() const
 {
 	return native_thread_id().raw;
+}
+
+
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _platform_pd->Address_space::weak_ptr();
 }
 
 

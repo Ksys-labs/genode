@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -72,21 +72,33 @@ void Thread_base::_deinit_platform_thread()
 void Thread_base::start()
 {
 	/*
-	 * On NOVA, core almost nerver starts regular threads. This simply creates a
+	 * On NOVA, core almost never starts regular threads. This simply creates a
 	 * local EC
 	 */
 	using namespace Nova;
 
-	addr_t sp   = reinterpret_cast<addr_t>(&_context->stack[-4]);
+	addr_t sp = reinterpret_cast<addr_t>(&_context->stack[-4]);
 	addr_t utcb = reinterpret_cast<addr_t>(&_context->utcb);
-	addr_t pd_sel   = Platform_pd::pd_core_sel();
+	Utcb * utcb_obj = reinterpret_cast<Utcb *>(&_context->utcb);
+	addr_t pd_sel = Platform_pd::pd_core_sel();
 
 	/* create local EC */
 	enum { CPU_NO = 0, GLOBAL = false };
 	uint8_t res = create_ec(_tid.ec_sel, pd_sel, CPU_NO,
 	                        utcb, sp, _tid.exc_pt_sel, GLOBAL);
 	if (res != NOVA_OK) {
-		PERR("%p - create_ec returned %d", this, res);
+		PERR("create_ec returned %d", res);
+		throw Cpu_session::Thread_creation_failed();
+	}
+
+	/* default: we don't accept any mappings or translations */
+	utcb_obj->crd_rcv = Obj_crd();
+	utcb_obj->crd_xlt = Obj_crd();
+
+	if (map_local(reinterpret_cast<Nova::Utcb *>(Thread_base::myself()->utcb()),
+	              Obj_crd(PT_SEL_PAGE_FAULT, 0),
+	              Obj_crd(_tid.exc_pt_sel + PT_SEL_PAGE_FAULT, 0))) {
+		PERR("could not create page fault portal");
 		throw Cpu_session::Thread_creation_failed();
 	}
 }

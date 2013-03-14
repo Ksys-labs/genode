@@ -55,20 +55,21 @@ namespace Nova {
 
 		asm volatile ("syscall"
 		              : "+D" (status)
-			      :
+		              :
 		              : "rcx", "r11", "memory");
 		return status;
 	}
 
 
 	ALWAYS_INLINE
-	inline uint8_t syscall_1(Syscall s, uint8_t flags, mword_t p1, mword_t * p2 = 0)
+	inline uint8_t syscall_1(Syscall s, uint8_t flags, mword_t sel, mword_t p1,
+	                         mword_t * p2 = 0)
 	{
-		mword_t status = rdi(s, flags, 0);
+		mword_t status = rdi(s, flags, sel);
 
 		asm volatile ("syscall"
 		              : "+D" (status), "+S" (p1)
-			      : 
+		              :
 		              : "rcx", "r11", "memory");
 		if (p2) *p2 = p1;
 		return status;
@@ -76,7 +77,8 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
-	inline uint8_t syscall_2(Syscall s, uint8_t flags, mword_t sel, mword_t p1, mword_t p2)
+	inline uint8_t syscall_2(Syscall s, uint8_t flags, mword_t sel, mword_t p1,
+	                         mword_t p2)
 	{
 		mword_t status = rdi(s, flags, sel);
 
@@ -119,13 +121,13 @@ namespace Nova {
 
 	ALWAYS_INLINE
 	inline uint8_t syscall_5(Syscall s, uint8_t flags, mword_t sel,
-	                         mword_t p1, mword_t p2, mword_t &p3, mword_t &p4)
+	                         mword_t &p1, mword_t &p2)
 	{
 		mword_t status = rdi(s, flags, sel);
 
 		asm volatile ("syscall"
-		              : "+D" (status), "+S"(p3), "+d"(p4)
-			      :
+		              : "+D" (status), "+S"(p1), "+d"(p2)
+		              :
 		              : "rcx", "r11", "memory");
 		return status;
 	}
@@ -174,6 +176,7 @@ namespace Nova {
 		return syscall_0(NOVA_EC_CTRL, 0, ec);
 	}
 
+
 	ALWAYS_INLINE
 	inline uint8_t create_sc(mword_t sc, mword_t pd, mword_t ec, Qpd qpd)
 	{
@@ -182,9 +185,22 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
-	inline uint8_t create_pt(mword_t pt, mword_t pd, mword_t ec, Mtd mtd, mword_t rip)
+	inline uint8_t pt_ctrl(mword_t pt, mword_t pt_id)
 	{
-		return syscall_4(NOVA_CREATE_PT, 0, pt, pd, ec, mtd.value(), rip);
+		return syscall_1(NOVA_PT_CTRL, 0, pt, pt_id);
+	}
+
+
+	ALWAYS_INLINE
+	inline uint8_t create_pt(mword_t pt, mword_t pd, mword_t ec, Mtd mtd,
+	                         mword_t rip, bool id_equal_pt = true)
+	{
+		uint8_t res = syscall_4(NOVA_CREATE_PT, 0, pt, pd, ec, mtd.value(), rip);
+
+		if (!id_equal_pt || res != NOVA_OK)
+			return res;
+
+		return pt_ctrl(pt, pt);
 	}
 
 
@@ -198,7 +214,7 @@ namespace Nova {
 	ALWAYS_INLINE
 	inline uint8_t revoke(Crd crd, bool self = true)
 	{
-		return syscall_1(NOVA_REVOKE, self, crd.value());
+		return syscall_1(NOVA_REVOKE, self, 0, crd.value());
 	}
 
 
@@ -206,7 +222,7 @@ namespace Nova {
 	inline uint8_t lookup(Crd &crd)
 	{
 		mword_t crd_r;
-		uint8_t res=syscall_1(NOVA_LOOKUP, 0, crd.value(), &crd_r);
+		uint8_t res = syscall_1(NOVA_LOOKUP, 0, 0, crd.value(), &crd_r);
 		crd = Crd(crd_r);
 		return res;
 	}
@@ -225,7 +241,7 @@ namespace Nova {
 		mword_t status = rdi(NOVA_SC_CTRL, op, sm);
 		mword_t time_h;
 
-		uint8_t res = syscall_5(NOVA_SC_CTRL, op, sm, 0, 0, time_h, time);
+		uint8_t res = syscall_5(NOVA_SC_CTRL, op, sm, time_h, time);
 		asm volatile ("syscall"
 		              : "+D" (status), "=S"(time_h), "=d"(time)
 			      :
@@ -239,20 +255,17 @@ namespace Nova {
 	ALWAYS_INLINE
 	inline uint8_t assign_pci(mword_t pd, mword_t mem, mword_t rid)
 	{
-		return syscall_2(NOVA_ASSIGN_GSI, 0, pd, mem, rid);
+		return syscall_2(NOVA_ASSIGN_PCI, 0, pd, mem, rid);
 	}
 
-	ALWAYS_INLINE
-	inline uint8_t assign_gsi(mword_t sm, mword_t dev, mword_t rid)
-	{
-		mword_t dummy1 = 0, dummy2 = 0;
-		return syscall_5(NOVA_ASSIGN_GSI, 0, sm, dev, rid, dummy1, dummy2);
-	}
 
 	ALWAYS_INLINE
-	inline uint8_t assign_gsi(mword_t sm, mword_t dev, mword_t rid, mword_t &msi_addr, mword_t &msi_data)
+	inline uint8_t assign_gsi(mword_t sm, mword_t dev, mword_t cpu,
+	                          mword_t &msi_addr, mword_t &msi_data)
 	{
-		return syscall_5(NOVA_ASSIGN_GSI, 0, sm, dev, rid, msi_addr, msi_data);
+		msi_addr = dev;
+		msi_data = cpu;
+		return syscall_5(NOVA_ASSIGN_GSI, 0, sm, msi_addr, msi_data);
 	}
 }
 #endif /* _PLATFORM__NOVA_SYSCALLS_H_ */

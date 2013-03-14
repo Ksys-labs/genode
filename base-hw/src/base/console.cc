@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -31,7 +31,20 @@ namespace Genode
 			/**
 			 * Print a char to the console
 			 */
-			void _out_char(char c) { Serial_log::put_char(c); }
+			void _out_char(char c)
+			{
+				enum {
+					ASCII_LINE_FEED = 10,
+					ASCII_CARRIAGE_RETURN = 13,
+				};
+
+				/* auto complete new line commands */
+				if (c == ASCII_LINE_FEED)
+					Serial_log::put_char(ASCII_CARRIAGE_RETURN);
+
+				/* print char */
+				Serial_log::put_char(c);
+			}
 
 		public:
 

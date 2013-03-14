@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -18,12 +18,42 @@
 
 #include <base/pager.h>
 #include <base/thread_state.h>
+#include <cpu_session/cpu_session.h>
 
 namespace Genode {
 
-	class Platform_thread
+	class Platform_thread;
+
+	/*
+	 * We hold all Platform_thread objects in a list in order to be able to
+	 * reflect SIGCHLD as exception signals. When a SIGCHILD occurs, we
+	 * determine the PID of the terminated child process via 'wait4'. We use
+	 * the list to find the 'Platform_thread' matching the TID, wherei, in
+	 * turn, we find the exception handler's 'Signal_context_capability'.
+	 */
+
+	class Platform_thread : public List<Platform_thread>::Element
 	{
 		private:
+
+			struct Registry
+			{
+				Lock                  _lock;
+				List<Platform_thread> _list;
+
+				void insert(Platform_thread *thread);
+				void remove(Platform_thread *thread);
+
+				/**
+				 * Trigger exception handler for 'Platform_thread' with matching PID.
+				 */
+				void submit_exception(unsigned long pid);
+			};
+
+			/**
+			 * Return singleton instance of 'Platform_thread::Registry'
+			 */
+			static Registry *_registry();
 
 			unsigned long _tid;
 			unsigned long _pid;
@@ -33,6 +63,12 @@ namespace Genode {
 			 * Unix-domain socket pair bound to the thread
 			 */
 			Native_connection_state _ncs;
+
+			/*
+			 * Dummy pager object that is solely used for storing the
+			 * 'Signal_context_capability' for the thread's exception handler.
+			 */
+			Pager_object _pager;
 
 		public:
 
@@ -61,10 +97,22 @@ namespace Genode {
 			/**
 			 * Dummy implementation of platform-thread interface
 			 */
-			Pager_object *pager() { return 0; }
+			Pager_object *pager() { return &_pager; }
 			void          pager(Pager_object *) { }
 			int           start(void *ip, void *sp) { return 0; }
-			int           state(Thread_state *state_dst) { return 0; }
+
+			Thread_state state()
+			{
+				PDBG("Not implemented");
+				throw Cpu_session::State_access_failed();
+			}
+
+			void state(Thread_state)
+			{
+				PDBG("Not implemented");
+				throw Cpu_session::State_access_failed();
+			}
+
 			const char   *name() { return _name; }
 			void          affinity(unsigned) { }
 
@@ -85,6 +133,14 @@ namespace Genode {
 			 * Return server-side socket descriptor
 			 */
 			int server_sd();
+
+			/**
+			 * Notify Genode::Signal handler about sigchld
+			 */
+			static void submit_exception(int pid)
+			{
+				_registry()->submit_exception(pid);
+			}
 	};
 }
 

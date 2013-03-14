@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,7 +26,6 @@ namespace Genode {
 		static void copy(void* dst, Native_capability_tpl<Cap_dst_policy>* src);
 	};
 
-	typedef volatile int  Native_lock;
 	typedef int           Native_thread;
 	typedef Native_thread Native_thread_id;
 	typedef struct { }    Native_utcb;
@@ -46,6 +45,8 @@ namespace Genode {
 		 */
 		static addr_t context_virtual_size() { return 0x00100000UL; }
 	};
+
+	struct Native_pd_args { };
 }
 
 #endif /* _INCLUDE__BASE__NATIVE_TYPES_H_ */

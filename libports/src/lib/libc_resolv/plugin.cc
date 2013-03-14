@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -73,14 +73,11 @@ namespace {
 			                const struct ::addrinfo *hints,
 			                struct ::addrinfo **res)
 			{
-				PDBG("libc_resolv getaddrinfo() called");
 				return ::libc_getaddrinfo(node, service, hints, res);
 			}
 
 			void freeaddrinfo(struct ::addrinfo *res)
 			{
-				PDBG("libc_resolv freeaddrinfo() called");
-
 				return ::libc_freeaddrinfo(res);
 			}
 

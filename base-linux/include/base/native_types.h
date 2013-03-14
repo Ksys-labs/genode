@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2007-2012 Genode Labs GmbH
+ * Copyright (C) 2007-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -14,6 +14,7 @@
 #ifndef _INCLUDE__BASE__NATIVE_TYPES_H_
 #define _INCLUDE__BASE__NATIVE_TYPES_H_
 
+#include <util/string.h>
 #include <base/native_capability.h>
 #include <base/stdint.h>
 
@@ -28,25 +29,9 @@
 namespace Genode {
 
 	/**
-	 * Native lock type
+	 * Thread ID
 	 *
-	 * We are using a sleeping spinlock as lock implementation on Linux. This
-	 * is a temporary solution until we have implemented futex-based locking.
-	 * In a previous version, we have relied on POSIX semaphores as provided by
-	 * the glibc. However, relying on the glibc badly interferes with a custom
-	 * libc implementation. The glibc semaphore implementation expects to find
-	 * a valid pthread structure via the TLS pointer. We do not have such a
-	 * structure because we create threads via the 'clone' system call rather
-	 * than 'pthread_create'. Hence we have to keep the base framework clean
-	 * from glibc usage altogether.
-	 */
-	typedef volatile int Native_lock;
-
-	/**
-	 * Thread ID used in lock implementation
-	 *
-	 * Unfortunately, both - PID and TID - are needed for lx_tgkill() in
-	 * thread_check_stopped_and_restart().
+	 * Unfortunately, both - PID and TID - are needed for lx_tgkill()
 	 */
 	struct Native_thread_id
 	{
@@ -77,6 +62,11 @@ namespace Genode {
 		bool is_ipc_server;
 
 		/**
+		 * Natively aligned memory location used in the lock implementation
+		 */
+		int futex_counter __attribute__((aligned(sizeof(Genode::addr_t))));
+
+		/**
 		 * Opaque pointer to additional thread-specific meta data
 		 *
 		 * This pointer is used by hybrid Linux/Genode program to maintain
@@ -85,7 +75,7 @@ namespace Genode {
 		 */
 		Thread_meta_data *meta_data;
 
-		Native_thread() : is_ipc_server(false), meta_data(0) { }
+		Native_thread() : is_ipc_server(false), futex_counter(0), meta_data(0) { }
 	};
 
 	inline bool operator == (Native_thread_id t1, Native_thread_id t2) {
@@ -148,6 +138,35 @@ namespace Genode {
 		 * Size of virtual address region holding the context of one thread
 		 */
 		static addr_t context_virtual_size() { return 0x00100000UL; }
+	};
+
+	class Native_pd_args
+	{
+		public:
+
+			enum { ROOT_PATH_MAX_LEN = 256 };
+
+		private:
+
+			char _root[ROOT_PATH_MAX_LEN];
+
+			unsigned _uid;
+			unsigned _gid;
+
+		public:
+
+			Native_pd_args() : _uid(0), _gid(0) { _root[0] = 0; }
+
+			Native_pd_args(char const *root, unsigned uid, unsigned gid)
+			:
+				_uid(uid), _gid(gid)
+			{
+				Genode::strncpy(_root, root, sizeof(_root));
+			}
+
+			char const *root() const { return _root; }
+			unsigned    uid()  const { return _uid;  }
+			unsigned    gid()  const { return _gid;  }
 	};
 }
 

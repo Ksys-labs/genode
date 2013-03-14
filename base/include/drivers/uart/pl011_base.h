@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -26,12 +26,7 @@ namespace Genode
 	{
 		protected:
 
-			enum {
-				MAX_BAUD_RATE = 0xfffffff,
-
-				ASCII_LINE_FEED = 10,
-				ASCII_CARRIAGE_RETURN = 13,
-			};
+			enum { MAX_BAUD_RATE = 0xfffffff };
 
 			/**
 			 * Data register
@@ -174,9 +169,6 @@ void Genode::Pl011_base::put_char(char const c)
 {
 	/* wait as long as the transmission buffer is full */
 	while (read<Uartfr::Txff>()) ;
-
-	/* auto complete new line commands */
-	if (c == ASCII_LINE_FEED) write<Uartdr::Data>(ASCII_CARRIAGE_RETURN);
 
 	/* transmit character */
 	write<Uartdr::Data>(c);

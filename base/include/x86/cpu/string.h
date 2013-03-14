@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -25,7 +25,7 @@ namespace Genode
 	 *
 	 * \return      Number of bytes not copied
 	 */
-	inline size_t memcpy_cpu(void *dst, const void *src, size_t size) {
+	inline size_t memcpy_cpu(void *, const void *, size_t size) {
 		return size; }
 }
 

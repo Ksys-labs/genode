@@ -5,19 +5,17 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-/* Genode includes */
-#include <drivers/board.h>
-
-/* Core includes */
+/* core includes */
+#include <board.h>
 #include <platform.h>
-#include <pic/pl390_base.h>
-#include <cortex_a9/cpu/core.h>
+#include <pic/vea9x4_trustzone.h>
+#include <cpu/cortex_a9.h>
 
 using namespace Genode;
 
@@ -26,7 +24,7 @@ Native_region * Platform::_ram_regions(unsigned const i)
 {
 	static Native_region _regions[] =
 	{
-		{ Board::SRAM_BASE, Board::SRAM_SIZE }
+		{ Board::RAM_3_BASE, Board::RAM_3_SIZE }
 	};
 	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
 }
@@ -39,7 +37,7 @@ Native_region * Platform::_irq_regions(unsigned const i)
 		{ 0, 34 },
 		{ 37, 3 },
 		{ 46, 1 },
-		{ 49, Pl390_base::MAX_INTERRUPT_ID - 49 }
+		{ 49, Vea9x4_trustzone::Pic::MAX_INTERRUPT_ID - 49 }
 	};
 	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
 }
@@ -50,7 +48,7 @@ Native_region * Platform::_core_only_irq_regions(unsigned const i)
 	static Native_region _regions[] =
 	{
 		/* Core timer */
-		{ Cortex_a9::PRIVATE_TIMER_IRQ, 1 },
+		{ Cortex_a9::Cpu::PRIVATE_TIMER_IRQ, 1 },
 
 		/* Core UART */
 		{ Board::PL011_0_IRQ, 1 }
@@ -63,9 +61,9 @@ Native_region * Platform::_mmio_regions(unsigned const i)
 {
 	static Native_region _regions[] =
 	{
-		{ Board::SMB_CS7_BASE, Board::SMB_CS7_SIZE },
-		{ Board::SMB_CS0_TO_CS6_BASE, Board::SMB_CS0_TO_CS6_SIZE },
-		{ Board::LOCAL_DDR2_BASE, Board::LOCAL_DDR2_SIZE },
+		{ Board::MMIO_0_BASE, Board::MMIO_0_SIZE },
+		{ Board::MMIO_1_BASE, Board::MMIO_1_SIZE },
+		{ 0x60000000, 0x40000000 },
 		{ Board::TZASC_MMIO_BASE, Board::TZASC_MMIO_SIZE },
 		{ Board::TZPC_MMIO_BASE, Board::TZPC_MMIO_SIZE },
 	};

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,9 +22,9 @@ class Platform_timer
 {
 	private:
 
-		Genode::Lock  _lock;               /* for protecting '_next_timeout_usec' */
-		unsigned long _next_timeout_usec;  /* timeout of current sleep */
-		unsigned long _curr_time_usec;     /* accumulated sleep time */
+		Genode::Lock mutable _lock;               /* for protecting '_next_timeout_usec' */
+		unsigned long        _next_timeout_usec;  /* timeout of current sleep */
+		unsigned long        _curr_time_usec;     /* accumulated sleep time */
 
 		/**
 		 * Platform-specific sleep implementation
@@ -38,7 +38,6 @@ class Platform_timer
 		 */
 		Platform_timer() : _next_timeout_usec(max_timeout()), _curr_time_usec(0) { }
 
-
 		/**
 		 * Set next relative timeout
 		 */
@@ -48,18 +47,15 @@ class Platform_timer
 			_next_timeout_usec = timeout_usec;
 		}
 
-
 		/**
 		 * Return maximum supported timeout in microseconds
 		 */
 		unsigned long max_timeout();
 
-
 		/**
 		 * Get current time in microseconds
 		 */
-		unsigned long curr_time();
-
+		unsigned long curr_time() const;
 
 		/**
 		 * Block until the scheduled timeout triggers

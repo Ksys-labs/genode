@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -47,15 +47,15 @@ namespace Genode {
 		 * \return  Service to be contacted for the new session, or
 		 *          0 if session request could not be resolved
 		 */
-		virtual Service *resolve_session_request(const char *service_name,
-		                                         const char *args)
+		virtual Service *resolve_session_request(const char * /*service_name*/,
+		                                         const char * /*args*/)
 		{ return 0; }
 
 		/**
 		 * Apply transformations to session arguments
 		 */
-		virtual void filter_session_args(const char *service,
-		                                 char *args, size_t args_len) { }
+		virtual void filter_session_args(const char * /*service*/,
+		                                 char * /*args*/, size_t /*args_len*/) { }
 
 		/**
 		 * Register a service provided by the child
@@ -67,10 +67,10 @@ namespace Genode {
 		 * \return       true if announcement succeeded, or false if
 		 *               child is not permitted to announce service
 		 */
-		virtual bool announce_service(const char            *name,
-		                              Root_capability        root,
-		                              Allocator             *alloc,
-		                              Server                *server)
+		virtual bool announce_service(const char            * /*name*/,
+		                              Root_capability         /*root*/,
+		                              Allocator             * /*alloc*/,
+		                              Server                * /*server*/)
 		{ return false; }
 
 		/**
@@ -95,9 +95,12 @@ namespace Genode {
 		virtual Ram_session *ref_ram_session() { return env()->ram_session(); }
 
 		/**
-		 * Return root path of the child's PD session (only used on Linux)
+		 * Return platform-specific PD-session arguments
+		 *
+		 * This function is used on Linux to supply additional PD-session
+		 * argument to core, i.e., the chroot path, the UID, and the GID.
 		 */
-		virtual char const *root() const { return ""; }
+		virtual Native_pd_args const *pd_args() const { return 0; }
 	};
 
 

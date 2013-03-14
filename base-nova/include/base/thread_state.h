@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2012-2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,12 +22,13 @@ namespace Genode {
 
 	struct Thread_state : public Cpu_state
 	{
-		bool transfer;
 		bool is_vcpu;
 		addr_t sel_exc_base;
 
-		Thread_state(bool trans = false) : Cpu_state(), transfer(trans),
-		                                   is_vcpu(false), sel_exc_base(~0UL) {}
+		Thread_state() : Cpu_state(), is_vcpu(false), sel_exc_base(~0UL) { }
+
+		Thread_state(bool is_vcpu, addr_t sel_exc_base)
+		: is_vcpu(is_vcpu), sel_exc_base(sel_exc_base) { }
 	};
 }
 

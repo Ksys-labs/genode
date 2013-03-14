@@ -78,7 +78,7 @@ Platform devices
 UART devices
 ============
 
-The UART device drivers implement the terminal-session interface.
+The UART device drivers implement the UART-session interface.
 
 :'os/src/drivers/uart/pl011':
   Driver for the PL011 UART as found on many ARM-based platforms.
@@ -139,26 +139,21 @@ input-session interfaces respectively.
 Timer drivers
 =============
 
-All timer drivers implement the timer-session interface. Technically, a timer
-driver is both a device driver (accessing a timer device) and a resource
-multiplexer (supporting multiple timer-session clients at the same time). The
-timer implementations differ in their use of different time sources and the
-mode of internal operation of the timer sessions. Time sources are either
-hardware timers, a time source provided by the kernel, or a pseudo time source
-(busy).
+The timer driver located at 'os/src/drivers/timer' implements the timer-session
+interface. Technically, it is is both a device driver (accessing a timer
+device) and a resource multiplexer (supporting multiple timer-session clients
+at the same time). Depending on the base platform, the implementation uses of
+different time sources. Time sources are either hardware timers, a time source
+provided by the kernel, or a pseudo time source (busy):
 
-The internal operation of the timer session depends on the kernel. On kernels
-with support for out-of-order RPCs, all timer sessions are handled by a single
-thread. Otherwise, each timer session uses a dedicated thread.
-
-:'timer/nova':      PIT as time source,         multi-threaded
-:'timer/codezero':  busy time source,           single-threaded
-:'timer/okl4_arm':  busy time source,           single-threaded
-:'timer/okl4_x86':  PIT as time source,         single-threaded
-:'timer/foc':       IPC timeout as time source, multi-threaded
-:'timer/fiasco':    IPC timeout as time source, single-threaded
-:'timer/pistachio': IPC timeout as time source, single-threaded
-:'timer/linux':     nanosleep as time source,   single-threaded
+:'nova':      PIT as time source
+:'codezero':  busy time source
+:'okl4_arm':  busy time source
+:'okl4_x86':  PIT as time source
+:'foc':       IPC timeout as time source
+:'fiasco':    IPC timeout as time source
+:'pistachio': IPC timeout as time source
+:'linux':     nanosleep as time source
 
 
 Audio output drivers
@@ -169,6 +164,10 @@ All audio-output drivers implement the audio session interface defined at
 
 :'os/src/drivers/audio_out/linux':
   Uses ALSA as back-end on the Linux base platform.
+
+:'dde_oss/src/drivers/oss':
+  Sound drivers for the most common PC sound hardware, ported from the
+  Open Sound System project.
 
 :'linux_drivers/src/drivers/audio_out':
   Sound drivers for the most common PC sound hardware, ported from the Linux
@@ -225,6 +224,13 @@ defined at 'os/include/nic_session'.
   For the OMAP4 platform, the USB driver contains the networking driver.
 
 
+General-purpose I/O drivers
+===========================
+
+:'os/src/drivers/gpio/omap4':
+  Driver for accessing the GPIO pins of OMAP4 platforms.
+
+
 Resource multiplexers
 #####################
 
@@ -258,6 +264,11 @@ subdirectory of a source repository.
   concurrently access the same FFAT-formatted block device. It is located
   at 'libports/src/server/ffat_fs'.
 
+:Terminal: The terminal_mux service located at gems/src/server/terminal_mux
+  is able to provide multiple terminal sessions over one terminal-client
+  session. The user can switch between the different sessions using a keyboard
+  shortcut, which brings up an ncurses-based menu.
+
 
 Protocol stacks
 ###############
@@ -280,6 +291,10 @@ Separate components:
 :'os/src/server/tar_rom':
   Provides each file contained in a tar file obtained via Genode's ROM session
   as separate ROM session.
+
+:'os/src/server/fs_rom':
+  Provides files stored in a file system as individual ROM sessions. Please
+  refer to 'os/src/server/fs_rom' for more information.
 
 :'os/src/server/iso9660':
   Provides each file of an ISO9660 file system accessed via a block session as
@@ -319,6 +334,11 @@ Separate components:
   A block service that fetches a virtual block device over the network from
   a HTTP server.
 
+:'fs_rom':
+  A ROM service that translates the 'File_system' session interface to the
+  'ROM' session' interface. Each request for a ROM file is handled by looking
+  up an equally named file on the file system.
+
 Libraries:
 
 :'libports/lib/mk/libc':
@@ -337,6 +357,9 @@ Libraries:
 :'libports/lib/mk/libc_terminal':
   Connects the standard input and output from/to Genode's terminal session
   interface.
+
+:'libports/lib/mk/stdcxx':
+  Standard C++ library
 
 :'libports/lib/mk/gallium' + 'linux_drivers/lib/mk/gpu_i915_drv':
   Translates the OpenGL API to a framebuffer session using the MESA OpenGL
@@ -436,13 +459,9 @@ Runtime environments
 
 :'ports/src/vancouver': Vancouver is a virtual-machine monitor developed for
   the use with the NOVA platform. It virtualizes 32bit x86 PC hardware
-  including various peripherals. The current version is regarded as work in
-  progress. It is able to bootstrap one of the Fiasco or Pistachio kernels
-  but support for interrupts (i.e., the timer) is not yet implemented.
+  including various peripherals.
 
 :'os/src/server/loader': A service that allows the creation and destruction
   of Genode subsystems via a session interface. For further information,
   refer to 'os/src/server/loader/README'.
 
-:'os/src/app/chroot': A helper for the Linux base platforms that makes the
-  Linux chroot mechanism usable for Genode systems.

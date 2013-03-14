@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -46,8 +46,18 @@ namespace Genode {
 		Pager_capability add_client(Thread_capability thread) {
 			return _local()->add_client(thread); }
 
-		void fault_handler(Signal_context_capability handler) {
-			return _local()->fault_handler(handler); }
+		void remove_client(Pager_capability pager) {
+			_local()->remove_client(pager); }
+
+		void fault_handler(Signal_context_capability /*handler*/)
+		{
+			/*
+			 * On Linux, page faults are never reflected to RM clients. They
+			 * are always handled by the kernel. If a segmentation fault
+			 * occurs, this condition is being reflected as a CPU exception
+			 * to the handler registered via 'Cpu_session::exception_handler'.
+			 */
+		}
 
 		State state() {
 			return _local()->state(); }

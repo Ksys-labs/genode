@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -29,6 +29,7 @@
 #include <nitpicker_session/nitpicker_session.h>
 #include <framebuffer_session/connection.h>
 #include <nitpicker_gfx/pixel_rgb565.h>
+#include <nitpicker_gfx/string.h>
 #include <os/session_policy.h>
 #include <os/config.h>
 
@@ -44,37 +45,6 @@
 /***************
  ** Utilities **
  ***************/
-
-namespace Genode {
-
-	/**
-	 * Convert ASCII string to Color
-	 *
-	 * The ASCII string must have the format '#rrggbb'
-	 *
-	 * \return number of consumed characters, or 0 if the string contains
-	 *         no valid color
-	 */
-	template <>
-	inline size_t ascii_to<Color>(const char *s, Color *result, unsigned)
-	{
-		/* validate string */
-		if (strlen(s) != 7 || *s != '#') return 0;
-
-		enum { HEX = true };
-
-		for (unsigned i = 0; i < 6; i++)
-			if (!is_digit(s[i + 1], HEX)) return 0;
-
-		int red   = 16*digit(s[1], HEX) + digit(s[2], HEX),
-		    green = 16*digit(s[3], HEX) + digit(s[4], HEX),
-		    blue  = 16*digit(s[5], HEX) + digit(s[6], HEX);
-
-		*result = Color(red, green, blue);
-		return 7;
-	}
-}
-
 
 /**
  * Determine session color according to the list of configured policies
@@ -412,8 +382,7 @@ class View_component : public Genode::List<View_component>::Element,
 
 		int stack(Nitpicker::View_capability neighbor_cap, bool behind, bool redraw)
 		{
-			View_component *nvc;
-			nvc = dynamic_cast<View_component *>(_ep->obj_by_cap(neighbor_cap));
+			Genode::Object_pool<View_component>::Guard nvc(_ep->lookup_and_lock(neighbor_cap));
 
 			::View *neighbor_view = nvc ? nvc->view() : 0;
 
@@ -515,7 +484,7 @@ namespace Nitpicker {
 				 */
 				Event e = *ev;
 				if (e.ax() || e.ay())
-					e = Event(e.type(), e.keycode(), e.ax(),
+					e = Event(e.type(), e.code(), e.ax(),
 					          max(0, e.ay() - v_offset()), e.rx(), e.ry());
 
 				_input_session_component.submit(&e);
@@ -547,7 +516,7 @@ namespace Nitpicker {
 
 			void destroy_view(View_capability view_cap)
 			{
-				View_component *vc = dynamic_cast<View_component *>(_ep->obj_by_cap(view_cap));
+				View_component *vc = dynamic_cast<View_component *>(_ep->lookup_and_lock(view_cap));
 				if (!vc) return;
 
 				_view_stack->remove_view(vc->view());
@@ -559,7 +528,7 @@ namespace Nitpicker {
 			int background(View_capability view_cap)
 			{
 				if (_provides_default_bg) {
-					View_component *vc = dynamic_cast<View_component *>(_ep->obj_by_cap(view_cap));
+					Genode::Object_pool<View_component>::Guard vc(_ep->lookup_and_lock(view_cap));
 					vc->view()->background(true);
 					_view_stack->default_background(vc->view());
 					return 0;
@@ -569,7 +538,7 @@ namespace Nitpicker {
 				if (::Session::background()) ::Session::background()->background(false);
 
 				/* assign session background */
-				View_component *vc = dynamic_cast<View_component *>(_ep->obj_by_cap(view_cap));
+				Genode::Object_pool<View_component>::Guard vc(_ep->lookup_and_lock(view_cap));
 				::Session::background(vc->view());
 
 				/* switch background view to background mode */

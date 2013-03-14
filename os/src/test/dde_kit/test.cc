@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -478,7 +478,7 @@ static void test_pci()
 {
 	PDBG("=== starting PCI test ===");
 
-	dde_kit_pci_init();
+	dde_kit_pci_init(0, 0);
 
 	enum { BUS_MAX = 4, DEV_MAX = 8 };
 

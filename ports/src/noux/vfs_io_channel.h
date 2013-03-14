@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -134,6 +134,11 @@ namespace Noux {
 				return sysio->fstat_out.st.size;
 
 			return 0;
+		}
+
+		bool ioctl(Sysio *sysio)
+		{
+			return _fh->fs()->ioctl(sysio, _fh);
 		}
 
 		bool lseek(Sysio *sysio)

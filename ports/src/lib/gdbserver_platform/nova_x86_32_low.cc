@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012-2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,8 +22,8 @@ extern "C" int genode_fetch_register(int regno, unsigned long *reg_content)
 {
 	Thread_state thread_state;
 
-	if (!get_current_thread_state(thread_state))
-		return -1;
+	try { thread_state = get_current_thread_state(); }
+	catch (...) { return -1; }
 
 	switch((enum reg_index)regno)
 	{

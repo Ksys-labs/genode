@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -40,7 +40,7 @@ L4_CV void* genode_block_request(unsigned idx, unsigned long sz,
                                  void *req, unsigned long *offset);
 
 L4_CV void genode_block_submit(unsigned idx, unsigned long queue_offset,
-                               unsigned long size, unsigned long disc_offset,
+                               unsigned long size, unsigned long long disc_offset,
                                int write);
 
 L4_CV void genode_block_collect_responses(unsigned idx);

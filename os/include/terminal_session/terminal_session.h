@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -82,11 +82,6 @@ namespace Terminal {
 		 */
 		virtual void read_avail_sigh(Genode::Signal_context_capability cap) = 0;
 
-		/**
-		 * Set baud rate
-		 */
-		virtual bool set_baudrate(int baud) = 0;
-
 
 		/*******************
 		 ** RPC interface **
@@ -99,11 +94,10 @@ namespace Terminal {
 		GENODE_RPC(Rpc_connected_sigh, void, connected_sigh, Genode::Signal_context_capability);
 		GENODE_RPC(Rpc_read_avail_sigh, void, read_avail_sigh, Genode::Signal_context_capability);
 		GENODE_RPC(Rpc_dataspace, Genode::Dataspace_capability, _dataspace);
-		GENODE_RPC(Rpc_set_baudrate, bool, set_baudrate, int);
 
 		GENODE_RPC_INTERFACE(Rpc_size, Rpc_avail, Rpc_read, Rpc_write,
 		                     Rpc_connected_sigh, Rpc_read_avail_sigh,
-		                     Rpc_dataspace, Rpc_set_baudrate);
+		                     Rpc_dataspace);
 	};
 }
 

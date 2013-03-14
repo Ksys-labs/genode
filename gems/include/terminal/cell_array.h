@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -107,6 +107,11 @@ class Cell_array
 		void mark_line_as_clean(int line)
 		{
 			_line_dirty[line] = false;
+		}
+
+		void mark_line_as_dirty(int line)
+		{
+			_line_dirty[line] = true;
 		}
 
 		void scroll_up(int region_start, int region_end)

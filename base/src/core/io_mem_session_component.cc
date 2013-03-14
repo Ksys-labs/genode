@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -51,16 +51,16 @@ Io_mem_session_component::_prepare_io_mem(const char      *args,
 	}
 
 	/* allocate region */
-	switch (_io_mem_alloc->alloc_addr(req_size, req_base)) {
-	case Range_allocator::RANGE_CONFLICT:
+	switch (_io_mem_alloc->alloc_addr(req_size, req_base).value) {
+	case Range_allocator::Alloc_return::RANGE_CONFLICT:
 		PERR("I/O memory [%lx,%lx) not available", base, base + size);
 		return Dataspace_attr();
 
-	case Range_allocator::OUT_OF_METADATA:
+	case Range_allocator::Alloc_return::OUT_OF_METADATA:
 		PERR("I/O memory allocator ran out of meta data");
 		return Dataspace_attr();
 
-	case Range_allocator::ALLOC_OK: break;
+	case Range_allocator::Alloc_return::OK: break;
 	}
 
 	/* request local mapping */
@@ -99,6 +99,7 @@ Io_mem_session_component::~Io_mem_session_component()
 {
 	if (verbose)
 		PDBG("I/O mem free [%lx,%lx)", _ds.phys_addr(), _ds.phys_addr() + _ds.size());
+
 	/* dissolve IO_MEM dataspace from service entry point */
 	_ds_ep->dissolve(&_ds);
 

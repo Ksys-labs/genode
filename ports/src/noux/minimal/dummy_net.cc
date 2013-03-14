@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -13,10 +13,6 @@
 
 /* local includes */
 #include <child.h>
-
-void (*close_socket)(int) = 0;
-
-void (*cleanup_socket_descriptors)() = 0;
 
 void init_network() { }
 

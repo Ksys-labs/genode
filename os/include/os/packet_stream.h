@@ -66,7 +66,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -577,7 +577,7 @@ class Packet_stream_source : private Packet_stream_base
 		Packet_descriptor alloc_packet(Genode::size_t size, int align = POLICY::Packet_descriptor::PACKET_ALIGNMENT)
 		{
 			void *base = 0;
-			if (!_packet_alloc->alloc_aligned(size, &base, align))
+			if (_packet_alloc->alloc_aligned(size, &base, align).is_error())
 				throw Packet_alloc_failed();
 
 			return Packet_descriptor((Genode::off_t)base, size);

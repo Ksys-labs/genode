@@ -4,6 +4,109 @@
                                ===========
 
 
+Genode OS Framework release 13.02 | 2013-02-28
+##############################################
+
+| The version 13.02 takes a major leap with supporting the NOVA hypervisor by
+| fully embracing IOMMUs and NOVA's virtualization capabilities. Additionally,
+| the framework enables the use of ARM Cortex A15, comes with a new audio
+| interface, and introduces file-system notifications.
+
+Following the tradition to focus the February release on platform improvements,
+we dedicated the release cycle of version 13.02 to bringing the NOVA platform
+to new heights, revisiting several framework internals, and exploring the
+Exynos 5250 SoC based on ARM Cortex A15.
+
+The work on the NOVA platform pursued three goals: Improving the kernel to make
+it fit for Genode's highly dynamic work loads, leveraging the IOMMU support
+provided by the kernel, and tightly integrating the Vancouver virtualization
+solution with the Genode environment. These improvements combined turn NOVA
+into an intriguing base platform for Genode on x86 machines. Besides the x86
+architecture, the framework receives new support for ARM Cortex A15 CPUs in the
+form of the Exynos 5250 SoC. We enabled Genode on this hardware platform using
+both our custom kernel as well as the Fiasco.OC kernel.
+
+Even though the current version is primarily focused on platform support, there
+are noteworthy functional improvements as well. A few highlights are a
+completely redesigned audio interface, added file-system notification
+capabilities, and a new fault-detection mechanism.
+
+These and many more improvements are described in elaborative detail in the
+[http:/documentation/release-notes/13.02 - release notes of version 13.02...]
+
+
+Road Map 2013 | 2013-01-15
+##########################
+
+| The updated road map provides the background and rough schedule for the
+| advances of the framework planned for 2013.
+
+The road map of 2013 encompasses four major topics: improving the
+framework infrastructure, using Genode as a self-hosting environment,
+tooling and optimizations, and hardware support.
+
+Before going into detail about each of those topics, the updated road map
+document takes the chance to look back at the outcome of 2012. Even though
+the project largely maintains its main motivation of last year to turn Genode
+into a real-world general-purpose OS, the planned work reaches out to
+challenges that lie beyond this immediate goal, in particular multi-processor
+scalability, support for IOMMUs, extended ARM SoC support, and improved
+virtualization on x86.
+
+[http://genode.org/about/road-map - Review our road-map for more details...]
+
+
+Genode OS Framework release 12.11 | 2012-11-29
+##############################################
+
+| With version 12.11, Genode has become able to execute the Genode build system
+| directly on microkernels, introduces audio drivers based on the Open Sound
+| System project, and largely revisits the platform mechanisms used on Linux.
+
+We are excited to report on a real break-through towards using Genode as our
+day-to-day OS. The just released version 12.11 of the Genode OS Framework bears
+the fruit of the extensive effort to enable the execution of the entire build
+system within the genuine Genode environment. On the course of this work, we
+improved the whole software stack ranging from the underlying kernels, over the
+framework infrastructure, third-party libraries, up to the actual tool-chain
+utilities. In the process, the official Genode tool chain has been updated
+to GCC 4.7.2.
+
+In addition to the primary topic of self-hosting Genode, the release largely
+revisits and improves the existing base platforms. The Linux platform support
+has been almost reinvented to accommodate the use of the framework as an
+attractive middleware solution on Linux. Our custom kernel platform for ARM
+hardware gained new SoC support for Freescale i.MX and Texas Instruments OMAP4.
+The NOVA, Fiasco.OC, and L4ka::Pistachio kernels have been updated and improved.
+
+With the addition of the new device driver environment for the Open Sound
+System, Genode users on the x86 platform have a new option for driving popular
+sound hardware. For users of the ARM-based OMAP4 platform, a new GPIO driver
+clears the way towards building more sophisticated system scenarios.
+
+To learn more details and background information about the current release,
+please continue with reading the
+[http:/documentation/release-notes/12.11 - release notes of version 12.11...]
+
+
+How Genode came to the Pandaboard | 2012-11-23
+##############################################
+
+| In the just published experience report, the Genode developers
+| provide insights into the process of porting the framework to
+| a new hardware platform, namely the popular Pandaboard.
+
+The new article
+[http:/documentation/articles/pandaboard - "How Genode came to the Pandaboard"]
+describes the steps to bring various peripherals such as HDMI output, networking,
+and SD-cards to live. Additionally, the report takes the reader along the
+long-winding road of performance optimizations. For those who are eager to
+try out running Genode on the Pandaboard, the article presents a example
+scenario that may serve as a good starting point.
+
+Learn more about [http:/documentation/articles/pandaboard - how Genode came to the Pandaboard...]
+
+
 Genode OS Framework release 12.08 | 2012-08-23
 ##############################################
 

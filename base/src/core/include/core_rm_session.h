@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -41,7 +41,8 @@ namespace Genode {
 			                  Local_addr local_addr = 0,
 			                  bool executable = false)
 			{
-				Dataspace_component *ds = static_cast<Dataspace_component *>(_ds_ep->obj_by_cap(ds_cap));
+				Object_pool<Dataspace_component>::Guard
+					ds(_ds_ep->lookup_and_lock(ds_cap));
 				if (!ds)
 					throw Invalid_dataspace();
 
@@ -52,6 +53,8 @@ namespace Genode {
 
 			Pager_capability add_client(Thread_capability thread) {
 				return Pager_capability(); }
+
+			void remove_client(Pager_capability) { }
 
 			void fault_handler(Signal_context_capability handler) { }
 

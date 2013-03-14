@@ -1,11 +1,11 @@
  /*
- * \brief  Vm session interface
+ * \brief  VM-session interface
  * \author Stefan Kalkowski
  * \date   2012-10-02
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -14,6 +14,7 @@
 #ifndef _INCLUDE__VM_SESSION__VM_SESSION_H_
 #define _INCLUDE__VM_SESSION__VM_SESSION_H_
 
+/* Genode includes */
 #include <base/rpc_args.h>
 #include <base/signal.h>
 #include <session/session.h>
@@ -25,6 +26,9 @@ namespace Genode {
 	{
 			static const char *service_name() { return "VM"; }
 
+			/**
+			 * Destructor
+			 */
 			virtual ~Vm_session() { }
 
 			/**

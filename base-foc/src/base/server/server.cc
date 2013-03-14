@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -55,7 +55,8 @@ void Rpc_entrypoint::entry()
 	 */
 	_delay_start.lock();
 
-	while (1) {
+	while (!_exit_handler.exit) {
+
 		int opcode = 0;
 
 		srv >> IPC_REPLY_WAIT >> opcode;
@@ -70,21 +71,30 @@ void Rpc_entrypoint::entry()
 		}
 
 		/* atomically lookup and lock referenced object */
+		Object_pool<Rpc_object_base>::Guard curr_obj(lookup_and_lock(srv.badge()));
+		if (!curr_obj)
+			continue;
+
 		{
 			Lock::Guard lock_guard(_curr_obj_lock);
-
-			_curr_obj = obj_by_id(srv.badge());
-			if (!_curr_obj)
-				continue;
-
-			_curr_obj->lock();
+			_curr_obj = curr_obj;
 		}
 
 		/* dispatch request */
 		try { srv.ret(_curr_obj->dispatch(opcode, srv, srv)); }
 		catch (Blocking_canceled) { }
 
-		_curr_obj->unlock();
-		_curr_obj = 0;
+		{
+			Lock::Guard lock_guard(_curr_obj_lock);
+			_curr_obj = 0;
+		}
 	}
+
+	/* answer exit call, thereby wake up '~Rpc_entrypoint' */
+	srv << IPC_REPLY;
+
+	/* defer the destruction of 'Ipc_server' until '~Rpc_entrypoint' is ready */
+	_delay_exit.lock();
+
+
 }

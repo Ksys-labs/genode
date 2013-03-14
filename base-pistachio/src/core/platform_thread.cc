@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,7 +36,7 @@ using namespace Pistachio;
 static const bool verbose = false;
 static const bool verbose2 = true;
 
-#define PT_DBG(args...) if (verbose) PDBG(args); else {}
+#define PT_DBG(args...) if (verbose) { PDBG(args); } else { }
 
 
 void Platform_thread::affinity(unsigned int cpu_no)
@@ -162,8 +162,17 @@ void Platform_thread::unbind()
 }
 
 
-int Platform_thread::state(Thread_state *state_dst)
+void Platform_thread::state(Thread_state)
 {
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
+}
+
+
+Thread_state Platform_thread::state()
+{
+	Thread_state s;
+
 	L4_Word_t     dummy;
 	L4_ThreadId_t dummy_tid;
 	L4_Word_t ip, sp;
@@ -177,9 +186,9 @@ int Platform_thread::state(Thread_state *state_dst)
 	                     0, 0, 0, 0, L4_nilthread,
 	                     &dummy, &sp, &ip, &dummy, &dummy,
 	                     &dummy_tid);
-	state_dst->ip = ip;
-	state_dst->sp = sp;
-	return 0;
+	s.ip = ip;
+	s.sp = sp;
+	return s;
 }
 
 
@@ -214,6 +223,12 @@ void Platform_thread::cancel_blocking()
 	                     0, 0, 0, USER_DEFINED_HANDLE_ZERO, L4_nilthread,
 	                     &dummy, &dummy, &dummy, &dummy, &dummy,
 	                     &dummy_tid);
+}
+
+
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _platform_pd->Address_space::weak_ptr();
 }
 
 

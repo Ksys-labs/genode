@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -63,6 +63,8 @@ class Minimal_env : public Genode::Env
 			return Genode::Ram_session_capability(); }
 		Genode::Cpu_session_capability cpu_session_cap() {
 			return Genode::Cpu_session_capability(); }
+
+		void reload_parent_cap(Genode::Capability<Genode::Parent>::Dst, long) { }
 };
 
 

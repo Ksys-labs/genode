@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -49,6 +49,11 @@ namespace Genode {
 			: _imprint(imprint), _cnt(0), _source(source) { }
 
 			/**
+			 * De-constructor
+			 */
+			~Signal_context_component(); 
+
+			/**
 			 * Increment number of signals to be delivered at once
 			 */
 			void increment_signal_cnt(int increment) { _cnt += increment; }
@@ -78,6 +83,8 @@ namespace Genode {
 			 * Constructor
 			 */
 			Signal_source_component(Rpc_entrypoint *rpc_entrypoint);
+
+			void release(Signal_context_component *context);
 
 			void submit(Signal_context_component *context,
 			            Ipc_ostream              *ostream,

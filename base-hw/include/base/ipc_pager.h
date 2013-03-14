@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -32,6 +32,7 @@ namespace Genode
 		addr_t   virt_address;
 		addr_t   phys_address;
 		bool     write_combined;
+		bool     io_mem;
 		unsigned size_log2;
 		bool     writable;
 
@@ -39,10 +40,11 @@ namespace Genode
 		 * Construct valid mapping
 		 */
 		Mapping(addr_t const va, addr_t const pa, bool const wc,
-		        unsigned const sl2 = MIN_MAPPING_SIZE_LOG2, bool w = 1)
+		        bool io, unsigned const sl2 = MIN_MAPPING_SIZE_LOG2,
+		        bool const w = 1)
 		:
 			virt_address(va), phys_address(pa), write_combined(wc),
-			size_log2(sl2), writable(w)
+			io_mem(io), size_log2(sl2), writable(w)
 		{ }
 
 		/**
@@ -149,7 +151,7 @@ namespace Genode
 			/**
 			 * Return badge for faulting thread
 			 */
-			unsigned long badge() const { return _pagefault.thread_id; }
+			unsigned badge() const { return _pagefault.thread_id; }
 
 			/**
 			 * Return true if last fault was a write fault

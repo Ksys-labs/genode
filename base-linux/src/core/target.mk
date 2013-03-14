@@ -1,6 +1,6 @@
 TARGET        = core
 REQUIRES      = linux
-LIBS          = cxx ipc heap core_printf child lock raw_server syscall
+LIBS          = cxx base-common syscall startup
 
 GEN_CORE_DIR  = $(BASE_DIR)/src/core
 
@@ -18,24 +18,36 @@ SRC_CC        = main.cc \
                 io_mem_session_component.cc \
                 signal_session_component.cc \
                 signal_source_component.cc \
-                thread.cc \
                 thread_linux.cc \
                 context_area.cc \
-                debug.cc
+                core_printf.cc \
+                thread.cc
 
 INC_DIR      += $(REP_DIR)/src/core/include \
                 $(GEN_CORE_DIR)/include \
                 $(REP_DIR)/src/platform \
-                $(REP_DIR)/src/base/ipc
+                $(REP_DIR)/src/base/ipc \
+                $(REP_DIR)/src/base/env \
+                $(REP_DIR)/src/base/console
 
 HOST_INC_DIR += /usr/include
 
+#
+# core does not use POSIX threads when built for the 'lx_hybrid_x86' platform,
+# so we need to reserve the thread-context area via a segment in the program to
+# prevent clashes with vdso and shared libraries.
+#
+ifeq ($(findstring always_hybrid, $(SPECS)), always_hybrid)
+LD_SCRIPT_STATIC = $(LD_SCRIPT_DEFAULT) \
+                   $(call select_from_repositories,src/platform/context_area.stdlib.ld)
+endif
+
 vpath main.cc                     $(GEN_CORE_DIR)
-vpath thread.cc                   $(BASE_DIR)/src/base/thread
 vpath ram_session_component.cc    $(GEN_CORE_DIR)
 vpath cpu_session_component.cc    $(GEN_CORE_DIR)
 vpath platform_services.cc        $(GEN_CORE_DIR)
 vpath signal_session_component.cc $(GEN_CORE_DIR)
 vpath signal_source_component.cc  $(GEN_CORE_DIR)
-vpath debug.cc                    $(REP_DIR)/src/base/env
+vpath core_printf.cc              $(BASE_DIR)/src/base/console
+vpath thread.cc                   $(BASE_DIR)/src/base/thread
 vpath %.cc                        $(PRG_DIR)

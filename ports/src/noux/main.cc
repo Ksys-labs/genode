@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -27,10 +27,12 @@
 #include <pipe_io_channel.h>
 #include <dir_file_system.h>
 #include <user_info.h>
+#include <io_receptor_registry.h>
+#include <destruct_queue.h>
 
 
 static bool trace_syscalls = false;
-
+static bool verbose_quota  = false;
 
 namespace Noux {
 
@@ -38,9 +40,8 @@ namespace Noux {
 
 	bool is_init_process(Child *child) { return child == init_child; }
 	void init_process_exited() { init_child = 0; }
-};
 
-extern void (*close_socket)(int);
+};
 
 extern void init_network();
 
@@ -145,6 +146,7 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 					if (io->write(_sysio, count) == false)
 						return false;
 				}
+
 				return true;
 			}
 
@@ -230,13 +232,6 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 		case SYSCALL_CLOSE:
 			{
-				/**
-				 * We have to explicitly close Socket_io_channel fd's because
-				 * these are currently handled separately.
-				 */
-				if (close_socket)
-					close_socket(_sysio->close_in.fd);
-
 				remove_io_channel(_sysio->close_in.fd);
 				return true;
 			}
@@ -278,7 +273,9 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 					                         _cap_session,
 					                         _parent_services,
 					                         _resources.ep,
-					                         false);
+					                         false,
+					                         env()->heap(),
+					                         _destruct_queue);
 
 					/* replace ourself by the new child at the parent */
 					parent()->remove(this);
@@ -287,7 +284,7 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 					_assign_io_channels_to(child);
 
 					/* signal main thread to remove ourself */
-					Genode::Signal_transmitter(_execve_cleanup_context_cap).submit();
+					Genode::Signal_transmitter(_destruct_context_cap).submit();
 
 					/* start executing the new process */
 					child->start();
@@ -335,37 +332,36 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 						Shared_pointer<Io_channel> io = io_channel_by_fd(fd);
 
-						if (io->check_unblock(in_fds.watch_for_rd(i),
-								      in_fds.watch_for_wr(i),
-								      in_fds.watch_for_ex(i))) {
-
+						if (in_fds.watch_for_rd(i))
 							if (io->check_unblock(true, false, false)) {
 								_rd_array[unblock_rd++] = fd;
-							//	io->clear_unblock(true, false, false);
 							}
+						if (in_fds.watch_for_wr(i))
 							if (io->check_unblock(false, true, false)) {
 								_wr_array[unblock_wr++] = fd;
-							//	io->clear_unblock(false, true, false);
 							}
-
+						if (in_fds.watch_for_ex(i))
 							if (io->check_unblock(false, false, true)) {
 								unblock_ex++;
-							//	io->clear_unblock(false, false, true);
 							}
-
-						}
 					}
 
 					if (unblock_rd || unblock_wr || unblock_ex) {
+						/**
+						 * Merge the fd arrays in one output array
+						 */
 						for (size_t i = 0; i < unblock_rd; i++) {
 							_sysio->select_out.fds.array[i] = _rd_array[i];
-							_sysio->select_out.fds.num_rd = unblock_rd;
 						}
-						for (size_t i = 0; i < unblock_wr; i++) {
-							_sysio->select_out.fds.array[i] = _wr_array[i];
-							_sysio->select_out.fds.num_wr = unblock_wr;
-						}
+						_sysio->select_out.fds.num_rd = unblock_rd;
 
+						/* XXX could use a pointer to select_out.fds.array instead */
+						for (size_t j = unblock_rd, i = 0; i < unblock_wr; i++, j++) {
+							_sysio->select_out.fds.array[j] = _wr_array[i];
+						}
+						_sysio->select_out.fds.num_wr = unblock_wr;
+
+						/* exception fds are currently not considered */
 						_sysio->select_out.fds.num_ex = unblock_ex;
 
 						return true;
@@ -411,6 +407,16 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 						io->register_wake_up_notifier(&notifiers[i]);
 					}
 
+					/**
+					 * Register ourself at the Io_receptor_registry
+					 *
+					 * Each entry in the registry will be unblocked if an external
+					 * event has happend, e.g. network I/O.
+					 */
+
+					Io_receptor receptor(&_blocker);
+					io_receptor_registry()->register_receptor(&receptor);
+
 					/*
 					 * Block at barrier except when reaching the timeout
 					 */
@@ -450,6 +456,11 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 						io->unregister_wake_up_notifier(&notifiers[i]);
 					}
 
+					/*
+					 * Unregister receptor
+					 */
+					io_receptor_registry()->unregister_receptor(&receptor);
+
 				}
 
 				return true;
@@ -478,7 +489,9 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 				                         _cap_session,
 				                         _parent_services,
 				                         _resources.ep,
-				                         true);
+				                         true,
+				                         env()->heap(),
+				                         _destruct_queue);
 
 				Family_member::insert(child);
 
@@ -541,8 +554,11 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 		case SYSCALL_DUP2:
 			{
-				add_io_channel(io_channel_by_fd(_sysio->dup2_in.fd),
-				               _sysio->dup2_in.to_fd);
+				int fd = add_io_channel(io_channel_by_fd(_sysio->dup2_in.fd),
+				                        _sysio->dup2_in.to_fd);
+
+				_sysio->dup2_out.fd = fd;
+
 				return true;
 			}
 
@@ -789,6 +805,20 @@ Noux::User_info* Noux::user_info()
 }
 
 
+Noux::Io_receptor_registry * Noux::io_receptor_registry()
+{
+	static Noux::Io_receptor_registry _inst;
+	return &_inst;
+}
+
+
+Terminal::Connection *Noux::terminal()
+{
+	static Terminal::Connection _inst;
+	return &_inst;
+}
+
+
 void *operator new (Genode::size_t size) {
 	return Genode::env()->heap()->alloc(size); }
 
@@ -838,6 +868,7 @@ int main(int argc, char **argv)
 
 	/* create init process */
 	static Genode::Signal_receiver sig_rec;
+	static Destruct_queue destruct_queue;
 
 	init_child = new Noux::Child(name_of_init_process(),
 	                             0,
@@ -849,9 +880,9 @@ int main(int argc, char **argv)
 	                             &cap,
 	                             parent_services,
 	                             resources_ep,
-	                             false);
-
-	static Terminal::Connection terminal;
+	                             false,
+	                             env()->heap(),
+	                             destruct_queue);
 
 	/*
 	 * I/O channels must be dynamically allocated to handle cases where the
@@ -859,9 +890,9 @@ int main(int argc, char **argv)
 	 */
 	typedef Terminal_io_channel Tio; /* just a local abbreviation */
 	Shared_pointer<Io_channel>
-		channel_0(new Tio(terminal, Tio::STDIN,  sig_rec), Genode::env()->heap()),
-		channel_1(new Tio(terminal, Tio::STDOUT, sig_rec), Genode::env()->heap()),
-		channel_2(new Tio(terminal, Tio::STDERR, sig_rec), Genode::env()->heap());
+		channel_0(new Tio(*Noux::terminal(), Tio::STDIN,  sig_rec), Genode::env()->heap()),
+		channel_1(new Tio(*Noux::terminal(), Tio::STDOUT, sig_rec), Genode::env()->heap()),
+		channel_2(new Tio(*Noux::terminal(), Tio::STDERR, sig_rec), Genode::env()->heap());
 
 	init_child->add_io_channel(channel_0, 0);
 	init_child->add_io_channel(channel_1, 1);
@@ -872,13 +903,26 @@ int main(int argc, char **argv)
 	/* handle asynchronous events */
 	while (init_child) {
 
-		Genode::Signal signal = sig_rec.wait_for_signal();
+		/*
+		 * limit the scope of the 'Signal' object, so the signal context may
+		 * get freed by the destruct queue
+		 */
+		{
+			Genode::Signal signal = sig_rec.wait_for_signal();
 
-		Signal_dispatcher *dispatcher =
-			static_cast<Signal_dispatcher *>(signal.context());
+			Signal_dispatcher_base *dispatcher =
+				static_cast<Signal_dispatcher_base *>(signal.context());
 
-		for (int i = 0; i < signal.num(); i++)
-			dispatcher->dispatch();
+			for (unsigned i = 0; i < signal.num(); i++)
+				dispatcher->dispatch(1);
+		}
+
+		destruct_queue.flush();
+
+		if (verbose_quota)
+			PINF("quota: avail=%zd, used=%zd",
+				 env()->ram_session()->avail(),
+				 env()->ram_session()->used());
 	}
 
 	PINF("-- exiting noux ---");

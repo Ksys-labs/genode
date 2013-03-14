@@ -6,13 +6,14 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
 /* Genode includes */
+#include <drivers/board_base.h>
 #include <os/attached_io_mem_dataspace.h>
 #include <timer_session/connection.h>
 #include <gpio_session/connection.h>
@@ -49,29 +50,9 @@ class Framebuffer::Driver
 			 */
 			void usleep(unsigned us)
 			{
-				/* polling */
-				if (us == 0)
-					return;
-
-				unsigned ms = us / 1000;
-				if (ms == 0)
-					ms = 1;
-
-				Timer::Connection::msleep(ms);
+				Timer::Connection::usleep(us);
 			}
 		} _delayer;
-
-		/* memory map */
-		enum {
-			DSS_MMIO_BASE   = 0x58000000,
-			DSS_MMIO_SIZE   = 0x00001000,
-
-			DISPC_MMIO_BASE = 0x58001000,
-			DISPC_MMIO_SIZE = 0x1000,
-
-			HDMI_MMIO_BASE  = 0x58006000,
-			HDMI_MMIO_SIZE  = 0x1000,
-		};
 
 		/* display sub system registers */
 		Attached_io_mem_dataspace _dss_mmio;
@@ -130,13 +111,13 @@ class Framebuffer::Driver
 
 Framebuffer::Driver::Driver()
 :
-	_dss_mmio(DSS_MMIO_BASE, DSS_MMIO_SIZE),
+	_dss_mmio(Board_base::DSS_MMIO_BASE, Board_base::DSS_MMIO_SIZE),
 	_dss((addr_t)_dss_mmio.local_addr<void>()),
 
-	_dispc_mmio(DISPC_MMIO_BASE, DISPC_MMIO_SIZE),
+	_dispc_mmio(Board_base::DISPC_MMIO_BASE, Board_base::DISPC_MMIO_SIZE),
 	_dispc((addr_t)_dispc_mmio.local_addr<void>()),
 
-	_hdmi_mmio(HDMI_MMIO_BASE, HDMI_MMIO_SIZE),
+	_hdmi_mmio(Board_base::HDMI_MMIO_BASE, Board_base::HDMI_MMIO_SIZE),
 	_hdmi((addr_t)_hdmi_mmio.local_addr<void>())
 { }
 

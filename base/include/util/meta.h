@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -465,22 +465,22 @@ namespace Genode {
 		 */
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(RET_TYPE &ret, SERVER &server, ARGS &args,
+		static inline void call_member(RET_TYPE &ret, SERVER &server, ARGS &,
 		                               RET_TYPE (SERVER::*func)())
 		{ ret = (server.*func)(); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(RET_TYPE &ret, SERVER &server, ARGS &args,
+		static inline void call_member(RET_TYPE &ret, SERVER &server, ARGS &,
 		                               RET_TYPE (SERVER::*func)() const)
 		{ ret = (server.*func)(); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &,
 		                               void (SERVER::*func)())
 		{ (server.*func)(); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &,
 		                               void (SERVER::*func)() const)
 		{ (server.*func)(); }
 
@@ -491,7 +491,7 @@ namespace Genode {
 		{ ret = (server.*func)(args.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type))
 		{ (server.*func)(args.get()); }
 
@@ -503,7 +503,7 @@ namespace Genode {
 		{ ret = (server.*func)(args.get(), args._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type))
 		{ (server.*func)(args.get(), args._2.get()); }
@@ -517,7 +517,7 @@ namespace Genode {
 		{ ret = (server.*func)(args.get(), args._2.get(), args._2._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type,
 		                                                    typename Type_at<ARGS, 2>::Type))
@@ -533,7 +533,7 @@ namespace Genode {
 		{ ret = (server.*func)(args.get(), args._2.get(), args._2._2.get(), args._2._2._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type,
 		                                                    typename Type_at<ARGS, 2>::Type,
@@ -551,7 +551,7 @@ namespace Genode {
 		{ ret = (server.*func)(args.get(), args._2.get(), args._2._2.get(), args._2._2._2.get(), args._2._2._2._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type,
 		                                                    typename Type_at<ARGS, 2>::Type,
@@ -572,7 +572,7 @@ namespace Genode {
 		                       args._2._2._2._2.get(), args._2._2._2._2._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type,
 		                                                    typename Type_at<ARGS, 2>::Type,
@@ -596,7 +596,7 @@ namespace Genode {
 		                       args._2._2._2._2.get(), args._2._2._2._2._2.get(), args._2._2._2._2._2._2.get()); }
 
 		template <typename RET_TYPE, typename SERVER, typename ARGS>
-		static inline void call_member(Meta::Empty &ret, SERVER &server, ARGS &args,
+		static inline void call_member(Meta::Empty &, SERVER &server, ARGS &args,
 		                               void (SERVER::*func)(typename Type_at<ARGS, 0>::Type,
 		                                                    typename Type_at<ARGS, 1>::Type,
 		                                                    typename Type_at<ARGS, 2>::Type,
@@ -641,6 +641,11 @@ namespace Genode {
 			/* prevent zero initialization of objects */
 			Overload_selector() { }
 		};
+
+		/**
+		 * Convert boolean value to type
+		 */
+		template <bool VALUE> struct Bool_to_type { enum { V = VALUE }; };
 
 	} /* namespace Meta */
 }

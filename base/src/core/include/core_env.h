@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -77,7 +77,6 @@ namespace Genode {
 
 			void free(Ram_dataspace_capability ds)
 			{
-				Lock::Guard lock_guard(_lock);
 				RAM_SESSION_IMPL::free(ds);
 			}
 
@@ -113,7 +112,7 @@ namespace Genode {
 
 			typedef Synchronized_ram_session<Ram_session_component> Core_ram_session;
 
-			enum { ENTRYPOINT_STACK_SIZE = 8*1024 };
+			enum { ENTRYPOINT_STACK_SIZE = 2048 * sizeof(Genode::addr_t) };
 
 			Core_parent                  _core_parent;
 			Cap_session_component        _cap_session;
@@ -129,6 +128,7 @@ namespace Genode {
 			 * Constructor
 			 */
 			Core_env() :
+				_cap_session(platform()->core_mem_alloc(), "ram_quota=4K"),
 				_entrypoint(&_cap_session, ENTRYPOINT_STACK_SIZE, "entrypoint"),
 				_rm_session(&_entrypoint),
 				_ram_session(&_entrypoint, &_entrypoint,
@@ -163,7 +163,6 @@ namespace Genode {
 				return 0;
 			}
 
-
 			Cpu_session_capability cpu_session_cap() {
 				PWRN("%s:%u not implemented", __FILE__, __LINE__);
 				return Cpu_session_capability();
@@ -174,6 +173,8 @@ namespace Genode {
 				PWRN("%s:%u not implemented", __FILE__, __LINE__);
 				return 0;
 			}
+
+			void reload_parent_cap(Capability<Parent>::Dst, long) { }
 	};
 
 

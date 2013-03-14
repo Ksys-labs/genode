@@ -5,13 +5,12 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-#include <base/sleep.h>
 #include <base/thread.h>
 
 
@@ -24,7 +23,9 @@ void Genode::Thread_base::_thread_start()
 
 	Thread_base::myself()->_thread_bootstrap();
 	Thread_base::myself()->entry();
-	sleep_forever();
+	Thread_base::myself()->_join_lock.unlock();
+	Lock sleep_forever_lock(Lock::LOCKED);
+	sleep_forever_lock.lock();
 }
 
 

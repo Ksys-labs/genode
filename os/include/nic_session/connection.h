@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -32,12 +32,13 @@ namespace Nic {
 		 */
 		Connection(Genode::Range_allocator *tx_block_alloc,
 		           Genode::size_t           tx_buf_size = 64*1024,
-		           Genode::size_t           rx_buf_size = 64*1024)
+		           Genode::size_t           rx_buf_size = 64*1024,
+		           const char              *label = "")
 		:
 			Genode::Connection<Session>(
-				session("ram_quota=%zd, tx_buf_size=%zd, rx_buf_size=%zd",
+				session("ram_quota=%zd, tx_buf_size=%zd, rx_buf_size=%zd, label=\"%s\"",
 				        6*4096 + tx_buf_size + rx_buf_size,
-				        tx_buf_size, rx_buf_size)),
+				        tx_buf_size, rx_buf_size, label)),
 			Session_client(cap(), tx_block_alloc)
 		{ }
 	};

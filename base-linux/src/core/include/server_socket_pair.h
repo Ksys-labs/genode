@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -93,7 +93,7 @@ static inline Genode::Native_connection_state create_server_socket_pair(long id)
 		throw Connect_failed();
 	}
 
-	Genode::ep_sd_registry()->associate(ncs.client_sd, id);
+	ncs.client_sd = Genode::ep_sd_registry()->try_associate(ncs.client_sd, id);
 
 	/*
 	 * Wipe Unix domain socket from the file system. It will live as long as

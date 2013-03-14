@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -80,14 +80,14 @@ namespace Input {
 
 					Input::Event &ev = _ev_buf[i];
 
-					if ((ev.type()    == Input::Event::MOTION)
-					 || (ev.type()    == Input::Event::WHEEL)
-					 || (ev.keycode() == Input::BTN_LEFT)
-					 || (ev.keycode() == Input::BTN_RIGHT)
-					 || (ev.keycode() == Input::BTN_MIDDLE)) {
+					if ((ev.type() == Input::Event::MOTION)
+					 || (ev.type() == Input::Event::WHEEL)
+					 || (ev.code() == Input::BTN_LEFT)
+					 || (ev.code() == Input::BTN_RIGHT)
+					 || (ev.code() == Input::BTN_MIDDLE)) {
 
 						ev = Input::Event(ev.type(),
-						                  ev.keycode(),
+						                  ev.code(),
 						                  ev.ax() - delta.x,
 						                  ev.ay() - delta.y,
 						                  ev.rx(),

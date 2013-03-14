@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -144,6 +144,7 @@ ret_type Plugin::name args \
 /*
  * Functions returning a 'File_descriptor'
  */
+DUMMY(File_descriptor *, 0, dup,    (File_descriptor *));
 DUMMY(File_descriptor *, 0, open,   (const char *, int));
 DUMMY(File_descriptor *, 0, socket, (int, int, int));
 DUMMY(File_descriptor *, 0, accept, (File_descriptor *, struct sockaddr *, socklen_t *));

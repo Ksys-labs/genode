@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -44,12 +44,12 @@ namespace Genode {
 			 */
 			Signal_context_capability _exception_sigh;
 
-  			/**
+			/**
 			 * Portal selector for object cleanup/destruction
 			 */
 			addr_t _pt_cleanup;
 
- 			/**
+			/**
 			 * Semaphore selector to synchronize pause/state/resume operations
 			 */
 			addr_t _sm_state_notify;
@@ -57,13 +57,16 @@ namespace Genode {
 			addr_t _initial_esp;
 			addr_t _initial_eip;
 
-			struct {
+			struct
+			{
 				struct Thread_state thread;
 				addr_t sel_client_ec;
 				bool valid;
 				bool dead;
 				bool singlestep;
 			} _state;
+
+			Thread_capability _thread_cap;
 
 			void _copy_state(Nova::Utcb * utcb);
 
@@ -176,6 +179,22 @@ namespace Genode {
 			void    client_set_ec(addr_t ec) { _state.sel_client_ec = ec; }
 
 			void single_step(bool on) { _state.singlestep = on; }
+
+			/**
+			 * Remember thread cap so that rm_session can tell thread that
+			 * rm_client is gone.
+			 */
+			Thread_capability thread_cap() { return _thread_cap; } const
+			void thread_cap(Thread_capability cap) { _thread_cap = cap; }
+
+			/**
+			 * Make sure nobody is in the handler anymore by doing an IPC to a
+			 * local cap pointing to same serving thread (if not running in the
+			 * context of the serving thread). When the call returns
+			 * we know that nobody is handled by this object anymore, because
+			 * all remotely available portals had been revoked beforehand.
+			 */
+			void cleanup_call();
 	};
 
 

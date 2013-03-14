@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -142,7 +142,8 @@ Thread_base::Context *Thread_base::_alloc_context(size_t stack_size)
 	try {
 		ds_cap = env_context_area_ram_session()->alloc(ds_size);
 		addr_t attach_addr = ds_addr - Native_config::context_area_virtual_base();
-		env_context_area_rm_session()->attach_at(ds_cap, attach_addr, ds_size);
+		if (attach_addr != (addr_t)env_context_area_rm_session()->attach_at(ds_cap, attach_addr, ds_size))
+			throw Stack_alloc_failed(); 
 	}
 	catch (Ram_session::Alloc_failed) { throw Stack_alloc_failed(); }
 
@@ -160,8 +161,7 @@ Thread_base::Context *Thread_base::_alloc_context(size_t stack_size)
 
 void Thread_base::_free_context()
 {
-	addr_t ds_addr = _context->stack_base -
-	                 Native_config::context_area_virtual_base();
+	addr_t ds_addr = _context->stack_base - Native_config::context_area_virtual_base();
 	Ram_dataspace_capability ds_cap = _context->ds_cap;
 	Genode::env_context_area_rm_session()->detach((void *)ds_addr);
 	Genode::env_context_area_ram_session()->free(ds_cap);
@@ -195,10 +195,17 @@ Thread_base *Thread_base::myself()
 }
 
 
+void Thread_base::join()
+{
+	_join_lock.lock();
+}
+
+
 Thread_base::Thread_base(const char *name, size_t stack_size)
 :
 	_list_element(this),
-	_context(_alloc_context(stack_size))
+	_context(_alloc_context(stack_size)),
+	_join_lock(Lock::LOCKED)
 {
 	strncpy(_context->name, name, sizeof(_context->name));
 	_init_platform_thread();

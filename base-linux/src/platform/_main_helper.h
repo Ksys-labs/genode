@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -23,6 +23,13 @@
  * startup code.
  */
 __attribute__((weak)) char **lx_environ = (char **)0;
+
+
+
+/**
+ * Natively aligned memory location used in the lock implementation
+ */
+int main_thread_futex_counter __attribute__((aligned(sizeof(Genode::addr_t))));
 
 
 static inline void main_thread_bootstrap()

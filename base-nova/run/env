@@ -10,11 +10,12 @@
 # Install files needed to boot via PXE
 #
 proc install_pxe_bootloader_to_run_dir { } {
-        exec cp [genode_dir]/tool/boot/pulsar [run_dir]/boot/pulsar
+	exec cp [genode_dir]/tool/boot/pulsar [run_dir]/boot/pulsar
+	exec cp [genode_dir]/tool/boot/bender [run_dir]/boot/bender
 }
 
 ##
-# Read the location of the Pistachio user directory from 'etc/pistachio.conf'
+# Read the location of the NOVA kernel directory from 'etc/nova.conf'
 #
 proc nova_kernel { } {
 	global _nova_kernel
@@ -71,7 +72,8 @@ proc build_boot_image {binaries} {
 	puts $fh "timeout 0"
 	puts $fh "default 0"
 	puts $fh "\ntitle Genode on NOVA"
-	puts $fh " kernel /hypervisor serial"
+	puts $fh " kernel /boot/bender"
+	puts $fh " module /hypervisor iommu serial"
 	puts $fh " module /genode/core"
 	puts $fh " module /genode/config"
 	foreach binary $binaries {
@@ -79,23 +81,80 @@ proc build_boot_image {binaries} {
 			puts $fh " module /genode/$binary" } }
 	close $fh
 
+	install_pxe_bootloader_to_run_dir
 	create_iso_image_from_run_dir
 
 	#
 	# Generate pulsar config file
 	#
 	set fh [open "[run_dir]/config-52-54-00-12-34-56" "WRONLY CREAT TRUNC"]
-	puts $fh " exec /hypervisor serial spinner"
+	puts $fh " exec /boot/bender"
+	puts $fh " load /hypervisor iommu serial"
 	puts $fh " load /genode/core"
 	puts $fh " load /genode/config"
 	foreach binary $binaries {
 		if {$binary != "core"} {
 			puts $fh " load /genode/$binary" } }
 	close $fh
-	install_pxe_bootloader_to_run_dir
+
+	#
+	# Generate pulsar config file pointing to the config file above.
+	#
+	if {[info exists ::env(PXE_TFTP_DIR_BASE)] && [info exists ::env(PXE_TFTP_DIR_OFFSET)]} {
+		set len [string length $::env(PXE_TFTP_DIR_BASE)]
+		set tmp [string range [pwd] 0 $len-1]
+		# if PXE_TFTP_DIR_BASE is part of pwd (autopilot) we don't need DIR_OFFSET
+		if ([string match $tmp $::env(PXE_TFTP_DIR_BASE)]) {
+			set tftp_local_offset [string range [pwd] $len [string length [pwd]]]
+		} else {
+		    set tftp_local_offset $::env(PXE_TFTP_DIR_OFFSET)
+		}
+
+		set fh [open "$::env(PXE_TFTP_DIR_BASE)$::env(PXE_TFTP_DIR_OFFSET)/config-00-00-00-00-00-00" "WRONLY CREAT TRUNC"]
+		puts $fh " root $tftp_local_offset/[run_dir]"
+		puts $fh " config config-52-54-00-12-34-56"
+		close $fh
+	}
 }
 
 
 proc run_genode_until {{wait_for_re forever} {timeout_value 0}} {
-	spawn_qemu $wait_for_re $timeout_value }
+	# run qemu if no AMT information are found
+	if {![info exists ::env(AMT_TEST_MACHINE_IP)] ||
+	    ![info exists ::env(AMT_TEST_MACHINE_PWD)] } {
+		spawn_qemu $wait_for_re $timeout_value;
+		return
+	}
 
+	#
+	# amttool expects in the environment variable AMT_PASSWORD the password
+	#
+	set ::env(AMT_PASSWORD) $::env(AMT_TEST_MACHINE_PWD)
+
+	#
+	# reset the box
+	#
+	spawn amttool $::env(AMT_TEST_MACHINE_IP) reset
+	set timeout 10
+	expect {
+		"host"  { send "y\r" }
+		eof     { puts stderr "Error: amttool died unexpectedly"; exit -4 }
+		timeout { puts stderr "Error: amttool timed out"; exit -5 }
+	}
+	sleep 5
+
+	#
+	# grab output
+	#
+	set amtterm  "amtterm -u admin -p $::env(AMT_TEST_MACHINE_PWD) -v $::env(AMT_TEST_MACHINE_IP)"
+	set timeout [expr $timeout_value + 30]
+	set pid [eval "spawn $amtterm"]
+	if {$wait_for_re == "forever"} { interact $pid }
+	expect {
+		-re $wait_for_re { }
+		eof     { puts stderr "Error: amtterm died unexpectedly"; exit -3 }
+		timeout { puts stderr "Error: Test execution timed out"; exit -2 }
+	}
+	global output
+	set output $expect_out(buffer)
+}

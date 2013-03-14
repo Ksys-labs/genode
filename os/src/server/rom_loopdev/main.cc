@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -14,6 +14,7 @@
 #include <base/exception.h>
 #include <base/printf.h>
 #include <base/sleep.h>
+#include <base/semaphore.h>
 #include <base/allocator_avl.h>
 #include <root/component.h>
 #include <os/config.h>

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,11 +22,17 @@
 namespace Genode
 {
 	class Platform_thread;
+	class Tlb;
 
-	typedef int volatile      Native_lock;
-	typedef Platform_thread * Native_thread;
-	typedef unsigned long     Native_thread_id;
-	typedef int               Native_connection_state;
+	typedef unsigned Native_thread_id;
+
+	struct Native_thread
+	{
+		Native_thread_id  tid;
+		Platform_thread  *pt;
+	};
+
+	typedef int Native_connection_state;
 
 	/* FIXME needs to be MMU dependent */
 	enum { MIN_MAPPING_SIZE_LOG2 = 12 };
@@ -47,11 +53,11 @@ namespace Genode
 	 */
 	struct Pagefault
 	{
-		unsigned long  thread_id; /* thread ID of the faulter */
-		Software_tlb * software_tlb; /* TLB to wich the faulter is assigned */
-		addr_t         virt_ip; /* the faulters virtual instruction pointer */
-		addr_t         virt_address; /* virtual fault address */
-		bool           write; /* write access attempted at fault? */
+		unsigned thread_id;    /* thread ID of the faulter */
+		Tlb *    tlb;          /* TLB to wich the faulter is assigned */
+		addr_t   virt_ip;      /* the faulters virtual instruction pointer */
+		addr_t   virt_address; /* virtual fault address */
+		bool     write;        /* write access attempted at fault? */
 
 		/**
 		 * Placement new operator
@@ -66,10 +72,10 @@ namespace Genode
 		/**
 		 * Construct valid pagefault
 		 */
-		Pagefault(unsigned const tid, Software_tlb * const sw_tlb,
+		Pagefault(unsigned const tid, Tlb * const tlb,
 		          addr_t const vip, addr_t const va, bool const w)
 		:
-			thread_id(tid), software_tlb(sw_tlb), virt_ip(vip),
+			thread_id(tid), tlb(tlb), virt_ip(vip),
 			virt_address(va), write(w)
 		{ }
 
@@ -85,25 +91,17 @@ namespace Genode
 	struct Native_utcb
 	{
 		/* UTCB payload */
-		union {
-			char     bytes[1<<MIN_MAPPING_SIZE_LOG2];
-			umword_t words[sizeof(bytes)/sizeof(umword_t)];
-		};
-
-		/**
-		 * Get pointer to a specific word within the UTCB
-		 */
-		umword_t * word(unsigned long const index) { return &words[index]; }
+		char payload[1<<MIN_MAPPING_SIZE_LOG2];
 
 		/**
 		 * Get the base of the UTCB
 		 */
-		void * base() { return (void *)bytes; }
+		void * base() { return payload; }
 
 		/**
 		 * Get the UTCB size
 		 */
-		unsigned long size() { return sizeof(bytes); }
+		size_t size() { return sizeof(payload); }
 	};
 
 	struct Cap_dst_policy
@@ -151,6 +149,8 @@ namespace Genode
 		 */
 		static addr_t context_virtual_size() { return 0x00100000UL; }
 	};
+
+	struct Native_pd_args { };
 }
 
 #endif /* _INCLUDE__BASE__NATIVE_TYPES_H_ */

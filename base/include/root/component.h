@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -39,7 +39,7 @@ namespace Genode {
 
 			Single_client() : _used(0) { }
 
-			void aquire(const char *args)
+			void aquire(const char *)
 			{
 				if (_used)
 					throw Root::Unavailable();
@@ -56,7 +56,7 @@ namespace Genode {
 	 */
 	struct Multiple_clients
 	{
-		void aquire(const char *args) { }
+		void aquire(const char *) { }
 		void release() { }
 	};
 
@@ -146,7 +146,7 @@ namespace Genode {
 			 * \param args     description of additional resources in the
 			 *                 same format as used at session creation
 			 */
-			virtual void _upgrade_session(SESSION_TYPE *session, const char *args) { }
+			virtual void _upgrade_session(SESSION_TYPE *, const char *) { }
 
 			virtual void _destroy_session(SESSION_TYPE *session) {
 				destroy(_md_alloc, session); }
@@ -186,13 +186,15 @@ namespace Genode {
 				 * the size of the session object.
 				 */
 				size_t ram_quota = Arg_string::find_arg(args.string(), "ram_quota").long_value(0);
-				size_t const remaining_ram_quota = ram_quota - sizeof(SESSION_TYPE) -
-				                                   md_alloc()->overhead(sizeof(SESSION_TYPE));
-				if (remaining_ram_quota < 0) {
+				size_t needed = sizeof(SESSION_TYPE) + md_alloc()->overhead(sizeof(SESSION_TYPE));
+
+				if (needed > ram_quota) {
 					PERR("Insufficient ram quota, provided=%zd, required=%zd",
-					     ram_quota, sizeof(SESSION_TYPE) + md_alloc()->overhead(sizeof(SESSION_TYPE)));
+					     ram_quota, needed);
 					throw Root::Quota_exceeded();
 				}
+
+				size_t const remaining_ram_quota = ram_quota - needed;
 
 				/*
 				 * Deduce ram quota needed for allocating the session object from the
@@ -221,9 +223,8 @@ namespace Genode {
 			{
 				if (!args.is_valid_string()) throw Root::Invalid_args();
 
-				SESSION_TYPE *s =
-					dynamic_cast<SESSION_TYPE *>(_ep->obj_by_cap(session));
-
+				typedef typename Object_pool<SESSION_TYPE>::Guard Object_guard;
+				Object_guard s(_ep->lookup_and_lock(session));
 				if (!s) return;
 
 				_upgrade_session(s, args.string());
@@ -231,9 +232,8 @@ namespace Genode {
 
 			void close(Session_capability session)
 			{
-				SESSION_TYPE *s = 
-					dynamic_cast<SESSION_TYPE *>(_ep->obj_by_cap(session));
-
+				SESSION_TYPE * s =
+					dynamic_cast<SESSION_TYPE *>(_ep->lookup_and_lock(session));
 				if (!s) return;
 
 				/* let the entry point forget the session object */

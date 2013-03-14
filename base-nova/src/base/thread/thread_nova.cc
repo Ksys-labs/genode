@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -37,6 +37,7 @@ using namespace Genode;
 void Thread_base::_thread_start()
 {
 	Genode::Thread_base::myself()->entry();
+	Thread_base::myself()->_join_lock.unlock();
 	Genode::sleep_forever();
 }
 
@@ -89,11 +90,17 @@ void Thread_base::_deinit_platform_thread()
 	revoke(Mem_crd(utcb >> 12, 0, rwx));
 
 	/* de-announce thread */
-	env()->cpu_session()->kill_thread(_thread_cap);
+	if (_thread_cap.valid()) {
+		env()->cpu_session()->kill_thread(_thread_cap);
+		revoke(_thread_cap.local_name(), 0);
+		cap_selector_allocator()->free(_thread_cap.local_name(), 0);
+	}
 
-	revoke(_thread_cap.local_name(), 0);
-	cap_selector_allocator()->free(_thread_cap.local_name(), 0);
-
+	if (_pager_cap.valid()) {
+		env()->rm_session()->remove_client(_pager_cap);
+		revoke(_pager_cap.local_name(), 0);
+		cap_selector_allocator()->free(_pager_cap.local_name(), 0);
+	}
 }
 
 
@@ -105,23 +112,23 @@ void Thread_base::start()
 	using namespace Genode;
 
 	/* create new pager object and assign it to the new thread */
-	Pager_capability pager_cap =
-		env()->rm_session()->add_client(_thread_cap);
-	if (!pager_cap.valid())
+	_pager_cap = env()->rm_session()->add_client(_thread_cap);
+	if (!_pager_cap.valid())
 		throw Cpu_session::Thread_creation_failed();
 
-	if (env()->cpu_session()->set_pager(_thread_cap, pager_cap))
+	if (env()->cpu_session()->set_pager(_thread_cap, _pager_cap))
 		throw Cpu_session::Thread_creation_failed();
 
 	/* create EC at core */
 	addr_t thread_sp = reinterpret_cast<addr_t>(&_context->stack[-4]);
 
-	Thread_state state(true);
+	Thread_state state;
 	state.sel_exc_base = _tid.exc_pt_sel;
 	state.is_vcpu      = _tid.is_vcpu;
 
-	if (env()->cpu_session()->state(_thread_cap, &state) ||
-	    env()->cpu_session()->start(_thread_cap, (addr_t)_thread_start,
+	try { env()->cpu_session()->state(_thread_cap, state); }
+	catch (...) { throw Cpu_session::Thread_creation_failed(); }
+	if (env()->cpu_session()->start(_thread_cap, (addr_t)_thread_start,
 	                                thread_sp))
 		throw Cpu_session::Thread_creation_failed();
 
@@ -137,11 +144,16 @@ void Thread_base::start()
 	/* request exception portals for normal threads */
 	if (!_tid.is_vcpu) {
 		for (unsigned i = 0; i < PT_SEL_PARENT; i++)
-			request_event_portal(pager_cap, _tid.exc_pt_sel, i);
+			request_event_portal(_pager_cap, _tid.exc_pt_sel, i);
 
-		request_event_portal(pager_cap, _tid.exc_pt_sel, PT_SEL_STARTUP);
-		request_event_portal(pager_cap, _tid.exc_pt_sel, SM_SEL_EC);
-		request_event_portal(pager_cap, _tid.exc_pt_sel, PT_SEL_RECALL);
+		request_event_portal(_pager_cap, _tid.exc_pt_sel, PT_SEL_STARTUP);
+		request_event_portal(_pager_cap, _tid.exc_pt_sel, SM_SEL_EC);
+		request_event_portal(_pager_cap, _tid.exc_pt_sel, PT_SEL_RECALL);
+
+		/* default: we don't accept any mappings or translations */
+		Utcb * utcb_obj = reinterpret_cast<Utcb *>(utcb());
+		utcb_obj->crd_rcv = Obj_crd();
+		utcb_obj->crd_xlt = Obj_crd();
 	}
 
 	/* request creation of SC to let thread run*/

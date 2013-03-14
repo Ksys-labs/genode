@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -43,17 +43,18 @@ addr_t Io_mem_session_component::_map_local(addr_t base, size_t size)
 
 	/* allocate range in core's virtual address space */
 	void *virt_addr;
-	if (!platform()->region_alloc()->alloc_aligned(page_rounded_size,
-	                                               &virt_addr, alignment)) {
+	if (platform()->region_alloc()->alloc_aligned(page_rounded_size,
+	                                               &virt_addr, alignment).is_error()) {
 		PERR("Could not allocate virtual address range in core of size %zd\n",
 		     page_rounded_size);
 		return 0;
 	}
 
 	/* map the dataspace's physical pages to local addresses */
-	map_local((Nova::Utcb *)Thread_base::myself()->utcb(),
-	          base, (addr_t)virt_addr,
-	          page_rounded_size >> get_page_size_log2(), true);
+	const Nova::Rights rights(true, true, false);
+	int res = map_local((Nova::Utcb *)Thread_base::myself()->utcb(),
+	                    base, (addr_t)virt_addr,
+	                    page_rounded_size >> get_page_size_log2(), rights, true);
 
-	return (addr_t)virt_addr;
+	return res ? 0 : (addr_t)virt_addr;
 }

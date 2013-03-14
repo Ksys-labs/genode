@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,12 +36,13 @@ enum { verbose_boot_info = true };
 
 Native_utcb *main_thread_utcb();
 
+
 /**
  * Initial value of esp register, saved by the crt0 startup code
  *
  * This value contains the address of the hypervisor information page.
  */
-extern long __initial_sp;
+extern addr_t __initial_sp;
 
 
 /**
@@ -61,26 +62,117 @@ extern unsigned _prog_img_beg, _prog_img_end;
  */
 addr_t __core_pd_sel;
 
-/**
- * Preserve physical page for the exclusive (read-only) use by core
- */
-void Platform::_preserve_page(addr_t phys_page)
-{
-	/* locally map page one-to-one */
-	map_local_one_to_one(__main_thread_utcb,
-	                     Mem_crd(phys_page, 0,
-	                             Rights(true, true, false)));
 
-	/* remove page with command line from physical-memory allocator */
-	addr_t addr = phys_page*get_page_size();
-	_core_mem_alloc.phys_alloc()->remove_range(addr, get_page_size());
-	_core_mem_alloc.virt_alloc()->remove_range(addr, get_page_size());
+/**
+ * Returns true if the phys address intersects with some other reserved area.
+ */
+static bool intersects(addr_t const phys, const Hip::Mem_desc * mem_desc_const,
+                       size_t const num_mem_desc)
+{ 
+	/* check whether phys intersects with some reserved area */
+	Hip::Mem_desc const * mem_desc = mem_desc_const;
+	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
+		if (mem_desc->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
+
+		if (mem_desc->addr > ~0UL) continue;
+
+		addr_t base = trunc_page(mem_desc->addr);
+		size_t size;
+		/* truncate size if base+size larger then natural 32/64 bit boundary */
+		if (mem_desc->addr >= ~0UL - mem_desc->size + 1)
+			size = round_page(~0UL - mem_desc->addr + 1);
+		else
+			size = round_page(mem_desc->addr + mem_desc->size) - base;
+
+		if (base <= phys && phys < base + size)
+			return true;
+	}
+
+	/* check whether phys is part of available memory */
+	mem_desc = mem_desc_const;
+	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
+		if (mem_desc->type != Hip::Mem_desc::AVAILABLE_MEMORY) continue;
+
+		if (mem_desc->addr > ~0UL) continue;
+
+		addr_t base = trunc_page(mem_desc->addr);
+		size_t size;
+		/* truncate size if base+size larger then natural 32/64 bit boundary */
+		if (mem_desc->addr >= ~0UL - mem_desc->size + 1)
+			size = round_page(~0UL - mem_desc->addr + 1);
+		else
+			size = round_page(mem_desc->addr + mem_desc->size) - base;
+	
+		if (base <= phys && phys < base + size)
+			return false;
+	}
+
+	return true;
+}
+
+
+/**
+ * Map preserved physical page for the exclusive read-execute-only used by core
+ */
+addr_t Platform::_map_page(addr_t const phys_page, addr_t const pages,
+                           bool const extra_page)
+{
+	addr_t const phys_addr = phys_page << get_page_size_log2();
+	addr_t const size = pages << get_page_size_log2();
+	addr_t const size_extra = size + (extra_page ? get_page_size() : 0);
+
+	/* try to reserve contiguous virtual area */
+	void * core_local_ptr = 0;
+	if (!region_alloc()->alloc(size_extra, &core_local_ptr))
+		return 0;
+	/* free the virtual area, but re allocate it later in two pieces */
+	region_alloc()->free(core_local_ptr, size_extra);
+
+	addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
+
+	/* allocate two separate regions - first part */
+	if (region_alloc()->alloc_addr(size, core_local_addr).is_error())
+		return 0;
+
+	/* allocate two separate regions - second part */
+	if (extra_page) {
+		/* second region can be freed separately now, if unneeded */
+		if (region_alloc()->alloc_addr(get_page_size(), core_local_addr +
+		                               size).is_error())
+			return 0;
+	}
+
+	/* map first part */
+	int res = map_local(__main_thread_utcb, phys_addr, core_local_addr, pages,
+	                    Nova::Rights(true, true, true), true);
+
+	/* map second part - if requested */
+	if (!res && extra_page)
+		res = map_local(__main_thread_utcb, phys_addr + size,
+	                    core_local_addr + size, 1,
+	                    Nova::Rights(true, true, false), true);
+
+	return res ? 0 : core_local_addr;
+}
+
+
+void Platform::_unmap_page(addr_t const phys, addr_t const virt,
+                           addr_t const pages)
+{
+	/* unmap page */
+	unmap_local(__main_thread_utcb, virt, pages);
+	/* put virtual address back to allocator */
+	region_alloc()->free((void *)(virt), pages << get_page_size_log2());
+	/* put physical address back to allocator */
+	if (phys != 0)
+		ram_alloc()->add_range(phys, pages << get_page_size_log2());
 }
 
 
 /*****************************
  ** Core page-fault handler **
  *****************************/
+
 
 enum { CORE_PAGER_UTCB_ADDR = 0xbff02000 };
 
@@ -93,11 +185,12 @@ static void page_fault_handler()
 	Utcb *utcb = (Utcb *)CORE_PAGER_UTCB_ADDR;
 
 	addr_t pf_addr = utcb->qual[1];
-	addr_t pf_ip  = utcb->ip;
-	addr_t pf_sp  = utcb->sp;
+	addr_t pf_ip   = utcb->ip;
+	addr_t pf_sp   = utcb->sp;
+	addr_t pf_type = utcb->qual[0];
 
-	printf("\nPAGE-FAULT IN CORE: ADDR %lx  IP %lx  SP %lx stack trace follows...\n",
-	       pf_addr, pf_ip, pf_sp);
+	print_page_fault("\nPAGE-FAULT IN CORE", pf_addr, pf_ip,
+	                 (Genode::Rm_session::Fault_type)pf_type, ~0UL);
 
 	/* dump stack trace */
 	struct Core_img
@@ -118,7 +211,7 @@ static void page_fault_handler()
 
 		addr_t *ip()       { return _ip; }
 		void    next_ip()  { _ip = ((addr_t *)*(_ip - 1)) + 1;}
-		bool    ip_valid() { return *_ip >= _beg && *_ip < _end; }
+		bool    ip_valid() { return (*_ip >= _beg) && (*_ip < _end); }
 	};
 
 	int count = 1;
@@ -179,11 +272,13 @@ static void init_core_page_fault_handler()
 	create_pt(PT_SEL_PAGE_FAULT, __core_pd_sel, ec_sel,
 	          Mtd(Mtd::QUAL | Mtd::ESP | Mtd::EIP),
 	          (addr_t)page_fault_handler);
+	revoke(Obj_crd(PT_SEL_PAGE_FAULT, 0, Obj_crd::RIGHT_PT_CTRL));
 
 	/* startup portal for global core threads */
 	create_pt(PT_SEL_STARTUP, __core_pd_sel, ec_sel,
 	          Mtd(Mtd::EIP | Mtd::ESP),
 	          (addr_t)startup_handler);
+	revoke(Obj_crd(PT_SEL_STARTUP, 0, Obj_crd::RIGHT_PT_CTRL));
 }
 
 
@@ -194,9 +289,12 @@ static void init_core_page_fault_handler()
 Platform::Platform() :
 	_io_mem_alloc(core_mem_alloc()), _io_port_alloc(core_mem_alloc()),
 	_irq_alloc(core_mem_alloc()),
-	_vm_base(0), _vm_size(0)
+	_vm_base(0x1000), _vm_size(0)
 {
 	Hip  *hip  = (Hip *)__initial_sp;
+	/* check for right API version */
+	if (hip->api_version != 6)
+		nova_die();
 
 	/* register UTCB of main thread */
 	__main_thread_utcb = (Utcb *)(__initial_sp - get_page_size());
@@ -205,12 +303,17 @@ Platform::Platform() :
 	__core_pd_sel = hip->sel_exc;
 
 	/* create lock used by capability allocator */
-	Nova::create_sm(Nova::PD_SEL_CAP_LOCK, __core_pd_sel, 1);
 	Nova::create_sm(Nova::SM_SEL_EC, __core_pd_sel, 0);
 
 	/* locally map the whole I/O port range */
 	enum { ORDER_64K = 16 };
 	map_local_one_to_one(__main_thread_utcb, Io_crd(0, ORDER_64K));
+	/* map BDA region, console reads IO ports at BDA_VIRT_ADDR + 0x400 */
+	enum { BDA_PHY = 0x0U, BDA_VIRT = 0x1U, BDA_VIRT_ADDR = 0x1000U };
+	map_local_phys_to_virt(__main_thread_utcb,
+	                       Mem_crd(BDA_PHY,  0, Rights(true, false, false)),
+	                       Mem_crd(BDA_VIRT, 0, Rights(true, false, false)));
+	
 
 	/*
 	 * Now that we can access the I/O ports for comport 0, printf works...
@@ -223,7 +326,6 @@ Platform::Platform() :
 	}
 
 	/* configure virtual address spaces */
-	_vm_base = get_page_size();
 #ifdef __x86_64__
 	_vm_size = 0x800000000000UL - _vm_base;
 #else
@@ -239,8 +341,8 @@ Platform::Platform() :
 	}
 
 	/* initialize core allocators */
-	size_t num_mem_desc = (hip->hip_length - hip->mem_desc_offset)
-	                      / hip->mem_desc_size;
+	size_t const num_mem_desc = (hip->hip_length - hip->mem_desc_offset)
+	                            / hip->mem_desc_size;
 
 	if (verbose_boot_info)
 		printf("Hypervisor info page contains %zd memory descriptors:\n", num_mem_desc);
@@ -253,31 +355,34 @@ Platform::Platform() :
 	_core_mem_alloc.virt_alloc()->add_range(virt_beg, virt_end - virt_beg);
 
 	/* exclude core image from core's virtual address allocator */
-	addr_t core_virt_beg = trunc_page((addr_t)&_prog_img_beg),
-	                       core_virt_end = round_page((addr_t)&_prog_img_end);
+	addr_t core_virt_beg = trunc_page((addr_t)&_prog_img_beg);
+	addr_t core_virt_end = round_page((addr_t)&_prog_img_end);
 	size_t core_size     = core_virt_end - core_virt_beg;
-	_core_mem_alloc.virt_alloc()->remove_range(core_virt_beg, core_size);
+	region_alloc()->remove_range(core_virt_beg, core_size);
+
+	/* preserve Bios Data Area (BDA) in core's virtual address space */
+	region_alloc()->remove_range(BDA_VIRT_ADDR, 0x1000);
 
 	/* preserve context area in core's virtual address space */
-	_core_mem_alloc.virt_alloc()->remove_range(Native_config::context_area_virtual_base(),
-	                                           Native_config::context_area_virtual_size());
+	region_alloc()->remove_range(Native_config::context_area_virtual_base(),
+	                             Native_config::context_area_virtual_size());
 
 	/* exclude utcb of core pager thread + empty guard pages before and after */
-	_core_mem_alloc.virt_alloc()->remove_range(CORE_PAGER_UTCB_ADDR - get_page_size(),
-	                                           get_page_size() * 3);
+	region_alloc()->remove_range(CORE_PAGER_UTCB_ADDR - get_page_size(),
+	                             get_page_size() * 3);
 
 	/* exclude utcb of echo thread + empty guard pages before and after */
-	_core_mem_alloc.virt_alloc()->remove_range(Echo::ECHO_UTCB_ADDR - get_page_size(),
-	                                           get_page_size() * 3);
+	region_alloc()->remove_range(Echo::ECHO_UTCB_ADDR - get_page_size(),
+	                             get_page_size() * 3);
 
 	/* exclude utcb of main thread and hip + empty guard pages before and after */
-	_core_mem_alloc.virt_alloc()->remove_range((addr_t)__main_thread_utcb - get_page_size(),
-	                                           get_page_size() * 4);
+	region_alloc()->remove_range((addr_t)__main_thread_utcb - get_page_size(),
+	                             get_page_size() * 4);
 
 	/* sanity checks */
 	addr_t check [] = {
 		reinterpret_cast<addr_t>(__main_thread_utcb), CORE_PAGER_UTCB_ADDR,
-		Echo::ECHO_UTCB_ADDR,
+		Echo::ECHO_UTCB_ADDR, BDA_VIRT_ADDR
 	};
 
 	for (unsigned i = 0; i < sizeof(check) / sizeof(check[0]); i++) { 
@@ -290,7 +395,7 @@ Platform::Platform() :
 			     Native_config::context_area_virtual_base() +
 			     Native_config::context_area_virtual_size(), check[i]);
 			nova_die();
- 		}
+		}
 	}
  
 	/* initialize core's physical-memory and I/O memory allocator */
@@ -300,7 +405,8 @@ Platform::Platform() :
 		if (mem_desc->type != Hip::Mem_desc::AVAILABLE_MEMORY) continue;
 
 		if (verbose_boot_info)
-			printf("detected physical memory: 0x%llx - 0x%llx\n", mem_desc->addr, mem_desc->size);
+			printf("detected physical memory: 0x%16llx - size: 0x%llx\n",
+			        mem_desc->addr, mem_desc->size);
 
 		/* skip regions above 4G on 32 bit, no op on 64 bit */
 		if (mem_desc->addr > ~0UL) continue;
@@ -314,10 +420,10 @@ Platform::Platform() :
 			size = trunc_page(mem_desc->addr + mem_desc->size) - base;
 
 		if (verbose_boot_info)
-			printf("use      physical memory: 0x%lx - 0x%zx\n", base, size);
+			printf("use      physical memory: 0x%16lx - size: 0x%zx\n", base, size);
 
 		_io_mem_alloc.remove_range(base, size);
-		_core_mem_alloc.phys_alloc()->add_range(base, size);
+		ram_alloc()->add_range(base, size);
 	}
 
 	/* exclude all non-available memory from physical allocator */
@@ -337,16 +443,16 @@ Platform::Platform() :
 			size = round_page(mem_desc->addr + mem_desc->size) - base;
 
 		_io_mem_alloc.add_range(base, size);
-		_core_mem_alloc.phys_alloc()->remove_range(base, size);
+		ram_alloc()->remove_range(base, size);
 	}
 
 	/* needed as I/O memory by the VESA driver */
 	_io_mem_alloc.add_range(0, 0x1000);
-	_core_mem_alloc.phys_alloc()->remove_range(0, 0x1000);
+	ram_alloc()->remove_range(0, 0x1000);
 
 	/* exclude pages holding multi-boot command lines from core allocators */
 	mem_desc = (Hip::Mem_desc *)mem_desc_base;
-	addr_t prev_cmd_line_page = 0, curr_cmd_line_page = 0;
+	addr_t prev_cmd_line_page = ~0, curr_cmd_line_page = 0;
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 		if (mem_desc->type != Hip::Mem_desc::MULTIBOOT_MODULE) continue;
 		if (!mem_desc->aux) continue;
@@ -354,46 +460,138 @@ Platform::Platform() :
 		curr_cmd_line_page = mem_desc->aux >> get_page_size_log2();
 		if (curr_cmd_line_page == prev_cmd_line_page) continue;
 
-		_preserve_page(curr_cmd_line_page);
+		ram_alloc()->remove_range(curr_cmd_line_page << get_page_size_log2(),
+		                          get_page_size() * 2);
 		prev_cmd_line_page = curr_cmd_line_page;
 	}
-
-	/* preserve page following the last multi-boot command line */
-	_preserve_page(curr_cmd_line_page + 1);
 
 	/*
 	 * From now on, it is save to use the core allocators...
 	 */
 
-	/* build ROM file system */
+	/*
+	 * Allocate ever an extra page behind the command line pointer. If it turns
+	 * out that this page is unused, because the command line was short enough,
+	 * the mapping is revoked and the virtual and physical regions are put back
+	 * to the allocator.
+	 */
 	mem_desc = (Hip::Mem_desc *)mem_desc_base;
+	prev_cmd_line_page = ~0UL, curr_cmd_line_page = 0;
+	addr_t mapped_cmd_line = 0;
+	addr_t aux     = ~0UL;
+	size_t aux_len = 0;
+	/* build ROM file system */
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 		if (mem_desc->type != Hip::Mem_desc::MULTIBOOT_MODULE) continue;
 		if (!mem_desc->addr || !mem_desc->size || !mem_desc->aux) continue;
 
-		addr_t aux = mem_desc->aux;
-		const char *name = commandline_to_basename(reinterpret_cast<char *>(aux));
-		printf("detected multi-boot module: %s 0x%lx-0x%lx\n", name,
-		       (long)mem_desc->addr, (long)(mem_desc->addr + mem_desc->size - 1));
+		/* convenience */
+		addr_t const rom_mem_start = trunc_page(mem_desc->addr);
+		addr_t const rom_mem_end   = round_page(mem_desc->addr + mem_desc->size);
+		addr_t const rom_mem_size  = rom_mem_end - rom_mem_start;
+		bool const aux_in_rom_area = (rom_mem_start <= mem_desc->aux) &&
+		                             (mem_desc->aux < rom_mem_end);
 
-		void *core_local_addr = (void*)0x234;
-		if (!region_alloc()->alloc(round_page(mem_desc->size), &core_local_addr))
-			PERR("could not locally map multi-boot module");
+		/* map ROM + extra page for the case aux crosses page boundary */
+		addr_t core_local_addr = _map_page(rom_mem_start >> get_page_size_log2(),
+		                                   rom_mem_size  >> get_page_size_log2(),
+		                                   aux_in_rom_area);
+		if (!core_local_addr) {
+			PERR("could not map multi boot module");
+			nova_die();
+		}
 
-		int res = map_local(__main_thread_utcb, mem_desc->addr, (addr_t)core_local_addr,
-		                    round_page(mem_desc->size) >> get_page_size_log2(), true);
-		if (res)
-			PERR("map_local failed res=%d", res);
+		/* adjust core_local_addr of module if it was not page aligned */
+		core_local_addr += mem_desc->addr - rom_mem_start;
 
+		if (verbose_boot_info)
+			printf("map multi-boot module: physical 0x%8lx -> [0x%8lx-0x%8lx)"
+			       " - ", (addr_t)mem_desc->addr, (addr_t)core_local_addr,
+			       (addr_t)(core_local_addr + mem_desc->size));
+
+		char * name;
+		if (aux_in_rom_area) {
+			aux = core_local_addr + (mem_desc->aux - mem_desc->addr);
+			aux_len = strlen(reinterpret_cast<char const *>(aux)) + 1;
+
+			/* if last page is unused, free it up */
+			if (aux + aux_len <= rom_mem_end) {
+				bool overlap = intersects(rom_mem_end,
+				                          (Hip::Mem_desc *)mem_desc_base,
+				                          num_mem_desc);
+				_unmap_page(overlap ? 0 : rom_mem_end,
+				            round_page(core_local_addr) + rom_mem_size, 1);
+			}
+
+			/* all behind rom module will be cleared, copy the command line */
+			char *name_tmp = commandline_to_basename(reinterpret_cast<char *>(aux));
+			name = new (core_mem_alloc()) char [aux_len];
+			memcpy(name, name_tmp, aux_len);
+
+		} else {
+
+			curr_cmd_line_page = mem_desc->aux >> get_page_size_log2();
+			if (curr_cmd_line_page != prev_cmd_line_page) {
+				int err = 1;
+				if (curr_cmd_line_page == prev_cmd_line_page + 1) {
+					/* try to allocate subsequent virtual region */
+					addr_t const virt = mapped_cmd_line + get_page_size() * 2;
+					addr_t const phys = round_page(mem_desc->aux);
+
+					if (region_alloc()->alloc_addr(get_page_size(), virt).is_ok()) {
+						/* we got the virtual region */
+						err = map_local(__main_thread_utcb, phys, virt, 1,
+						                Nova::Rights(true, false, false), true);
+						if (!err) {
+							/* we got the mapping */
+							mapped_cmd_line    += get_page_size();
+							prev_cmd_line_page += 1;
+						}
+					}
+				}
+
+				/* allocate new pages if it was not successful beforehand */
+				if (err) {
+					/* check whether we can free up unused page */
+					if (aux + aux_len <= mapped_cmd_line + get_page_size()) {
+						addr_t phys = (curr_cmd_line_page + 1) << get_page_size_log2();
+						phys = intersects(phys, (Hip::Mem_desc *)mem_desc_base,
+						                  num_mem_desc) ? 0 : phys;
+						_unmap_page(phys, mapped_cmd_line + get_page_size(), 1);
+					}
+
+					mapped_cmd_line = _map_page(curr_cmd_line_page, 1, true);
+					prev_cmd_line_page = curr_cmd_line_page;
+
+					if (!mapped_cmd_line) {
+						PERR("could not map command line");
+						nova_die();
+					}
+				}
+			}
+			aux = mapped_cmd_line + (mem_desc->aux - trunc_page(mem_desc->aux));
+			aux_len = strlen(reinterpret_cast<char const *>(aux)) + 1;
+			name = commandline_to_basename(reinterpret_cast<char *>(aux));
+
+		}
+
+		/* set zero out range */
+		addr_t const zero_out = core_local_addr + mem_desc->size;
+		/* zero out behind rom module */
+		memset(reinterpret_cast<void *>(zero_out), 0, round_page(zero_out) -
+		       zero_out);
+
+		printf("%s\n", name);
+
+		/* revoke write permission on rom module */
+		unmap_local(__main_thread_utcb, trunc_page(core_local_addr),
+		            rom_mem_size >> get_page_size_log2(), true,
+		            Nova::Rights(false, true, false));
+
+		/* create rom module */
 		Rom_module *rom_module = new (core_mem_alloc())
-		                         Rom_module((addr_t)core_local_addr, mem_desc->size, name);
+		                         Rom_module(core_local_addr, mem_desc->size, name);
 		_rom_fs.insert(rom_module);
-
-		/* zero remainder of last ROM page */
-		size_t count = 0x1000 - rom_module->size() % 0x1000;
-		if (count != 0x1000)
-			memset(reinterpret_cast<void *>(rom_module->addr() + rom_module->size()), 0, count);
-
 	}
 
 	/* export hypervisor info page as ROM module */
@@ -407,10 +605,10 @@ Platform::Platform() :
 	_irq_alloc.add_range(0, hip->sel_gsi - 1);
 	_gsi_base_sel = (hip->mem_desc_offset - hip->cpu_desc_offset) / hip->cpu_desc_size;
 
-	/* remap main utcb to default utbc address */
+	/* remap main utcb to default utcb address */
 	if (map_local(__main_thread_utcb, (addr_t)__main_thread_utcb,
-	              (addr_t)main_thread_utcb(), 1)) {
-		PERR("could not remap main threads utcb");
+	              (addr_t)main_thread_utcb(), 1, Rights(true, true, false))) {
+		PERR("could not remap utcb of main thread");
 		nova_die();
 	}
 
@@ -431,7 +629,8 @@ bool Core_mem_allocator::Mapped_mem_allocator::_map_local(addr_t virt_addr,
                                                           unsigned size_log2)
 {
 	map_local((Utcb *)Thread_base::myself()->utcb(), phys_addr,
-	          virt_addr, 1 << (size_log2 - get_page_size_log2()), true);
+	          virt_addr, 1 << (size_log2 - get_page_size_log2()),
+	          Rights(true, true, true), true);
 	return true;
 }
 

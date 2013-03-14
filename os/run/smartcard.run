@@ -38,14 +38,35 @@ set config  {
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
-		</start>
+		</start>}
+		
+append_if [have_spec x86] config {
 		<start name="uart_drv">
 			<resource name="RAM" quantum="1M"/>
-			<provides><service name="Terminal"/></provides>
+			<provides>
+				<service name="Uart"/>
+				<service name="Terminal"/>
+			</provides>
 			<config>
 				<policy label="smartcard_drv" uart="1" baudrate="38400"/>
 			</config>
 		</start>
+}
+
+append_if [have_spec omap4] config {
+		<start name="uart_drv">
+			<resource name="RAM" quantum="1M"/>
+			<provides>
+				<service name="Uart"/>
+				<service name="Terminal"/>
+			</provides>
+			<config>
+				<policy label="smartcard_drv" uart="3" baudrate="38400"/>
+			</config>
+		</start>
+}
+
+append config {
 		<start name="smartcard_drv">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Smartcard"/></provides>

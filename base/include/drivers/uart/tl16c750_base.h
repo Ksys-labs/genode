@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -19,11 +19,6 @@
 
 namespace Genode
 {
-	enum {
-		ASCII_LINE_FEED = 10,
-		ASCII_CARRIAGE_RETURN = 13,
-	};
-
 	/**
 	 * Base driver Texas instruments TL16C750 UART module
 	 *
@@ -32,133 +27,139 @@ namespace Genode
 	 */
 	class Tl16c750_base : public Mmio
 	{
-		/**
-		 * Least significant divisor part
-		 */
-		struct Uart_dll : Register<0x0, 32>
-		{
-			struct Clock_lsb : Bitfield<0, 8> { };
-		};
-
-		/**
-		 * Transmit holding register
-		 */
-		struct Uart_thr : Register<0x0, 32>
-		{
-			struct Thr : Bitfield<0, 8> { };
-		};
-
-		/**
-		 * Most significant divisor part
-		 */
-		struct Uart_dlh : Register<0x4, 32>
-		{
-			struct Clock_msb : Bitfield<0, 6> { };
-		};
-
-		/**
-		 * Interrupt enable register
-		 */
-		struct Uart_ier : Register<0x4, 32>
-		{
-			struct Rhr_it : Bitfield<0, 1> { };
-			struct Thr_it : Bitfield<1, 1> { };
-			struct Line_sts_it : Bitfield<2, 1> { };
-			struct Modem_sts_it : Bitfield<3, 1> { };
-			struct Sleep_mode : Bitfield<4, 1> { };
-			struct Xoff_it : Bitfield<5, 1> { };
-			struct Rts_it : Bitfield<6, 1> { };
-			struct Cts_it : Bitfield<7, 1> { };
-		};
-
-		/**
-		 * FIFO control register
-		 */
-		struct Uart_fcr : Register<0x8, 32>
-		{
-			struct Fifo_enable   : Bitfield<0, 1> { };
-		};
-
-		/**
-		 * Line control register
-		 */
-		struct Uart_lcr : Register<0xc, 32>
-		{
-			struct Char_length : Bitfield<0, 2>
+		protected:
+			/**
+			* Least significant divisor part
+			*/
+			struct Uart_dll : Register<0x0, 32>
 			{
-				enum { _8_BIT = 3 };
+				struct Clock_lsb : Bitfield<0, 8> { };
 			};
-			struct Nb_stop : Bitfield<2, 1>
-			{
-				enum { _1_STOP_BIT = 0 };
-			};
-			struct Parity_en : Bitfield<3, 1> { };
-			struct Break_en  : Bitfield<6, 1> { };
-			struct Div_en    : Bitfield<7, 1> { };
-			struct Reg_mode  : Bitfield<0, 8>
-			{
-				enum { OPERATIONAL = 0, CONFIG_A = 0x80, CONFIG_B = 0xbf };
-			};
-		};
-
-		/**
-		 * Modem control register
-		 */
-		struct Uart_mcr : Register<0x10, 32>
-		{
-			struct Tcr_tlr : Bitfield<6, 1> { };
-		};
-
-		/**
-		 * Line status register
-		 */
-		struct Uart_lsr : Register<0x14, 32>
-		{
-			struct Tx_fifo_empty : Bitfield<5, 1> { };
-		};
-
-		/**
-		 * Mode definition register 1
-		 */
-		struct Uart_mdr1 : Register<0x20, 32>
-		{
-			struct Mode_select : Bitfield<0, 3>
-			{
-				enum { UART_16X = 0, DISABLED = 7 };
-			};
-		};
-
-		/**
-		 * System control register
-		 */
-		struct Uart_sysc : Register<0x54, 32>
-		{
-			struct Softreset : Bitfield<1, 1> { };
-		};
-
-		/**
-		 * System status register
-		 */
-		struct Uart_syss : Register<0x58, 32>
-		{
-			struct Resetdone : Bitfield<0, 1> { };
-		};
-
-		public:
 
 			/**
-			 * Constructor
-			 *
-			 * \param  base       MMIO base address
-			 * \param  clock      reference clock
-			 * \param  baud_rate  targeted baud rate
-			 */
-			Tl16c750_base(addr_t const base, unsigned long const clock,
-			              unsigned long const baud_rate) : Mmio(base)
+			* Transmit holding register
+			*/
+			struct Uart_thr : Register<0x0, 32>
 			{
-				/* reset and disable UART */
-				write<Uart_sysc::Softreset>(1);
-				while (!read<Uart_syss::Resetdone>()) ;
+				struct Thr : Bitfield<0, 8> { };
+			};
+
+			/**
+			 * Receiver holding register
+			 */
+			struct Uart_rhr : Register<0x0, 32>
+			{
+				struct Rhr : Bitfield<0, 8> { };
+			};
+
+			/**
+			* Most significant divisor part
+			*/
+			struct Uart_dlh : Register<0x4, 32>
+			{
+				struct Clock_msb : Bitfield<0, 6> { };
+			};
+
+			/**
+			* Interrupt enable register
+			*/
+			struct Uart_ier : Register<0x4, 32>
+			{
+				struct Rhr_it : Bitfield<0, 1> { };
+				struct Thr_it : Bitfield<1, 1> { };
+				struct Line_sts_it : Bitfield<2, 1> { };
+				struct Modem_sts_it : Bitfield<3, 1> { };
+				struct Sleep_mode : Bitfield<4, 1> { };
+				struct Xoff_it : Bitfield<5, 1> { };
+				struct Rts_it : Bitfield<6, 1> { };
+				struct Cts_it : Bitfield<7, 1> { };
+			};
+
+			/**
+			 * Interrupt identification register
+			 */
+			struct Uart_iir : Register<0x8, 32>
+			{
+				struct It_pending : Bitfield<0, 1> { };
+			};
+
+			/**
+			* FIFO control register
+			*/
+			struct Uart_fcr : Register<0x8, 32>
+			{
+				struct Fifo_enable   : Bitfield<0, 1> { };
+			};
+
+			/**
+			* Line control register
+			*/
+			struct Uart_lcr : Register<0xc, 32>
+			{
+				struct Char_length : Bitfield<0, 2>
+				{
+					enum { _8_BIT = 3 };
+				};
+				struct Nb_stop : Bitfield<2, 1>
+				{
+					enum { _1_STOP_BIT = 0 };
+				};
+				struct Parity_en : Bitfield<3, 1> { };
+				struct Break_en  : Bitfield<6, 1> { };
+				struct Div_en    : Bitfield<7, 1> { };
+				struct Reg_mode  : Bitfield<0, 8>
+				{
+					enum { OPERATIONAL = 0, CONFIG_A = 0x80, CONFIG_B = 0xbf };
+				};
+			};
+
+			/**
+			* Modem control register
+			*/
+			struct Uart_mcr : Register<0x10, 32>
+			{
+				struct Tcr_tlr : Bitfield<6, 1> { };
+			};
+
+			/**
+			* Line status register
+			*/
+			struct Uart_lsr : Register<0x14, 32>
+			{
+				struct Rx_fifo_empty : Bitfield<0, 1> { };
+				struct Tx_fifo_empty : Bitfield<5, 1> { };
+			};
+
+			/**
+			* Mode definition register 1
+			*/
+			struct Uart_mdr1 : Register<0x20, 32>
+			{
+				struct Mode_select : Bitfield<0, 3>
+				{
+					enum { UART_16X = 0, DISABLED = 7 };
+				};
+			};
+
+			/**
+			* System control register
+			*/
+			struct Uart_sysc : Register<0x54, 32>
+			{
+				struct Softreset : Bitfield<1, 1> { };
+			};
+
+			/**
+			* System status register
+			*/
+			struct Uart_syss : Register<0x58, 32>
+			{
+				struct Resetdone : Bitfield<0, 1> { };
+			};
+			
+			void _init(unsigned long const clock, unsigned long const baud_rate)
+			{
+				/* disable UART */
 				write<Uart_mdr1::Mode_select>(Uart_mdr1::Mode_select::DISABLED);
 
 				/* enable access to 'Uart_fcr' and 'Uart_ier' */
@@ -211,6 +212,23 @@ namespace Genode
 				write<Uart_mdr1::Mode_select>(Uart_mdr1::Mode_select::UART_16X);
 			}
 
+		public:
+			/**
+			 * Constructor
+			 *
+			 * \param  base       MMIO base address
+			 * \param  clock      reference clock
+			 * \param  baud_rate  targeted baud rate
+			 */
+			Tl16c750_base(addr_t const base, unsigned long const clock,
+			              unsigned long const baud_rate) : Mmio(base)
+			{
+				/* reset and init UART */
+				write<Uart_sysc::Softreset>(1);
+				while (!read<Uart_syss::Resetdone>()) ;
+				_init(clock, baud_rate);
+			}
+
 			/**
 			 * Transmit ASCII char 'c'
 			 */
@@ -218,10 +236,6 @@ namespace Genode
 			{
 				/* wait as long as the transmission buffer is full */
 				while (!read<Uart_lsr::Tx_fifo_empty>()) ;
-
-				/* auto complete new line commands */
-				if (c == ASCII_LINE_FEED)
-					write<Uart_thr::Thr>(ASCII_CARRIAGE_RETURN);
 
 				/* transmit character */
 				write<Uart_thr::Thr>(c);

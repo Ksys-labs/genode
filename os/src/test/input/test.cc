@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -51,9 +51,9 @@ int main(int argc, char **argv)
 			if (ev->type() == Input::Event::RELEASE) key_cnt--;
 
 			/* log event */
-			PLOG("Input event type=%d\tkeycode=%d\trx=%d\try=%d\tkey_cnt=%d\t%s",
-			     ev->type(), ev->keycode(), ev->rx(), ev->ry(), key_cnt,
-			     key_strings[ev->keycode()]);
+			PLOG("Input event type=%d\tcode=%d\trx=%d\try=%d\tkey_cnt=%d\t%s",
+			     ev->type(), ev->code(), ev->rx(), ev->ry(), key_cnt,
+			     key_strings[ev->code()]);
 		}
 	}
 

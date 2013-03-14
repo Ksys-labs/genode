@@ -58,10 +58,10 @@ namespace Smartcard {
 			 ** Smartcard session interface **
 			 ********************************/
 
-			void _get_reader_status()
+			void _reader_status()
 			{
 				void *io_buf = _io_buffer.local_addr<void>();
-				_driver.get_reader_status(reinterpret_cast<ReaderStatus*>(io_buf));
+				_driver.reader_status(reinterpret_cast<ReaderStatus*>(io_buf));
 			}
 
 			bool is_card_present() { return _driver.is_card_present(); }
@@ -78,7 +78,7 @@ namespace Smartcard {
 			}
 
 
-			ReaderStatus get_reader_status() const {
+			ReaderStatus reader_status() const {
 				return ReaderStatus();
 			}
 

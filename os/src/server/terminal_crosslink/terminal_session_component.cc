@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -44,7 +44,8 @@ Genode::Session_capability Session_component::cap()
 
 bool Session_component::belongs_to(Genode::Session_capability cap)
 {
-        return _ep.obj_by_cap(cap) == this;
+	Object_pool<Session_component>::Guard session(_ep.lookup_and_lock(cap));
+	return session == this;
 }
 
 

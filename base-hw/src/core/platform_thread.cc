@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -32,6 +32,12 @@ bool Platform_thread::_attaches_utcb_by_itself()
 }
 
 
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _address_space;
+}
+
+
 Platform_thread::~Platform_thread()
 {
 	/* detach UTCB if main thread outside core */
@@ -52,17 +58,12 @@ Platform_thread::~Platform_thread()
 	}
 	/* destroy object at the kernel */
 	Kernel::delete_thread(_id);
-
-	/* free kernel object space */
-	Range_allocator * ram = platform()->ram_alloc();
-	ram->free(&_kernel_thread, Kernel::thread_size());
 }
 
 
 Platform_thread::Platform_thread(const char * name,
                                  Thread_base * const thread_base,
-                                 unsigned long const stack_size,
-                                 unsigned long const pd_id)
+                                 size_t const stack_size, unsigned const pd_id)
 :
 	_thread_base(thread_base), _stack_size(stack_size),
 	_pd_id(pd_id), _rm_client(0), _virt_utcb(0)
@@ -72,7 +73,7 @@ Platform_thread::Platform_thread(const char * name,
 	/* create UTCB for a core thread */
 	Range_allocator * const ram = platform()->ram_alloc();
 	assert(ram->alloc_aligned(sizeof(Native_utcb), (void **)&_phys_utcb,
-	                          MIN_MAPPING_SIZE_LOG2));
+	                          MIN_MAPPING_SIZE_LOG2).is_ok());
 	_virt_utcb = _phys_utcb;
 
 	/* common constructor parts */
@@ -107,24 +108,22 @@ Platform_thread::Platform_thread(const char * name, unsigned int priority,
 }
 
 
-int Platform_thread::join_pd(unsigned long const pd_id,
-                             bool const main_thread)
+int Platform_thread::join_pd(unsigned const pd_id, bool const main_thread,
+                             Weak_ptr<Address_space> address_space)
 {
 	/* check if we're already in another PD */
 	if (_pd_id && _pd_id != pd_id) return -1;
 
 	/* denote configuration for start method */
-	_pd_id = pd_id;
-	_main_thread = main_thread;
+	_pd_id         = pd_id;
+	_main_thread   = main_thread;
+	_address_space = address_space;
 	return 0;
 }
 
 
 void Platform_thread::_init()
 {
-	/* create kernel object */
-	Range_allocator * ram = platform()->ram_alloc();
-	assert(ram->alloc(Kernel::thread_size(), &_kernel_thread));
 	_id = Kernel::new_thread(_kernel_thread, this);
 	assert(_id);
 }
@@ -153,8 +152,8 @@ int Platform_thread::start(void * ip, void * sp, unsigned int cpu_no)
 		catch (...) { assert(0); }
 	}
 	/* let thread participate in CPU scheduling */
-	_software_tlb = Kernel::start_thread(this, ip, sp, cpu_no);
-	return _software_tlb ? 0 : -1;
+	_tlb = Kernel::start_thread(this, ip, sp, cpu_no);
+	return _tlb ? 0 : -1;
 }
 
 
@@ -169,9 +168,6 @@ void Platform_thread::pager(Pager_object * const pager)
 }
 
 
-Genode::Pager_object * Platform_thread::pager() const
-{
-	assert(_rm_client)
-	return static_cast<Pager_object *>(_rm_client);
-}
+Genode::Pager_object * Platform_thread::pager() {
+	return _rm_client ? static_cast<Pager_object *>(_rm_client) : 0; }
 

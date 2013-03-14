@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -43,8 +43,11 @@ namespace Genode
 
 		Signal_context_capability
 		alloc_context(Signal_receiver_capability const r,
-		              unsigned long const imprint)
-		{ return call<Rpc_alloc_context>(r, imprint); }
+		              unsigned const imprint) {
+			return call<Rpc_alloc_context>(r, imprint); }
+
+		void free_context(Signal_context_capability cap) {
+			call<Rpc_free_context>(cap); }
 	};
 }
 

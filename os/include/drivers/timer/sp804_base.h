@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -21,8 +21,6 @@ namespace Genode
 {
 	/**
 	 * Basic driver for the ARM SP804 timer
-	 *
-	 * Uses only timer module 0.
 	 */
 	template <unsigned long CLK>
 	class Sp804_base : public Mmio
@@ -171,8 +169,8 @@ namespace Genode
 			/**
 			 * Translate microseconds to a native timer value
 			 */
-			static unsigned long us_to_tics(unsigned long const tics) {
-				return tics / TICS_PER_US; }
+			static unsigned long us_to_tics(unsigned long const us) {
+				return us * TICS_PER_US; }
 
 			/**
 			 * Translate native timer value to microseconds

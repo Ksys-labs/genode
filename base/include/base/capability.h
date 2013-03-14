@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -64,7 +64,7 @@ namespace Genode {
 			                       Meta::Overload_selector<Rpc_arg_inout>) const;
 
 			template <typename T>
-			void _unmarshal_result(Ipc_client &, T &arg,
+			void _unmarshal_result(Ipc_client &, T &,
 			                       Meta::Overload_selector<Rpc_arg_in>) const { }
 
 			/**

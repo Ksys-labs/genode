@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2007-2012 Genode Labs GmbH
+ * Copyright (C) 2007-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -36,3 +36,10 @@ _stack_low:
 	.globl	_stack_high
 _stack_high:
 
+	/*
+	 * Symbol referenced by ldso's crt0.s, which is needed by base-hw only.
+	 * It is defined here merely to resolve the symbol for non-base-hw
+	 * platforms.
+	 */
+	 .globl _main_utcb
+	_main_utcb: .long 0

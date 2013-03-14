@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -35,14 +35,14 @@ void Platform_thread::affinity(unsigned int cpu_no)
 
 int Platform_thread::start(void *ip, void *sp, unsigned int cpu_no)
 {
-	Native_thread_id pager = _pager ? _pager->cap().dst() : -1;
+	Native_thread_id pager = _pager ? _pager->cap().dst() : THREAD_INVALID;
 
 	/* setup thread context */
 	struct exregs_data exregs;
-	exregs.flags = 0;
+	memset(&exregs, 0, sizeof(exregs));
 	exregs_set_stack(&exregs, (unsigned long)sp);
 	exregs_set_pc   (&exregs, (unsigned long)ip);
-	exregs_set_pager(&exregs, pager.tid);
+	exregs_set_pager(&exregs, pager);
 	exregs_set_utcb (&exregs, _utcb);
 
 	int ret = l4_exchange_registers(&exregs, _tid);
@@ -78,10 +78,17 @@ void Platform_thread::resume()
 }
 
 
-int Platform_thread::state(Thread_state *state_dst)
+void Platform_thread::state(Thread_state s)
 {
-	PDBG("not implemented");
-	return -1;
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
+}
+
+
+Thread_state Platform_thread::state()
+{
+	PDBG("Not implemented");
+	throw Cpu_session::State_access_failed();
 }
 
 
@@ -91,9 +98,15 @@ void Platform_thread::cancel_blocking()
 }
 
 
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _address_space;
+}
+
+
 Platform_thread::Platform_thread(const char *name, unsigned, addr_t,
                                  int thread_id)
-: _tid(-1)
+: _tid(THREAD_INVALID)
 {
 	strncpy(_name, name, sizeof(_name));
 }

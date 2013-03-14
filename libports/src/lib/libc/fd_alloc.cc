@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -52,7 +52,7 @@ File_descriptor *File_descriptor_allocator::alloc(Plugin *plugin,
 	if (addr == ANY_FD) 
 		alloc_ok = Allocator_avl_base::alloc(1, reinterpret_cast<void**>(&addr));
 	else
-		alloc_ok = (Allocator_avl_base::alloc_addr(1, addr) == ALLOC_OK);
+		alloc_ok = (Allocator_avl_base::alloc_addr(1, addr).is_ok());
 
 	if (!alloc_ok) {
 		PERR("could not allocate libc_fd %d%s",

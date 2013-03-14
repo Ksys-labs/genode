@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -142,7 +142,7 @@ namespace Genode {
 			/**
 			 * Close session
 			 */
-			virtual void close(Session_capability session) { }
+			virtual void close(Session_capability /*session*/) { }
 
 			/**
 			 * Return server providing the service
@@ -408,6 +408,15 @@ namespace Genode {
 			 * Unregister service
 			 */
 			void remove(Service *service) { _services.remove(service); }
+
+			/**
+			 * Unregister all services
+			 */
+			void remove_all()
+			{
+				while (_services.first())
+					remove(_services.first());
+			}
 	};
 }
 

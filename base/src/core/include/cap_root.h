@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -24,10 +24,14 @@ namespace Genode {
 
 	class Cap_root : public Root_component<Cap_session_component>
 	{
+		private:
+
+			Allocator *_md_alloc;
+
 		protected:
 
 			Cap_session_component *_create_session(const char *args) {
-				return new (md_alloc()) Cap_session_component(); }
+				return new (md_alloc()) Cap_session_component(_md_alloc, args); }
 
 		public:
 
@@ -40,7 +44,9 @@ namespace Genode {
 			Cap_root(Rpc_entrypoint *session_ep,
 			         Allocator      *md_alloc)
 			:
-				Root_component<Cap_session_component>(session_ep, md_alloc) { }
+				Root_component<Cap_session_component>(session_ep, md_alloc),
+				_md_alloc(md_alloc)
+			{ }
 	};
 }
 

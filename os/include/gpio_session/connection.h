@@ -6,7 +6,7 @@
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -20,14 +20,13 @@
 
 namespace Gpio {
 
-	class Connection : public Genode::Connection<Session>, public Session_client
+	struct Connection : Genode::Connection<Session>, Session_client
 	{
-		public:
-			Connection()
-			:
-				Genode::Connection<Session>(session("ram_quota=4K")),
-				Session_client(cap())
-			{ }
+		Connection()
+		:
+			Genode::Connection<Session>(session("ram_quota=4K")),
+			Session_client(cap())
+		{ }
 	};
 }
 

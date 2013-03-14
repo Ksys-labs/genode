@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -19,6 +19,7 @@
 #include <base/tslab.h>
 #include <base/rpc_server.h>
 #include <base/allocator_guard.h>
+#include <base/sync_allocator.h>
 
 /* core includes */
 #include <dataspace_component.h>
@@ -38,7 +39,7 @@ namespace Genode {
 
 			enum { SBS = 1024 };   /* slab block size */
 
-			typedef Tslab<Dataspace_component, SBS> Ds_slab;
+			typedef Synchronized_allocator<Tslab<Dataspace_component, SBS> > Ds_slab;
 
 			Rpc_entrypoint         *_ds_ep;
 			Rpc_entrypoint         *_ram_session_ep;

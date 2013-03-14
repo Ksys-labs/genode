@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -27,6 +27,12 @@ namespace Noux {
 		virtual bool     write(Sysio *sysio, Vfs_handle *vfs_handle) = 0;
 		virtual bool      read(Sysio *sysio, Vfs_handle *vfs_handle) = 0;
 		virtual bool ftruncate(Sysio *sysio, Vfs_handle *vfs_handle) = 0;
+
+		/**
+		 * This method is only needed in file-systems which actually implement
+		 * a device and is therefore false by default.
+		 */
+		virtual bool     ioctl(Sysio *sysio, Vfs_handle *vfs_handle) { return false; }
 	};
 }
 

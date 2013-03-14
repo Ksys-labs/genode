@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -112,6 +112,8 @@ class Context_area_rm_session : public Rm_session
 		Pager_capability add_client(Thread_capability) {
 			return Pager_capability(); }
 
+		void remove_client(Pager_capability) { }
+
 		void fault_handler(Signal_context_capability) { }
 
 		State state() { return State(); }
@@ -142,8 +144,8 @@ class Context_area_ram_session : public Ram_session
 			/* allocate physical memory */
 			size = round_page(size);
 			void *phys_base;
-			if (!platform_specific()->ram_alloc()->alloc_aligned(size, &phys_base,
-			                                                     get_page_size_log2())) {
+			if (platform_specific()->ram_alloc()->alloc_aligned(size, &phys_base,
+			                                                    get_page_size_log2()).is_error()) {
 				PERR("could not allocate backing store for new context");
 				return Ram_dataspace_capability();
 			}
@@ -162,6 +164,9 @@ class Context_area_ram_session : public Ram_session
 		{
 			Dataspace_component *dataspace_component =
 				dynamic_cast<Dataspace_component*>(Dataspace_capability::deref(ds));
+
+			if (!dataspace_component)
+				return;
 
 			for (unsigned i = 0; i < MAX_CORE_CONTEXTS; i++)
 				if (context_ds[i] == dataspace_component) {

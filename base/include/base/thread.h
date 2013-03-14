@@ -11,7 +11,7 @@
  *
  * ! lower address
  * !   ...
- * !   ============================ <- aligned at 'CONTEXT_VIRTUAL_SIZE'
+ * !   ============================ <- aligned at the virtual context size
  * !
  * !             empty
  * !
@@ -23,7 +23,7 @@
  * !    additional context members
  * !   ----------------------------
  * !              UTCB
- * !   ============================ <- aligned at 'CONTEXT_VIRTUAL_SIZE'
+ * !   ============================ <- aligned at the virtual context size
  * !   ...
  * ! higher address
  *
@@ -42,7 +42,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -90,8 +90,7 @@ namespace Genode {
 			/**
 			 * Thread context located within the thread-context area
 			 *
-			 * The end of a thread context is placed at a boundary aligned at
-			 * 'CONTEXT_VIRTUAL_SIZE'.
+			 * The end of a thread context is placed virtual size aligned.
 			 */
 			struct Context
 			{
@@ -101,11 +100,6 @@ namespace Genode {
 				long stack[];
 
 				/**
-				 * Pointer to corresponding 'Thread_base' object
-				 */
-				Thread_base *thread_base;
-
-				/**
 				 * Virtual address of the start of the stack
 				 *
 				 * This address is pointing to the begin of the dataspace used
@@ -113,6 +107,11 @@ namespace Genode {
 				 * managed by the kernel).
 				 */
 				addr_t stack_base;
+
+				/**
+				 * Pointer to corresponding 'Thread_base' object
+				 */
+				Thread_base *thread_base;
 
 				/**
 				 * Dataspace containing the backing store for the thread context
@@ -231,18 +230,19 @@ namespace Genode {
 			 */
 			void _deinit_platform_thread();
 
-			/* hook only used for microblaze kernel */
-			void _init_context(Context* c);
-
 		protected:
 
 			/**
 			 * Capability for this thread (set by _start())
 			 *
 			 * Used if thread creation involves core's CPU service.
-			 * Currently, this is not the case for NOVA.
 			 */
 			Genode::Thread_capability _thread_cap;
+
+			/**
+			 * Capability to pager paging this thread (created by _start())
+			 */
+			Genode::Pager_capability  _pager_cap;
 
 			/**
 			 * Pointer to corresponding thread context
@@ -253,6 +253,11 @@ namespace Genode {
 			 * Physical thread ID
 			 */
 			Native_thread _tid;
+
+			/**
+			 * Lock used for synchronizing the finalization of the thread
+			 */
+			Genode::Lock _join_lock;
 
 		public:
 
@@ -335,6 +340,14 @@ namespace Genode {
 			 * 0 when called by the main thread.
 			 */
 			Native_utcb *utcb();
+
+			/**
+			 * Block until the thread leaves the 'entry' function
+			 *
+			 * Join must not be called more than once. Subsequent calls have
+			 * undefined behaviour.
+			 */
+			void join();
 	};
 
 

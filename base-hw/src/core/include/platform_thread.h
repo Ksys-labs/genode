@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -19,9 +19,12 @@
 #include <base/native_types.h>
 #include <kernel/syscalls.h>
 #include <kernel/log.h>
+#include <base/thread.h>
+#include <kernel/thread.h>
 
 /* core includes */
 #include <assert.h>
+#include <address_space.h>
 
 namespace Genode {
 
@@ -39,17 +42,18 @@ namespace Genode {
 		enum { NAME_MAX_LEN = 32 };
 
 		Thread_base *            _thread_base;
-		unsigned long            _stack_size;
-		unsigned long            _pd_id;
-		unsigned long            _id;
+		size_t                   _stack_size;
+		unsigned                 _pd_id;
+		Weak_ptr<Address_space>  _address_space;
+		unsigned                 _id;
 		Rm_client *              _rm_client;
 		bool                     _main_thread;
 		Native_utcb *            _phys_utcb;
 		Native_utcb *            _virt_utcb;
-		Software_tlb *           _software_tlb;
+		Tlb *                    _tlb;
 		Ram_dataspace_capability _utcb;
 		char                     _name[NAME_MAX_LEN];
-		void *                   _kernel_thread;
+		char                     _kernel_thread[sizeof(Kernel::Thread)];
 
 		/**
 		 * Common construction part
@@ -66,16 +70,14 @@ namespace Genode {
 			/**
 			 * Constructor for core threads
 			 */
-			Platform_thread(const char *        name,
-			                Thread_base * const thread_base,
-			                unsigned long const stack_size,
-			                unsigned long const pd_id);
+			Platform_thread(const char * name, Thread_base * const thread_base,
+			                size_t const stack_size, unsigned const pd_id);
 
 			/**
 			 * Constructor for threads outside of core
 			 */
-			Platform_thread(const char * name, unsigned int priority,
-			                addr_t utcb);
+			Platform_thread(const char * name, unsigned const priority,
+			                addr_t const utcb);
 
 			/**
 			 * Destructor
@@ -91,8 +93,8 @@ namespace Genode {
 			 * \retval  0  on success
 			 * \retval <0  otherwise
 			 */
-			int join_pd(unsigned long const pd_id,
-			            bool const main_thread);
+			int join_pd(unsigned const pd_id, bool const main_thread,
+			            Weak_ptr<Address_space> address_space);
 
 			/**
 			 * Run this thread
@@ -112,40 +114,41 @@ namespace Genode {
 			/**
 			 * Cancel currently blocking operation
 			 */
-			void cancel_blocking()
+			void cancel_blocking() { resume(); }
+
+			/**
+			 * Get raw thread state
+			 */
+			Thread_state state()
 			{
-				kernel_log() << __PRETTY_FUNCTION__ << ": Not implemented\n";
-				while (1) ;
+				Kernel::read_thread_state(id());
+				return *(Thread_state *)Thread_base::myself()->utcb()->base();
 			};
 
 			/**
-			 * Request our raw thread state
-			 *
-			 * \param state_dst  destination state buffer
-			 *
-			 * \retval  0  successful
-			 * \retval -1  thread state not accessible
+			 * Override raw thread state
 			 */
-			int state(Genode::Thread_state * state_dst)
+			void state(Thread_state s)
 			{
-				kernel_log() << __PRETTY_FUNCTION__ << ": Not implemented\n";
-				while (1) ;
-				return -1;
+				*(Thread_state *)Thread_base::myself()->utcb()->base() = s;
+				Kernel::write_thread_state(id());
 			};
 
 			/**
 			 * Return unique identification of this thread as faulter
 			 */
-			unsigned long pager_object_badge() { return _id; }
+			unsigned pager_object_badge() { return _id; }
 
 			/**
 			 * Set the executing CPU for this thread
 			 */
-			void affinity(unsigned cpu)
-			{
-				kernel_log() << __PRETTY_FUNCTION__ << ": Not implemented\n";
-				while (1) ;
-			};
+			void affinity(unsigned cpu) {
+				kernel_log() << __PRETTY_FUNCTION__ << ": not implemented\n"; };
+
+			/**
+			 * Return the address space to which the thread is bound
+			 */
+			Weak_ptr<Address_space> address_space();
 
 
 			/***************
@@ -156,13 +159,13 @@ namespace Genode {
 
 			void pager(Pager_object * const pager);
 
-			Pager_object * pager() const;
+			Pager_object * pager();
 
-			unsigned long pd_id() const { return _pd_id; }
+			unsigned pd_id() const { return _pd_id; }
 
 			Native_thread_id id() const { return _id; }
 
-			unsigned long stack_size() const { return _stack_size; }
+			size_t stack_size() const { return _stack_size; }
 
 			Thread_base * thread_base()
 			{
@@ -176,7 +179,7 @@ namespace Genode {
 
 			Ram_dataspace_capability utcb() const { return _utcb; }
 
-			Software_tlb * software_tlb() const { return _software_tlb; }
+			Tlb * tlb() const { return _tlb; }
 	};
 }
 

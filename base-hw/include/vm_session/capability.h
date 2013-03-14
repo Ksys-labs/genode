@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -14,6 +14,7 @@
 #ifndef _INCLUDE__VM_SESSION__CAPABILITY_H_
 #define _INCLUDE__VM_SESSION__CAPABILITY_H_
 
+/* Genode includes */
 #include <base/capability.h>
 #include <vm_session/vm_session.h>
 

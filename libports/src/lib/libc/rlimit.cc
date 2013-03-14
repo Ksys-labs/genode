@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -17,7 +17,7 @@
 
 #include "libc_debug.h"
 
-extern "C" int getrlimit(int resource, struct rlimit *rlim)
+extern "C" int __attribute__((weak)) getrlimit(int resource, struct rlimit *rlim)
 {
 	/*
 	 * The pthread init code on Linux calls getrlimit

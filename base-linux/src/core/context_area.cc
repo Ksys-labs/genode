@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -64,6 +64,8 @@ class Context_area_rm_session : public Genode::Rm_session
 
 		Genode::Pager_capability add_client(Genode::Thread_capability) {
 			return Genode::Pager_capability(); }
+
+		void remove_client(Genode::Pager_capability) { }
 
 		void fault_handler(Genode::Signal_context_capability) { }
 

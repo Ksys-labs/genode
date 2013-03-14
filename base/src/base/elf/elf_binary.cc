@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -58,6 +58,8 @@ bool inline Elf_binary::_dynamic_check_compat(unsigned type)
 		case PT_PHDR:
 		case PT_GNU_EH_FRAME:
 		case PT_GNU_STACK:
+		case PT_GNU_RELRO:
+		case PT_TLS:
 		case PT_NOTE:
 			return true;
 		default:

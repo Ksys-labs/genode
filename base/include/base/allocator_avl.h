@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -215,7 +215,7 @@ namespace Genode {
 
 			int          add_range(addr_t base, size_t size);
 			int          remove_range(addr_t base, size_t size);
-			bool         alloc_aligned(size_t size, void **out_addr, int align = 0);
+			Alloc_return alloc_aligned(size_t size, void **out_addr, int align = 0);
 			Alloc_return alloc_addr(size_t size, addr_t addr);
 			void         free(void *addr);
 			size_t       avail();
@@ -227,7 +227,7 @@ namespace Genode {
 			 *************************/
 
 			bool alloc(size_t size, void **out_addr) {
-				return Allocator_avl_base::alloc_aligned(size, out_addr); }
+				return (Allocator_avl_base::alloc_aligned(size, out_addr).is_ok()); }
 
 			void free(void *addr, size_t) { free(addr); }
 
@@ -241,7 +241,7 @@ namespace Genode {
 			 * The 'sizeof(umword_t)' represents the overhead of the meta-data
 			 * slab allocator.
 			 */
-			size_t overhead(size_t size) { return sizeof(Block) + sizeof(umword_t); }
+			size_t overhead(size_t) { return sizeof(Block) + sizeof(umword_t); }
 
 			bool need_size_for_free() const { return false; }
 	};

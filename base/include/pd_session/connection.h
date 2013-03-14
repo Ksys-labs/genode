@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -25,15 +25,10 @@ namespace Genode {
 		 * Constructor
 		 *
 		 * \param label  session label
-		 * \param root   chroot path (only on Linux)
 		 */
-		Pd_connection(char const *label = "", char const *root = "")
+		Pd_connection(char const *label = "", Native_pd_args const *pd_args = 0)
 		:
-			Connection<Pd_session>(session("ram_quota=4K, label=\"%s\"%s%s%s",
-			                               label,
-			                               (root && root[0]) ? ", root=\"" : "",
-			                               (root && root[0]) ? root        : "",
-			                               (root && root[0]) ? "\""        : "")),
+			Connection<Pd_session>(session("ram_quota=4K, label=\"%s\"", label)),
 			Pd_session_client(cap())
 		{ }
 	};

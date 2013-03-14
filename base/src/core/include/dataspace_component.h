@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -27,7 +27,6 @@
 namespace Genode {
 
 	class Rm_region;
-	class Rm_session_component;
 
 	/**
 	 * Deriving classes can own a dataspace to implement conditional behavior
@@ -46,11 +45,13 @@ namespace Genode {
 			                                   RAM uncacheable respectively            */
 			bool   const _writable;         /* false if dataspace is read-only         */
 
-			List<Rm_region> _regions;    /* regions this is attached to */
+			List<Rm_region> _regions;       /* regions this is attached to */
 			Lock            _lock;
 
-			/* Holds the dataspace owner if a distinction between owner and
-			 * others is necessary on the dataspace, otherwise it is 0 */
+			/*
+			 * Holds the dataspace owner if a distinction between owner and
+			 * others is necessary on the dataspace, otherwise it is 0.
+			 */
 			Dataspace_owner const * _owner;
 
 		protected:
@@ -115,9 +116,9 @@ namespace Genode {
 			/**
 			 * Return region-manager session corresponding to nested dataspace
 			 *
-			 * \retval  0  dataspace is not a nested dataspace
+			 * \retval  invalid capability if dataspace is not a nested one
 			 */
-			virtual Rm_session_component *sub_rm_session() { return 0; }
+			virtual Native_capability sub_rm_session() { return Dataspace_capability(); }
 
 			addr_t core_local_addr() const { return _core_local_addr; }
 			bool is_io_mem()         const { return _is_io_mem; }

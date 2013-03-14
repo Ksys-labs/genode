@@ -10,7 +10,7 @@
  */
 
  /*
-  * Copyright (C) 2009-2012 Genode Labs GmbH
+  * Copyright (C) 2009-2013 Genode Labs GmbH
   *
   * This file is part of the Genode OS framework, which is distributed
   * under the terms of the GNU General Public License version 2.
@@ -39,6 +39,17 @@ struct Apic_struct
 	Apic_struct *next() { return reinterpret_cast<Apic_struct *>((uint8_t *)this + length); }
 } __attribute__((packed));
 
+struct Mcfg_struct
+{
+	uint64_t base;
+	uint16_t pci_seg;
+	uint8_t  pci_bus_start;
+	uint8_t  pci_bus_end;
+	uint32_t reserved;
+
+	Mcfg_struct *next() {
+		return reinterpret_cast<Mcfg_struct *>((uint8_t *)this + sizeof(*this)); }
+} __attribute__((packed));
 
 /* ACPI spec 5.2.12.5 */
 struct Apic_override : Apic_struct
@@ -68,6 +79,10 @@ struct Generic
 	/* MADT acpi structures */
 	Apic_struct *apic_struct() { return reinterpret_cast<Apic_struct *>(&creator_rev + 3); }
 	Apic_struct *end()         { return reinterpret_cast<Apic_struct *>(signature + size); }
+
+	/* MCFG ACPI stucture */
+	Mcfg_struct *mcfg_struct() { return reinterpret_cast<Mcfg_struct *>(&creator_rev + 3); }
+	Mcfg_struct *mcfg_end()    { return reinterpret_cast<Mcfg_struct *>(signature + size); }
 } __attribute__((packed));
 
 
@@ -98,6 +113,30 @@ class Irq_override : public List<Irq_override>::Element
 		uint32_t flags()             const { return _flags; }
 };
 
+
+/**
+ * List that holds the result of the mcfg table parsing which are pointers
+ * to the extended pci config space - 4k for each device.
+ */
+class Pci_config_space : public List<Pci_config_space>::Element
+{
+	public:
+
+		uint32_t _bdf_start;
+		uint32_t _func_count;
+		addr_t   _base;
+
+		Pci_config_space(uint32_t bdf_start, uint32_t func_count, addr_t base)
+		:
+			_bdf_start(bdf_start), _func_count(func_count), _base(base) {}
+
+		static List<Pci_config_space> *list()
+		{
+			static List<Pci_config_space> _list;
+			return &_list;
+		}
+
+};
 
 /**
  * ACPI table wrapper that for mapping tables to this address space
@@ -137,7 +176,7 @@ class Table_wrapper
 		}
 
 		/* return offset of '_base' to page boundary */
-		uint32_t _offset() const              { return (_base & 0xfff); }
+		addr_t _offset() const              { return (_base & 0xfff); }
 
 		/* compare table name with 'name' */
 		bool     _cmp(char const *name) const { return !memcmp(_table->signature, name, 4); }
@@ -154,9 +193,15 @@ class Table_wrapper
 		/**
 		 * Copy table data to 'ptr'
 		 */
-		void copy_entries(uint32_t *ptr)
+		template <typename T>
+		T * copy_entries(T &count)
 		{
-			memcpy(ptr, _table + 1, _table->size - sizeof(Generic));
+			addr_t size = _table->size - sizeof (Generic);
+			count = size / sizeof(T);
+
+			T * entries = new (env()->heap()) T [count];
+			memcpy(entries, _table + 1, size);
+			return entries;
 		}
 
 		/**
@@ -181,6 +226,11 @@ class Table_wrapper
 		bool is_madt() { return _cmp("APIC"); }
 
 		/**
+		 * Is this a MCFG table
+		 */
+		bool is_mcfg() { return _cmp("MCFG"); }
+
+		/**
 		 * Look for DSDT and SSDT tables
 		 */
 		bool is_searched() const { return _cmp("DSDT") || _cmp("SSDT"); }
@@ -200,6 +250,23 @@ class Table_wrapper
 				PINF("MADT IRQ %u -> GSI %u flags: %x", o->irq, o->gsi, o->flags);
 				
 				Irq_override::list()->insert(new (env()->heap()) Irq_override(o->irq, o->gsi, o->flags));
+			}
+		}
+
+		void parse_mcfg()  const
+		{
+			Mcfg_struct *mcfg = _table->mcfg_struct();
+			for (; mcfg < _table->mcfg_end(); mcfg = mcfg->next()) {
+				PINF("MCFG BASE 0x%llx seg %02x bus %02x-%02x", mcfg->base,
+				     mcfg->pci_seg, mcfg->pci_bus_start, mcfg->pci_bus_end);
+
+				/* bus_count * up to 32 devices * 8 function per device * 4k */
+				uint32_t bus_count  = mcfg->pci_bus_end - mcfg->pci_bus_start + 1;
+				uint32_t func_count = bus_count * 32 * 8;
+				uint32_t bus_start  = mcfg->pci_bus_start * 32 * 8;
+
+				Pci_config_space::list()->insert(
+					new (env()->heap()) Pci_config_space(bus_start, func_count, mcfg->base));
 			}
 		}
 
@@ -600,11 +667,14 @@ class Element : public List<Element>::Element
 			}
 		}
 
-		Element(uint8_t const *data, bool package_op4 = false)
+		Element(uint8_t const *data = 0, bool package_op4 = false)
 		:
 			_type(0), _size(0), _size_len(0), _name(0), _name_len(0), _bdf(0), _data(data),
 			_valid(false), _routed(false), _pci(0)
 		{
+			if (!data)
+				return;
+
 			/* special handle for four value packet */
 			if (package_op4) {
 				/* scan for data package with four entries */
@@ -662,11 +732,6 @@ class Element : public List<Element>::Element
 				return;
 			}
 		}
-
-		/**
-		 * Default constructor
-		 */
-		Element() : _valid(false) {}
 
 		/**
 		 * Copy constructor
@@ -834,6 +899,34 @@ class Element : public List<Element>::Element
 			}
 			throw -1;
 		}
+
+		static void create_config_file(char * text, size_t max)
+		{
+			Pci_config_space *e = Pci_config_space::list()->first();
+
+			int len = snprintf(text, max, "<config>");
+			text += len;
+			max  -= len;
+			for (; e; e = e->next())
+			{
+				using namespace Genode;
+				len   = snprintf(text, max, "<bdf><start>%u</start>", e->_bdf_start);
+				text += len;
+				max  -= len;
+				len   = snprintf(text, max, "<count>%u</count>"       , e->_func_count);
+				text += len;
+				max  -= len;
+				len   = snprintf(text, max, "<base>0x%lx</base></bdf>" , e->_base);
+				text += len;
+				max  -= len;
+			}
+			len = snprintf(text, max, "</config>");
+			text += len;
+			max  -= len;
+
+			if (max < 2)
+				PERR("config file could not be generated, buffer to small");
+		}
 };
 
 
@@ -903,35 +996,14 @@ class Acpi_table
 			return 0;
 		}
 
-	public:
-
-		Acpi_table()
+		template <typename T>
+		void _parse_tables(T * entries, uint32_t count)
 		{
-			Io_mem_session_capability io_mem;
-			uint8_t *rsdp = _rsdp(io_mem);
-
-			if (verbose)
-				PDBG("RSDP %p", rsdp);
-
-			if (!rsdp)
-				return;
-
-			uint32_t rsdt_entries[36];
-			memset(rsdt_entries, 0, sizeof(uint32_t)*36);
-
-			{
-				/* table pointer at 16 byte offset in RSDP structure (5.2.5.3) */
-				Table_wrapper rsdt(*reinterpret_cast<uint32_t *>(rsdp + 0x10));
-				rsdt.copy_entries(rsdt_entries);
-			}
-
-			env()->parent()->close(io_mem);
-
 			/* search for SSDT and DSDT tables */
-			for (int i = 0; rsdt_entries[i]; i++) {
+			for (uint32_t i = 0; i < count; i++) {
 				uint32_t dsdt = 0;
 				{
-					Table_wrapper table(rsdt_entries[i]);
+					Table_wrapper table(entries[i]);
 					if (table.is_facp())
 						dsdt = *reinterpret_cast<uint32_t *>(table->signature + 40);
 
@@ -944,9 +1016,14 @@ class Acpi_table
 					}
 
 					if (table.is_madt()) {
-							PDBG("Found MADT");
+						PDBG("Found MADT");
 
 						table.parse_madt();
+					}
+					if (table.is_mcfg()) {
+						PDBG("Found MCFG");
+
+						table.parse_mcfg();
 					}
 				}
 
@@ -959,6 +1036,79 @@ class Acpi_table
 						Element::parse(table.table());
 					}
 				}
+			}
+
+		}
+
+	public:
+
+		Acpi_table()
+		{
+			Io_mem_session_capability io_mem;
+
+			uint8_t * ptr_rsdp = _rsdp(io_mem);
+
+			struct rsdp {
+				char     signature[8];
+			    uint8_t  checksum;
+				char     oemid[6];
+				uint8_t  revision;
+				/* table pointer at 16 byte offset in RSDP structure (5.2.5.3) */
+				uint32_t rsdt;
+				/* With ACPI 2.0 */
+				uint32_t len;
+				uint64_t xsdt;
+				uint8_t  checksum_extended;
+			    uint8_t  reserved[3];
+			} __attribute__((packed));
+			struct rsdp * rsdp = reinterpret_cast<struct rsdp *>(ptr_rsdp);
+
+			if (!rsdp) {
+				if (verbose)
+					PDBG("No rsdp structure found");
+				return;
+			}
+
+			if (verbose) {
+				uint8_t oem[7];
+				memcpy(oem, rsdp->oemid, 6);
+				oem[6] = 0;
+				PDBG("ACPI revision %u of OEM '%s', rsdt:0x%x xsdt:0x%llx",
+				     rsdp->revision, oem, rsdp->rsdt, rsdp->xsdt);
+			}
+
+			addr_t const rsdt = rsdp->rsdt;
+			addr_t const xsdt = rsdp->xsdt;
+			/* drop rsdp io_mem mapping since rsdt/xsdt may overlap */
+			env()->parent()->close(io_mem);
+
+			if (xsdt && sizeof(addr_t) != sizeof(uint32_t)) {
+				/* running 64bit and xsdt is valid */
+				addr_t entries_count;
+				addr_t * entries;
+				{
+					Table_wrapper table(xsdt);
+					entries = table.copy_entries(entries_count);
+				}
+
+				_parse_tables(entries, entries_count);
+
+				if (entries)
+					env()->heap()->free(entries, 0);
+			} else {
+				/* running (32bit) or (64bit and xsdt isn't valid) */
+				uint32_t entries_count;
+				uint32_t * entries;
+
+				{
+					Table_wrapper table(rsdt);
+					entries = table.copy_entries(entries_count);
+				}
+
+				_parse_tables(entries, entries_count);
+
+				if (entries)
+					env()->heap()->free(entries, 0);
 			}
 		}
 };
@@ -1113,22 +1263,38 @@ static void dump_rewrite(uint32_t bdf, uint8_t line, uint8_t gsi)
 	     (bdf >> 8), (bdf >> 3) & 0x1f, (bdf & 0x7), line, gsi);
 }
 
+/**
+ * Parse acpi table
+ */
+static void init_acpi_table() {
+	static Acpi_table table;
+}
+
+/**
+ * Create config file for pci_drv
+ */
+void Acpi::create_pci_config_file(char * config_space,
+		                          Genode::size_t config_space_max)
+{
+	init_acpi_table();
+	Element::create_config_file(config_space, config_space_max);
+}
 
 /**
  * Rewrite GSIs of PCI config space
  */
-void Acpi::rewrite_irq(Pci::Session_capability &session)
+void Acpi::configure_pci_devices(Pci::Session_capability &session)
 {
-	static Acpi_table table;
+	init_acpi_table();
 	static Pci_bridge bridge(session);
 
-	/* if no _PIC method could be found return */
-	if (Element::supported_acpi_format())
-		PINF("ACPI table format is supported by this driver");
-	else {
-		PWRN("ACPI table format not supported will not rewrite GSIs");
-		return;
-	}
+	/* if no _PIC method could be found don't rewrite */
+	bool acpi_rewrite = Element::supported_acpi_format();
+
+	if (acpi_rewrite)
+		PINF("ACPI table format is supported - rewrite GSIs");
+	else
+		PWRN("ACPI table format not supported - will not rewrite GSIs");
 
 	Pci::Session_client pci(session);
 	Pci::Device_capability device_cap = pci.first_device(), prev_device_cap;
@@ -1137,7 +1303,8 @@ void Acpi::rewrite_irq(Pci::Session_capability &session)
 		prev_device_cap = device_cap;
 		Pci_client device(device_cap);
 
-		if (!device.is_bridge()) {
+		/* rewrite IRQs */
+		if (acpi_rewrite && !device.is_bridge()) {
 			uint32_t device_bdf = device.bdf();
 			uint32_t bridge_bdf = Pci_bridge::bridge_bdf(device_bdf);
 			uint32_t irq_pin    = device.irq_pin();
@@ -1154,6 +1321,7 @@ void Acpi::rewrite_irq(Pci::Session_capability &session)
 		device_cap = pci.next_device(device_cap);
 		pci.release_device(prev_device_cap);
 	}
+
 }
 
 

@@ -46,7 +46,7 @@ set config  {
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Terminal"/></provides>
 			<config>
-				<policy label="test-terminal_echo" uart="3" baudrate="115200"/>
+				<policy label="test-terminal_echo" uart="3"/>
 			</config>
 		</start>
 		<start name="test-terminal_echo">

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -65,6 +65,8 @@ l4_cap_idx_t l4lx_task_number_allocate(void)
  */
 int l4lx_task_number_free(l4_cap_idx_t task)
 {
+	Linux::Irq_guard guard;
+
 	Genode::Cap_index* idx = Genode::cap_idx_alloc()->kcap_to_idx(task);
 	Genode::cap_idx_alloc()->free(idx, 1);
 	return 0;
@@ -85,6 +87,8 @@ int l4lx_task_number_free(l4_cap_idx_t task)
 int l4lx_task_get_new_task(l4_cap_idx_t parent_id,
                            l4_cap_idx_t *id)
 {
+	Linux::Irq_guard guard;
+
 	*id = Genode::cap_idx_alloc()->alloc_range(1)->kcap();
 	return 0;
 }

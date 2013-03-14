@@ -1,0 +1,375 @@
+assert_spec foc
+assert_spec x86
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	drivers/framebuffer
+	drivers/uart
+	drivers/atapi
+	drivers/acpi
+	server/nit_fb
+	server/nitpicker
+	server/terminalmux
+	server/rom_loopdev
+	server/part_blk
+	l4linux-ata
+	l4linux-ata-srv
+}
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="acpi">
+		<resource name="RAM" quantum="8M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+			<service name="PCI"/>
+			<service name="IRQ" />
+		</provides>
+		<route>
+			<service name="PCI"> <any-child /> </service>
+			<any-service> <parent/> <any-child /> </any-service>
+		</route>
+	</start>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<config>
+			<nic device="00:03.0"/>
+		</config>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="nic_drv.2">
+		<binary name="nic_drv"/>
+		<config>
+			<nic device="00:04.0"/>
+		</config>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="nitpicker">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nitpicker"/></provides>
+		<route>
+			<service name="Input">       <child name="ps2_drv"/> </service>
+			<service name="Framebuffer"> <child name="vesa_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="atapi_drv">
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="Block" /></provides>
+		<config ata="yes"/>
+	</start>
+	<start name="uart_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="terminalmux" uart="1"/>
+		</config>
+	</start>
+	<start name="terminalmux">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="l4linux.1" channel="0"/>
+			<policy label="l4linux.2" channel="1"/>
+			<policy label="l4linux.3" channel="2"/>
+		</config>
+		<route>
+			<service name="Terminal"> <child name="uart_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="linux.1.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="0" width="1024" height="250"/>
+	</start>
+	<start name="linux.2.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="252" width="1024" height="250"/>
+	</start>
+	<start name="linux.3.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="504" width="1024" height="250"/>
+	</start>
+	<start name="part_blk">
+		<resource name="RAM" quantum="10M" />
+		<provides><service name="Block" /></provides>
+		<config>
+			<policy label="l4linux.1 -> sdb" partition="1"/>
+			<policy label="l4linux.2 -> sdb" partition="2"/>
+			<policy label="l4linux.3 -> sdb" partition="3"/>
+		</config>
+		<route>
+			<service name="Block">  <child name="atapi_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="blockdev.1">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="fedora1.img" block_size="4096"/>
+	</start>
+	<start name="blockdev.2">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="fedora2.img" block_size="4096"/>
+	</start>
+	<start name="blockdev.3">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="fedora3.img" block_size="4096"/>
+	</start>
+	<start name="l4linux.1">
+		<binary name="l4linux-ata-srv"/>
+		<resource name="RAM" quantum="100M"/>
+		<config args="mem=64M console=tty1 console=ttyS0 l4x_rd=fedora-initrd.cpio.gz root=/dev/sda l4x_cpus=1 l4x_cpus_map=0 readonlyroot">
+			<block label="sda"/>
+			<block label="sdb"/>
+		</config>
+		<provides>
+			<service name="Nic"/>
+		</provides>
+		<route>
+			<service name="Input">       <child name="linux.1.fb"/>  </service>
+			<service name="Framebuffer"> <child name="linux.1.fb"/>  </service>
+			<service name="Nic">         <child name="nic_drv.1"/>   </service> 
+			<service name="Terminal">    <child name="terminalmux"/> </service>
+			<service name="Block">
+				<if-arg key="label" value="sda"/> <child name="blockdev.1"/>
+			</service>
+			<service name="Block">
+				<if-arg key="label" value="sdb"/> <child name="part_blk"/>
+			</service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="l4linux.2">
+		<binary name="l4linux-ata-srv"/>
+		<resource name="RAM" quantum="100M"/>
+		<config args="mem=64M console=tty1 console=ttyS0 l4x_rd=fedora-initrd.cpio.gz root=/dev/sda l4x_cpus=1 l4x_cpus_map=1 readonlyroot">
+			<block label="sda"/>
+			<block label="sdb"/>
+		</config>
+		<provides>
+			<service name="Nic"/>
+		</provides>
+		<route>
+			<service name="Input">       <child name="linux.2.fb"/>  </service>
+			<service name="Framebuffer"> <child name="linux.2.fb"/>  </service>
+			<service name="Nic">         <child name="l4linux.1"/>   </service> 
+			<service name="Terminal">    <child name="terminalmux"/> </service>
+			<service name="Block">
+				<if-arg key="label" value="sda"/> <child name="blockdev.2"/>
+			</service>
+			<service name="Block">
+				<if-arg key="label" value="sdb"/> <child name="part_blk"/>
+			</service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="l4linux.3">
+		<binary name="l4linux-ata"/>
+		<resource name="RAM" quantum="100M"/>
+		<config args="mem=64M console=tty1 console=ttyS0 l4x_rd=fedora-initrd.cpio.gz root=/dev/sda l4x_cpus=1 l4x_cpus_map=2 genode_net.if_nums=2 readonlyroot">
+			<block label="sda"/>
+			<block label="sdb"/>
+		</config>
+		<route>
+			<service name="Input">       <child name="linux.3.fb"/>  </service>
+			<service name="Framebuffer"> <child name="linux.3.fb"/>  </service>
+			<service name="Nic">
+				<if-arg key="label" value="eth0"/> <child name="nic_drv.2"/>
+			</service>
+			<service name="Nic">
+				<if-arg key="label" value="eth1"/> <child name="l4linux.2"/>
+			</service>
+			<service name="Terminal">    <child name="terminalmux"/> </service>
+			<service name="Block">
+				<if-arg key="label" value="sda"/> <child name="blockdev.3"/>
+			</service>
+			<service name="Block">
+				<if-arg key="label" value="sdb"/> <child name="part_blk"/>
+			</service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer
+	uart_drv
+	acpi_drv
+	atapi_drv
+	part_blk
+	rom_loopdev
+	nitpicker
+	nit_fb
+	terminalmux
+	l4linux-ata-srv
+	l4linux-ata
+	fedora-initrd.cpio.gz
+	fedora1.img
+	fedora2.img
+	fedora3.img
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+set initrd_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora-initrd.cpio.gz"
+set rootfs_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora18.img"
+set disk_image "bin/hda.img"
+
+if {![file exists bin/fedora-initrd.cpio.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/fedora-initrd.cpio.gz $initrd_uri
+}
+
+if {![file exists bin/fedora18.img]} {
+	puts "Download rootfs (use for login/password root/root) ..."
+	exec >& /dev/null wget -c -O bin/fedora18.img $rootfs_uri
+}
+
+# Example for 3 different rootfs
+if {![file exists bin/fedora1.img]} {
+	exec >& /dev/null cp bin/fedora18.img bin/fedora1.img
+}
+if {![file exists bin/fedora2.img]} {
+	exec >& /dev/null cp bin/fedora18.img bin/fedora2.img
+}
+if {![file exists bin/fedora3.img]} {
+	exec >& /dev/null cp bin/fedora18.img bin/fedora3.img
+}
+
+if { [file exists $disk_image] == 0 } then {
+	puts "creating disk image \"$disk_image\""
+	catch {
+		exec dd if=/dev/zero of=$disk_image bs=512 count=1M
+	}
+	puts "using sfdisk to partition disk image, requires root privileges"
+	catch { 
+		exec echo -e "0,22,83\n22,22,83\n44,21,83\n" | sudo sfdisk -f $disk_image
+	}
+	puts "creating ext4 fs"
+	catch { 
+		exec sudo kpartx -a $disk_image
+		exec sudo mkfs.ext4 /dev/mapper/loop0p1
+		exec sudo mkfs.ext4 /dev/mapper/loop0p2
+		exec sudo mkfs.ext4 /dev/mapper/loop0p3
+		exec sudo kpartx -d $disk_image
+	}
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 3072 "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -serial pty"
+append qemu_args " -smp 3,cores=3 "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap0,script=no,downscript=no "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap1,script=no,downscript=no "
+append qemu_args " -boot d -hda $disk_image  "
+
+#
+# Execute test case
+#
+run_genode_until forever

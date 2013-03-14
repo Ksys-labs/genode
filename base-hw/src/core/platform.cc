@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -141,6 +141,10 @@ Platform::Platform() :
 		printf("IO memory allocator\n");
 		printf("-------------------\n");
 		_io_mem_alloc.raw()->dump_addr_tree();
+		printf("\n");
+		printf("IRQ allocator\n");
+		printf("-------------------\n");
+		_irq_alloc.raw()->dump_addr_tree();
 		printf("\n");
 		printf("ROM filesystem\n");
 		printf("--------------\n");

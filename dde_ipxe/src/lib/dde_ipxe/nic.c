@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -27,6 +27,7 @@
 
 #include <dde_ipxe/nic.h>
 #include "local.h"
+#include "dde_support.h"
 
 /**
  * DDE iPXE mutual exclusion lock
@@ -74,7 +75,7 @@ static struct pci_driver *pci_drivers[] = {
 /**
  * Update BARs of PCI device
  */
-static void pci_read_bases(struct pci_device *pci_dev)
+static int pci_read_bases(struct pci_device *pci_dev)
 {
 	uint32_t bar;
 	int reg;
@@ -87,7 +88,7 @@ static void pci_read_bases(struct pci_device *pci_dev)
 
 				dde_kit_addr_t base = bar & PCI_BASE_ADDRESS_IO_MASK;
 				dde_kit_size_t size = pci_bar_size(pci_dev, reg);
-				dde_kit_request_io(base, size);
+				if (dde_kit_request_io(base, size) == -1) return -1;
 			}
 		} else {
 			if (!pci_dev->membase)
@@ -97,6 +98,7 @@ static void pci_read_bases(struct pci_device *pci_dev)
 				reg += 4;
 		}
 	}
+	return 0;
 }
 
 
@@ -161,6 +163,18 @@ static unsigned scan_pci(void)
 		dde_kit_pci_readb(bus, dev, fun, PCI_INTERRUPT_LINE, &irq);
 		LOG("Found: " FMT_BUSDEVFN " %04x:%04x (rev %02x) IRQ %02x",
 		            bus, dev, fun, vendor, device, rev, irq);
+		
+		if (nic_cfg.is_configured)
+		{
+			if (bus == nic_cfg.bus && dev == nic_cfg.dev && fun == nic_cfg.func)
+			{
+				LOG("Device select: " FMT_BUSDEVFN " %04x:%04x (rev %02x) IRQ %02x",
+		            bus, dev, fun, vendor, device, rev, irq);
+			} else {
+				LOG("Skip device");
+				continue;
+			}
+		}
 
 		struct pci_device *pci_dev = zalloc(sizeof(*pci_dev));
 		ASSERT(pci_dev != 0);
@@ -171,20 +185,21 @@ static unsigned scan_pci(void)
 		pci_dev->class    = class_code;
 		pci_dev->irq      = irq;
 
-		pci_read_bases(pci_dev);
+		if (pci_read_bases(pci_dev) == 0)
+		{
 
-		pci_dev->dev.desc.bus_type = BUS_TYPE_PCI;
-		pci_dev->dev.desc.location = pci_dev->busdevfn;
-		pci_dev->dev.desc.vendor   = pci_dev->vendor;
-		pci_dev->dev.desc.device   = pci_dev->device;
-		pci_dev->dev.desc.class    = pci_dev->class;
-		pci_dev->dev.desc.ioaddr   = pci_dev->ioaddr;
-		pci_dev->dev.desc.irq      = pci_dev->irq;
+			pci_dev->dev.desc.bus_type = BUS_TYPE_PCI;
+			pci_dev->dev.desc.location = pci_dev->busdevfn;
+			pci_dev->dev.desc.vendor   = pci_dev->vendor;
+			pci_dev->dev.desc.device   = pci_dev->device;
+			pci_dev->dev.desc.class    = pci_dev->class;
+			pci_dev->dev.desc.ioaddr   = pci_dev->ioaddr;
+			pci_dev->dev.desc.irq      = pci_dev->irq;
 
-		/* we found our device -> break loop */
-		if (!probe_pci_device(pci_dev))
-			return pci_dev->dev.desc.location;
-
+			/* we found our device -> break loop */
+			if (!probe_pci_device(pci_dev))
+				return pci_dev->dev.desc.location;
+		}
 		/* free device if no driver was found */
 		free(pci_dev);
 	}
@@ -192,17 +207,14 @@ static unsigned scan_pci(void)
 	return NO_DEVICE_FOUND;
 }
 
-
 /**
  * IRQ handler registered at DDE kit
  */
 static void irq_handler(void *p)
 {
 	ENTER;
-
 	netdev_poll(net_dev);
 	dde_kit_sem_up(bh_sema);
-
 	LEAVE;
 }
 
@@ -293,7 +305,12 @@ int dde_ipxe_nic_init(void)
 {
 	dde_kit_init();
 	dde_kit_timer_init(0, 0);
-	dde_kit_pci_init();
+	enum {
+		CLASS_MASK  = 0xff0000,
+		CLASS_NETWORK = PCI_BASE_CLASS_NETWORK << 16
+	};
+	dde_kit_pci_init(CLASS_NETWORK, CLASS_MASK);
+
 	dde_kit_lock_init(&ipxe_lock);
 
 	slab_init();
@@ -305,8 +322,18 @@ int dde_ipxe_nic_init(void)
 	if (location == NO_DEVICE_FOUND)
 		return 0;
 
-	/* find and open iPXE NIC device */
+	/* find iPXE NIC device */
 	net_dev = find_netdev_by_location(BUS_TYPE_PCI, location);
+
+	/* initialize memory backend allocator for nic driver */
+	if (!dde_mem_init(PCI_BUS(net_dev->dev->desc.location),
+	                  PCI_SLOT(net_dev->dev->desc.location),
+	                  PCI_FUNC(net_dev->dev->desc.location))) {
+		LOG("initialization of block memory failed!");
+		return 0;
+	}
+
+	/* open iPXE NIC device */
 	if (netdev_open(net_dev)) {
 		LOG("opening device " FMT_BUSDEVFN " failed",
 		    PCI_BUS(net_dev->dev->desc.location),
@@ -314,6 +341,11 @@ int dde_ipxe_nic_init(void)
 		    PCI_FUNC(net_dev->dev->desc.location));
 		return 0;
 	}
+	
+	LOG("opening device " FMT_BUSDEVFN,
+		    PCI_BUS(net_dev->dev->desc.location),
+		    PCI_SLOT(net_dev->dev->desc.location),
+		    PCI_FUNC(net_dev->dev->desc.location));
 
 	/* initialize IRQ handler and enable interrupt/bottom-half handling */
 	bh_sema = dde_kit_sem_init(0);

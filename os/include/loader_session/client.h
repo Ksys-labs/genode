@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -41,8 +41,12 @@ namespace Loader {
 		void view_ready_sigh(Signal_context_capability sigh) {
 			call<Rpc_view_ready_sigh>(sigh); }
 
-		void start(Name const &binary, Name const &label = "", Path const &root = "") {
-			call<Rpc_start>(binary, label, root); }
+		void fault_sigh(Signal_context_capability sigh) {
+			call<Rpc_fault_sigh>(sigh); }
+
+		void start(Name const &binary, Name const &label = "",
+		           Native_pd_args const &pd_args = Native_pd_args()) {
+			call<Rpc_start>(binary, label, pd_args); }
 
 		Nitpicker::View_capability view() {
 			return call<Rpc_view>(); }

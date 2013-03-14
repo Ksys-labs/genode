@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -52,7 +52,7 @@ namespace Genode {
 			void _out_char(char c)
 			{
 				/* ensure to leave space for null-termination */
-				if (_w_offset > _dst_len - 2)
+				if (_w_offset + 2 > _dst_len)
 					return;
 
 				_dst[_w_offset++] = c;

@@ -31,7 +31,7 @@ TARGET ?= $(lastword $(subst /, ,$(PRG_DIR)))
 
 NOUX_PKG ?= $(TARGET)
 
-LIBS  += cxx env libc libm libc_noux
+LIBS  += libc libm libc_noux
 
 NOUX_PKG_DIR ?= $(wildcard $(REP_DIR)/contrib/$(NOUX_PKG)-*)
 
@@ -174,9 +174,11 @@ noux_built.tag: noux_env.sh Makefile
 	$(VERBOSE)source noux_env.sh && $(MAKE) $(NOUX_MAKE_ENV) $(NOUX_MAKE_VERBOSE) MAN= $(NOUX_BUILD_OUTPUT_FILTER)
 	@touch $@
 
+NOUX_INSTALL_TARGET ?= install-strip
+
 noux_installed.tag: noux_built.tag
 	@$(MSG_INST)$(TARGET)
-	$(VERBOSE)$(MAKE) $(NOUX_MAKE_VERBOSE) install DESTDIR=$(PWD)/install MAN= >> stdout.log 2>> stderr.log
+	$(VERBOSE)source noux_env.sh && $(MAKE) $(NOUX_MAKE_ENV) $(NOUX_MAKE_VERBOSE) $(NOUX_INSTALL_TARGET) DESTDIR=$(PWD)/install MAN= >> stdout.log 2>> stderr.log
 	$(VERBOSE)rm -f $(INSTALL_DIR)/$(TARGET)
 	$(VERBOSE)ln -sf $(PWD)/install $(INSTALL_DIR)/$(TARGET)
 	@touch $@

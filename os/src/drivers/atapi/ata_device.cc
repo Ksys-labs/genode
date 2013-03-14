@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -77,6 +77,14 @@ void Ata::Device::probe_dma()
 	               0L,
 	               buffer,
 	               1L, 0 )) {
+		
+		
+		unsigned command_set = buffer[164] + (buffer[165] << 8) + (buffer[166] << 16) + (buffer[167] << 24);
+		_lba48 = false;
+		if  (command_set & (1 << 26) )
+			_lba48 = true;
+		Genode::printf( "LBA%d\n", _lba48 ? 48 : 28 );
+
 
 		Genode::printf("UDMA Modes supported:\n");
 
@@ -106,12 +114,22 @@ void Ata::Device::read_capacity()
 
 	enum { CMD_NATIVE_MAX_ADDRESS = 0xf8 };
 
-	if (!reg_non_data_lba28(dev_num(), CMD_NATIVE_MAX_ADDRESS, 0, 1, 0UL)) {
+	if (_lba48) {
+		if (!reg_non_data_lba48(dev_num(), CMD_NATIVE_MAX_ADDRESS, 0, 1, 0UL, 0UL)) {
 
-		_block_end  =  _pio->inb(CB_SN);              /* 0 - 7 */
-		_block_end |=  _pio->inb(CB_CL) << 8;         /* 8 - 15 */
-		_block_end |=  _pio->inb(CB_CH) << 16;        /* 16 - 23 */
-		_block_end |= (_pio->inb(CB_DH) & 0xf) << 24; /* 24 - 27 */
+			_block_end  =  _pio->inb(CB_SN);              /* 0 - 7 */
+			_block_end |=  _pio->inb(CB_CL) << 8;         /* 8 - 15 */
+			_block_end |=  _pio->inb(CB_CH) << 16;        /* 16 - 23 */
+			_block_end |=  _pio->inb(CB_DH) << 24;        /* 24 - 31 */
+		}
+	} else {
+		if (!reg_non_data_lba28(dev_num(), CMD_NATIVE_MAX_ADDRESS, 0, 1, 0UL)) {
+
+			_block_end  =  _pio->inb(CB_SN);              /* 0 - 7 */
+			_block_end |=  _pio->inb(CB_CL) << 8;         /* 8 - 15 */
+			_block_end |=  _pio->inb(CB_CH) << 16;        /* 16 - 23 */
+			_block_end |= (_pio->inb(CB_DH) & 0xf) << 24; /* 24 - 27 */
+		}
 	}
 
 	if (verbose)
@@ -123,40 +141,89 @@ void Ata::Device::read_capacity()
 void Ata::Device::read(unsigned long block_nr,
                        unsigned long count, off_t offset) {
 
-	if (dma_enabled()) {
+	while (count > 0) {
+		unsigned long c = count > 255 ? 255 : count;
 
-		if (verbose)
-			PDBG("DMA read: block %lu, count %lu, offset: %08lx, base: %08lx",
-			      block_nr, count, offset, _base_addr);
+		if (dma_enabled()) {
 
-		if (dma_pci_lba28(dev_num(), CMD_READ_DMA, 0, count, block_nr,
-		                 (unsigned char *)(_base_addr + offset), count))
-			throw Io_error();
+			if (verbose)
+				PDBG("DMA read: block %lu, c %lu, offset: %08lx, base: %08lx",
+					 block_nr, c, offset, _base_addr);
+
+			if (!_lba48)
+			{
+				if (dma_pci_lba28(dev_num(), CMD_READ_DMA, 0, c, block_nr,
+								(unsigned char *)(_base_addr + offset), c))
+					throw Io_error();
+			} else {
+				if (dma_pci_lba48(dev_num(), CMD_READ_DMA_EXT, 0, c, 0, block_nr,
+								(unsigned char *)(_base_addr + offset), c))
+					throw Io_error();
+
+			}
+		}
+		else {
+			if (!_lba48)
+			{
+				if (reg_pio_data_in_lba28(dev_num(), CMD_READ_SECTORS, 0, c, block_nr,
+										(unsigned char *)(_base_addr + offset), c, 0))
+					throw Io_error();
+			} else {
+				if (reg_pio_data_in_lba48(dev_num(), CMD_READ_SECTORS_EXT, 0, c, 0, block_nr,
+										(unsigned char *)(_base_addr + offset), c, 0))
+					throw Io_error();
+			}
+		}
+
+		count    -= c;
+		block_nr += c;
+		offset   += c * block_size();
 	}
-	else
-		if (reg_pio_data_in_lba28(dev_num(), CMD_READ_SECTORS, 0, count, block_nr,
-		                          (unsigned char *)(_base_addr + offset), count, 0))
-			throw Io_error();
 }
 
 
 void Ata::Device::write(unsigned long block_nr,
                         unsigned long count, off_t offset) {
 
-	if (dma_enabled()) {
+	while (count > 0) {
+		unsigned long c = count > 255 ? 255 : count;
 
-		if (verbose)
-			PDBG("DMA read: block %lu, count %lu, offset: %08lx, base: %08lx",
-			      block_nr, count, offset, _base_addr);
+		if (dma_enabled()) {
 
-		if (dma_pci_lba28(dev_num(), CMD_WRITE_DMA, 0, count, block_nr,
-		                 (unsigned char *)(_base_addr + offset), count))
-			throw Io_error();
+			if (verbose)
+				PDBG("DMA read: block %lu, c %lu, offset: %08lx, base: %08lx",
+					 block_nr, c, offset, _base_addr);
+
+			if (!_lba48)
+			{
+				if (dma_pci_lba28(dev_num(), CMD_WRITE_DMA, 0, c, block_nr,
+								(unsigned char *)(_base_addr + offset), c))
+					throw Io_error();
+			}
+			else {
+				if (dma_pci_lba48(dev_num(), CMD_WRITE_DMA_EXT, 0, c, 0, block_nr,
+							(unsigned char *)(_base_addr + offset), c))
+				throw Io_error();
+
+			}
+		}
+		else {
+			if (!_lba48)
+			{
+				if (reg_pio_data_out_lba28(dev_num(), CMD_WRITE_SECTORS, 0, c, block_nr,
+										(unsigned char *)(_base_addr + offset), c, 0))
+					throw Io_error();
+			} else {
+				if (reg_pio_data_out_lba48(dev_num(), CMD_WRITE_SECTORS_EXT, 0, c, 0, block_nr,
+										(unsigned char *)(_base_addr + offset), c, 0))
+					throw Io_error();
+			}
+		}
+
+		count    -= c;
+		block_nr += c;
+		offset   += c * block_size();
 	}
-	else
-		if (reg_pio_data_out_lba28(dev_num(), CMD_WRITE_SECTORS, 0, count, block_nr,
-		                           (unsigned char *)(_base_addr + offset), count, 0))
-			throw Io_error();
 }
 
 

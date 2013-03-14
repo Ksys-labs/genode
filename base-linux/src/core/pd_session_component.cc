@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -195,11 +195,25 @@ static bool setup_chroot_environment(char const *chroot_path)
  */
 struct Execve_args
 {
-	char  const *filename;
-	char  const *root;
-	char *const *argv;
-	char *const *envp;
-	int          parent_sd;
+	char         const *filename;
+	char         const *root;
+	char       * const *argv;
+	char       * const *envp;
+	unsigned int const  uid;
+	unsigned int const  gid;
+	int          const parent_sd;
+
+	Execve_args(char   const *filename,
+	            char   const *root,
+	            char * const *argv,
+	            char * const *envp,
+	            unsigned int  uid,
+	            unsigned int  gid,
+	            int           parent_sd)
+	:
+		filename(filename), root(root), argv(argv), envp(envp),
+		uid(uid), gid(gid), parent_sd(parent_sd)
+	{ }
 };
 
 
@@ -212,11 +226,17 @@ static int _exec_child(Execve_args *arg)
 
 	/* change to chroot environment */
 	if (arg->root && arg->root[0]) {
+		char cwd[1024];
 
 		PDBG("arg->root='%s'", arg->root);
 
 		if (setup_chroot_environment(arg->root) == false) {
 			PERR("Could not setup chroot environment");
+			return -1;
+		}
+
+		if (!lx_getcwd(cwd, sizeof(cwd))) {
+			PERR("Failed to getcwd");
 			return -1;
 		}
 
@@ -228,6 +248,31 @@ static int _exec_child(Execve_args *arg)
 			PERR("Syscall chroot failed (errno %d)", ret);
 			return -1;
 		}
+
+		ret = lx_chdir(cwd);
+		if (ret < 0) {
+			PERR("chdir to new chroot failed");
+			return -1;
+		}
+	}
+
+	/*
+	 * Set UID and GID
+	 *
+	 * We must set the GID prior setting the UID because setting the GID won't
+	 * be possible anymore once we set the UID to non-root.
+	 */
+	if (arg->gid) {
+		int const ret = lx_setgid(arg->gid);
+		if (ret)
+			PWRN("Could not set PID %d (%s) to GID %u (error %d)",
+			     lx_getpid(), arg->filename, arg->gid, ret);
+	}
+	if (arg->uid) {
+		int const ret = lx_setuid(arg->uid);
+		if (ret)
+			PWRN("Could not set PID %d (%s) to UID %u (error %d)",
+			     lx_getpid(), arg->filename, arg->uid, ret);
 	}
 
 	return lx_execve(arg->filename, arg->argv, arg->envp);
@@ -262,11 +307,41 @@ static const char *get_env(const char *key)
 
 Pd_session_component::Pd_session_component(Rpc_entrypoint *ep, const char *args)
 :
-	_pid(0), _ds_ep(ep)
+	_pid(0), _uid(0), _gid(0), _ds_ep(ep)
 {
 	Arg_string::find_arg(args, "label").string(_label, sizeof(_label),
 	                                           "<unlabeled>");
+
+	/*
+	 * Read Linux-specific session arguments
+	 */
 	Arg_string::find_arg(args, "root").string(_root, sizeof(_root), "");
+
+	_uid = Arg_string::find_arg(args, "uid").ulong_value(0);
+	_gid = Arg_string::find_arg(args, "gid").ulong_value(0);
+
+	bool const is_chroot = (Genode::strcmp(_root, "") != 0);
+
+	/*
+	 * If a UID is specified but no GID, we use the UID as GID. This way, a
+	 * configuration error where the UID is defined but the GID is left
+	 * undefined won't result in the execution of the new process with the
+	 * root user's GID.
+	 */
+	if (_gid == 0)
+		_gid = _uid;
+
+	/*
+	 * Print Linux-specific session arguments if specified
+	 *
+	 * This output used for the automated 'lx_pd_args' test.
+	 */
+	if (is_chroot || _uid || _gid)
+		printf("PD session for '%s'\n", _label);
+
+	if (is_chroot) printf("  root: %s\n", _root);
+	if (_uid)      printf("  uid:  %u\n", _uid);
+	if (_gid)      printf("  gid:  %u\n", _gid);
 }
 
 
@@ -290,8 +365,7 @@ int Pd_session_component::assign_parent(Parent_capability parent)
 void Pd_session_component::start(Capability<Dataspace> binary)
 {
 	/* lookup binary dataspace */
-	Dataspace_component *ds =
-		reinterpret_cast<Dataspace_component *>(_ds_ep->obj_by_cap(binary));
+	Object_pool<Dataspace_component>::Guard ds(_ds_ep->lookup_and_lock(binary));
 
 	if (!ds) {
 		PERR("could not lookup binary, aborted PD startup");
@@ -342,7 +416,8 @@ void Pd_session_component::start(Capability<Dataspace> binary)
 	 * Argument frame as passed to 'clone'. Because, we can only pass a single
 	 * pointer, all arguments are embedded within the 'execve_args' struct.
 	 */
-	Execve_args arg = { filename.buf, _root, argv_buf, env, _parent.dst().socket };
+	Execve_args arg(filename.buf, _root, argv_buf, env, _uid, _gid,
+	                _parent.dst().socket);
 
 	_pid = lx_create_process((int (*)(void *))_exec_child,
 	                         stack + STACK_SIZE - sizeof(umword_t), &arg);

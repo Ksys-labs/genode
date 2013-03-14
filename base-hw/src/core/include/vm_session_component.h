@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -31,7 +31,7 @@ namespace Genode {
 
 			Rpc_entrypoint          *_ds_ep;
 			Range_allocator         *_ram_alloc;
-			unsigned long            _vm_id;
+			unsigned                 _vm_id;
 			void                    *_vm;
 			addr_t                   _ds_addr;
 			Dataspace_component      _ds;
@@ -45,8 +45,8 @@ namespace Genode {
 			{
 				addr_t addr;
 				if (_ds_size() > *ram_quota ||
-					!_ram_alloc->alloc_aligned(_ds_size(), (void**)&addr,
-					                           get_page_size_log2()))
+					_ram_alloc->alloc_aligned(_ds_size(), (void**)&addr,
+					                          get_page_size_log2()).is_error())
 					throw Root::Quota_exceeded();
 				*ram_quota -= _ds_size();
 				return addr;

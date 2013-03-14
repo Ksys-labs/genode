@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -131,17 +131,6 @@ namespace Genode {
 	struct Thread_meta_data
 	{
 		/**
-		 * Used to block the constructor until the new thread has initialized
-		 * 'id'
-		 */
-		Lock construct_lock;
-
-		/**
-		 * Used to block the new thread until 'start' is called
-		 */
-		Lock start_lock;
-
-		/**
 		 * Filled out by 'thread_start' function in the context of the new
 		 * thread
 		 */
@@ -155,13 +144,131 @@ namespace Genode {
 		/**
 		 * Constructor
 		 *
-		 * \param thread_base  associated 'Thread_base' object
+		 * \param thread  associated 'Thread_base' object
 		 */
-		Thread_meta_data(Thread_base *thread_base)
-		:
-			construct_lock(Lock::LOCKED), start_lock(Lock::LOCKED),
-			thread_base(thread_base)
-		{ }
+		Thread_meta_data(Thread_base *thread) : thread_base(thread) { }
+
+		/**
+		 * Used to block the constructor until the new thread has initialized
+		 * 'id'
+		 */
+		virtual void wait_for_construction() = 0;
+		virtual void constructed() = 0;
+
+		/**
+		 * Used to block the new thread until 'start' is called
+		 */
+		virtual void wait_for_start() = 0;
+		virtual void started() = 0;
+
+		/**
+		 * Used to block the 'join()' function until the 'entry()' is done
+		 */
+		virtual void wait_for_join() = 0;
+		virtual void joined() = 0;
+	};
+
+	/*
+	 *  Thread meta data for a thread created by Genode
+	 */
+	class Thread_meta_data_created : public Thread_meta_data
+	{
+		private:
+
+			/**
+			 * Lock with the initial state set to LOCKED
+			 */
+			struct Barrier : Lock { Barrier() : Lock(Lock::LOCKED) { } };
+
+			/**
+			 * Used to block the constructor until the new thread has initialized
+			 * 'id'
+			 */
+			Barrier _construct_lock;
+
+			/**
+			 * Used to block the new thread until 'start' is called
+			 */
+			Barrier _start_lock;
+
+			/**
+			 * Used to block the 'join()' function until the 'entry()' is done
+			 */
+			Barrier _join_lock;
+
+		public:
+
+			Thread_meta_data_created(Thread_base *thread) : Thread_meta_data(thread) { }
+
+			void wait_for_construction()
+			{
+				_construct_lock.lock();
+			}
+
+			void constructed()
+			{
+				_construct_lock.unlock();
+			}
+
+			void wait_for_start()
+			{
+				_start_lock.lock();
+			}
+
+			void started()
+			{
+				_start_lock.unlock();
+			}
+
+			void wait_for_join()
+			{
+				_join_lock.lock();
+			}
+
+			void joined()
+			{
+				_join_lock.unlock();
+			}
+	};
+
+	/*
+	 *  Thread meta data for an adopted thread
+	 */
+	class Thread_meta_data_adopted : public Thread_meta_data
+	{
+		public:
+
+			Thread_meta_data_adopted(Thread_base *thread) : Thread_meta_data(thread) { }
+
+			void wait_for_construction()
+			{
+				PERR("wait_for_construction() called for an adopted thread");
+			}
+
+			void constructed()
+			{
+				PERR("constructed() called for an adopted thread");
+			}
+
+			void wait_for_start()
+			{
+				PERR("wait_for_start() called for an adopted thread");
+			}
+
+			void started()
+			{
+				PERR("started() called for an adopted thread");
+			}
+
+			void wait_for_join()
+			{
+				PERR("wait_for_join() called for an adopted thread");
+			}
+
+			void joined()
+			{
+				PERR("joined() called for an adopted thread");
+			}
 	};
 }
 
@@ -218,12 +325,14 @@ static void *thread_start(void *arg)
 	adopt_thread(meta_data);
 
 	/* unblock 'Thread_base' constructor */
-	meta_data->construct_lock.unlock();
+	meta_data->constructed();
 
 	/* block until the 'Thread_base::start' gets called */
-	meta_data->start_lock.lock();
+	meta_data->wait_for_start();
 
 	Thread_base::myself()->entry();
+
+	meta_data->joined();
 	return 0;
 }
 
@@ -263,7 +372,7 @@ Thread_base *Thread_base::myself()
 	 */
 	Thread_base *thread = (Thread_base *)malloc(sizeof(Thread_base));
 	memset(thread, 0, sizeof(*thread));
-	Thread_meta_data *meta_data = new Thread_meta_data(thread);
+	Thread_meta_data *meta_data = new Thread_meta_data_adopted(thread);
 
 	/*
 	 * Initialize 'Thread_base::_tid' using the default constructor of
@@ -282,14 +391,21 @@ void Thread_base::start()
 	/*
 	 * Unblock thread that is supposed to slumber in 'thread_start'.
 	 */
-	_tid.meta_data->start_lock.unlock();
+	_tid.meta_data->started();
+}
+
+
+void Thread_base::join()
+{
+	_tid.meta_data->wait_for_join();
 }
 
 
 Thread_base::Thread_base(const char *name, size_t stack_size)
-: _list_element(this)
+:
+	_list_element(this)
 {
-	_tid.meta_data = new (env()->heap()) Thread_meta_data(this);
+	_tid.meta_data = new (env()->heap()) Thread_meta_data_created(this);
 
 	int const ret = pthread_create(&_tid.meta_data->pt, 0, thread_start,
 	                              _tid.meta_data);
@@ -300,7 +416,7 @@ Thread_base::Thread_base(const char *name, size_t stack_size)
 		throw Context_alloc_failed();
 	}
 
-	_tid.meta_data->construct_lock.lock();
+	_tid.meta_data->wait_for_construction();
 
 	Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
 
@@ -325,13 +441,9 @@ void Thread_base::cancel_blocking()
 
 Thread_base::~Thread_base()
 {
-	{
-		int const ret = pthread_cancel(_tid.meta_data->pt);
-		if (ret)
-			PWRN("pthread_cancel unexpectedly returned with %d", ret);
-	}
+	bool const needs_join = (pthread_cancel(_tid.meta_data->pt) == 0);
 
-	{
+	if (needs_join) {
 		int const ret = pthread_join(_tid.meta_data->pt, 0);
 		if (ret)
 			PWRN("pthread_join unexpectedly returned with %d (errno=%d)",

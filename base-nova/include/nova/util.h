@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012-2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -27,6 +27,7 @@ inline void nova_die(const char * text = 0)
 	while (1)
 		asm volatile ("ud2a" : : "a"(text));
 }
+
 
 inline void request_event_portal(Genode::Native_capability cap,
                                  Genode::addr_t exc_base, Genode::addr_t event)
@@ -50,6 +51,5 @@ inline void request_event_portal(Genode::Native_capability cap,
 	/* restore original receive window */
 	utcb->crd_rcv = orig_crd;
 }
-
 
 #endif /* _NOVA__INCLUDE__UTIL_H_ */

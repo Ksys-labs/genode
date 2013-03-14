@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,8 +22,6 @@ namespace Pistachio {
 }
 
 namespace Genode {
-
-	typedef volatile int Native_lock;
 
 	class Platform_thread;
 
@@ -89,6 +87,8 @@ namespace Genode {
 		 */
 		static addr_t context_virtual_size() { return 0x00100000UL; }
 	};
+
+	struct Native_pd_args { };
 }
 
 #endif /* _INCLUDE__BASE__NATIVE_TYPES_H_ */

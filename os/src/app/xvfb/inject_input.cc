@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -74,21 +74,21 @@ void inject_input_event(Display *dpy, Input::Event &ev)
 		break;
 
 	case Input::Event::PRESS:
-		if (ev.keycode() == Input::BTN_LEFT)
+		if (ev.code() == Input::BTN_LEFT)
 			XTestFakeButtonEvent(dpy, 1, 1, CurrentTime);
-		if (ev.keycode() == Input::BTN_RIGHT)
+		if (ev.code() == Input::BTN_RIGHT)
 			XTestFakeButtonEvent(dpy, 2, 1, CurrentTime);
 		else
-			XTestFakeKeyEvent(dpy, convert_keycode(ev.keycode()), 1, CurrentTime);
+			XTestFakeKeyEvent(dpy, convert_keycode(ev.code()), 1, CurrentTime);
 		break;
 
 	case Input::Event::RELEASE:
-		if (ev.keycode() == Input::BTN_LEFT)
+		if (ev.code() == Input::BTN_LEFT)
 			XTestFakeButtonEvent(dpy, 1, 0, CurrentTime);
-		if (ev.keycode() == Input::BTN_RIGHT)
+		if (ev.code() == Input::BTN_RIGHT)
 			XTestFakeButtonEvent(dpy, 2, 0, CurrentTime);
 		else
-			XTestFakeKeyEvent(dpy, convert_keycode(ev.keycode()), 0, CurrentTime);
+			XTestFakeKeyEvent(dpy, convert_keycode(ev.code()), 0, CurrentTime);
 		break;
 
 	default: break;

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -77,8 +77,7 @@ L4_ThreadId_t Oklx_thread_list::add()
 		           (addr_t)thd->stack_addr());
 
 		/* Get the OKL4 thread id of the new thread */
-		Thread_state state;
-		_cpu.state(cap,&state);
+		Thread_state state = _cpu.state(cap);
 		thd->set_tid(state.tid);
 
 		/* Acknowledge startup and return */
@@ -127,7 +126,7 @@ Oklx_process::add_thread()
 		 * but will create the OKL4 thread inactive
 		 */
 		_cpu.start(th->cap(), 0xffffffff, 0xffffffff);
-		_cpu.state(th->cap(), &dst_state);
+		dst_state = _cpu.state(th->cap());
 		th->_tid = dst_state.tid;
 		_threads.insert(th);
 		return th->_tid;

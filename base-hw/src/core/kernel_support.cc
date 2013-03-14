@@ -5,19 +5,16 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-#include <kernel_support.h>
+/* core includes */
+#include <cpu.h>
 
+using namespace Genode;
 
-Cpu::User_context::User_context()
-{
-	/* Execute in usermode with IRQ's enabled and FIQ's and
-	 * asynchronous aborts disabled */
-	cpsr = Cpsr::M::bits(Cpsr::M::USER) | Cpsr::F::bits(1) |
-		Cpsr::I::bits(0) | Cpsr::A::bits(1);
-}
+Cpu::User_context::User_context() { cpsr = Psr::init_user(); }
+

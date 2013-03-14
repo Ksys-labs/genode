@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -72,11 +72,6 @@ inline int lx_execve(const char *filename, char *const argv[],
 }
 
 
-/**
- * Send signal to process
- *
- * This function is used by core to kill processes.
- */
 inline int lx_kill(int pid, int signal)
 {
 	return lx_syscall(SYS_kill, pid, signal);
@@ -85,8 +80,39 @@ inline int lx_kill(int pid, int signal)
 
 inline int lx_create_process(int (*entry)(void *), void *stack, void *arg)
 {
-	int flags = CLONE_VFORK | SIGCHLD;
+	/*
+	 * The low byte of the flags denotes the signal to be sent to the parent
+	 * when the process terminates. We want core to receive SIGCHLD signals on
+	 * this condition.
+	 */
+	int const flags = CLONE_VFORK | LX_SIGCHLD;
 	return lx_clone((int (*)(void *))entry, stack, flags, arg);
+}
+
+
+inline int lx_setuid(unsigned int uid)
+{
+	return lx_syscall(SYS_setuid, uid);
+}
+
+
+inline int lx_setgid(unsigned int gid)
+{
+	return lx_syscall(SYS_setgid, gid);
+}
+
+
+/**
+ * Query PID of any terminated child
+ *
+ * This function is called be core after having received a SIGCHLD signal to
+ * determine the PID of a terminated Genode process.
+ *
+ * \return  PID of terminated process or -1 if no process was terminated
+ */
+inline int lx_pollpid()
+{
+	return lx_syscall(SYS_wait4, -1 /* any PID */, (int *)0, 1 /* WNOHANG */, 0);
 }
 
 
@@ -94,9 +120,15 @@ inline int lx_create_process(int (*entry)(void *), void *stack, void *arg)
  ** Chroot handling **
  *********************/
 
-inline int lx_chroot(const char *path)
+inline int lx_chroot(char const *path)
 {
 	return lx_syscall(SYS_chroot, path);
+}
+
+
+inline int lx_chdir(char const *path)
+{
+	return lx_syscall(SYS_chdir, path);
 }
 
 
@@ -169,6 +201,22 @@ inline int lx_connect(int sockfd, const struct sockaddr *serv_addr,
 }
 
 #endif /* SYS_socketcall */
+
+
+/******************************
+ ** Linux signal dispatching **
+ ******************************/
+
+inline int lx_pipe(int pipefd[2])
+{
+	return lx_syscall(SYS_pipe, pipefd);
+}
+
+
+inline int lx_read(int fd, void *buf, Genode::size_t count)
+{
+	return lx_syscall(SYS_read, fd, buf, count);
+}
 
 
 #endif /* _CORE__INCLUDE__CORE_LINUX_SYSCALLS_H_ */

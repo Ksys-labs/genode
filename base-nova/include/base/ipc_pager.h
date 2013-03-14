@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -43,7 +43,8 @@ namespace Genode {
 			 * Constructor
 			 */
 			Mapping(addr_t dst_addr, addr_t map_addr,
-			        bool write_combined, unsigned size_log2 = PAGE_SIZE_LOG2,
+			        bool write_combined, bool io_mem,
+			        unsigned size_log2 = PAGE_SIZE_LOG2,
 			        bool rw = true)
 			:
 				_dst_addr(dst_addr), _core_local_addr(map_addr),
@@ -64,6 +65,8 @@ namespace Genode {
 				                     _size_log2 - PAGE_SIZE_LOG2,
 				                     Nova::Rights(true, _rw, true));
 			}
+
+			bool  write_combined() { return _write_combined; };
 
 			addr_t dst_addr() { return _dst_addr; }
 	};

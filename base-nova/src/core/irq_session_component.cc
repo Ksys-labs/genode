@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -75,10 +75,26 @@ class Irq_thread : public Thread_base
 				throw Cpu_session::Thread_creation_failed();
 			}
 
-			/* map startup portal from main thread */
-			map_local((Utcb *)Thread_base::myself()->utcb(),
-			          Obj_crd(PT_SEL_STARTUP, 0),
-			          Obj_crd(_tid.exc_pt_sel + PT_SEL_STARTUP, 0));
+			/* remap startup portal from main thread */
+			if (map_local((Utcb *)Thread_base::myself()->utcb(),
+			              Obj_crd(PT_SEL_STARTUP, 0),
+			              Obj_crd(_tid.exc_pt_sel + PT_SEL_STARTUP, 0))) {
+				PERR("could not create startup portal");
+				throw Cpu_session::Thread_creation_failed();
+			}
+
+			/* remap debugging page fault portal for core threads */
+			if (map_local((Utcb *)Thread_base::myself()->utcb(),
+			              Obj_crd(PT_SEL_PAGE_FAULT, 0),
+			              Obj_crd(_tid.exc_pt_sel + PT_SEL_PAGE_FAULT, 0))) {
+				PERR("could not create page fault portal");
+				throw Cpu_session::Thread_creation_failed();
+			}
+
+			/* default: we don't accept any mappings or translations */
+			Utcb * utcb_obj = reinterpret_cast<Utcb *>(Thread_base::utcb());
+			utcb_obj->crd_rcv = Obj_crd();
+			utcb_obj->crd_xlt = Obj_crd();
 
 			/* create SC */
 			unsigned sc_sel = cap_selector_allocator()->alloc();
@@ -98,7 +114,8 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 {
 	private:
 
-		long _irq_sel; /* IRQ cap selector */
+		Genode::addr_t _irq_sel; /* IRQ cap selector */
+		Genode::addr_t _dev_mem; /* used when MSI or HPET is used */
 
 	protected:
 
@@ -106,11 +123,11 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 		{
 			/* alloc slector where IRQ will be mapped */
 			_irq_sel = cap_selector_allocator()->alloc();
-		
+
 			/* since we run in APIC mode translate IRQ 0 (PIT) to 2 */
 			if (!_irq_number)
 				_irq_number = 2;
-	
+
 			/* map IRQ number to selector */
 			int ret = map_local((Nova::Utcb *)Thread_base::myself()->utcb(),
 			                    Nova::Obj_crd(platform_specific()->gsi_base_sel() + _irq_number, 0),
@@ -120,12 +137,19 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 				PERR("Could not map IRQ %ld", _irq_number);
 				return false;
 			}
-		
+
 			/* assign IRQ to CPU */
 			enum { CPU = 0 };
-			Nova::assign_gsi(_irq_sel, 0, CPU);
+			addr_t msi_addr = 0;
+			addr_t msi_data = 0;
+			uint8_t res = Nova::assign_gsi(_irq_sel, _dev_mem, CPU, msi_addr, msi_data);
 
-			return true;
+			if (res != Nova::NOVA_OK)
+				PERR("Error: assign_pci failed -irq:dev:msi_addr:msi_data "
+				     "%lx:%lx:%lx:%lx", _irq_number, _dev_mem, msi_addr,
+				     msi_data);
+
+			return res == Nova::NOVA_OK;
 		}
 
 		void _wait_for_irq()
@@ -138,7 +162,9 @@ class Genode::Irq_proxy_component : public Irq_proxy<Irq_thread>
 
 	public:
 
-		Irq_proxy_component(long irq_number) : Irq_proxy(irq_number)
+		Irq_proxy_component(long irq_number)
+		:
+			Irq_proxy(irq_number), _dev_mem(0)
 		{
 			_start();
 		}

@@ -136,15 +136,15 @@ private:
 			PDBG("Init touchscreen\n");
 
 		// Configure GPIO
-		_gpio.set_direction_input(CHIPSEE_TS_GPIO);
+		_gpio.direction_input(CHIPSEE_TS_GPIO);
 
-		_gpio.set_debouncing_time(CHIPSEE_TS_GPIO, 31*100);
-		_gpio.set_debounce_enable(CHIPSEE_TS_GPIO, 1);
+		_gpio.debouncing_time(CHIPSEE_TS_GPIO, 31*100);
+		_gpio.debounce_enable(CHIPSEE_TS_GPIO, 1);
 
-		_gpio.set_falling_detect(CHIPSEE_TS_GPIO, 1);
-		_gpio.set_irq_enable(CHIPSEE_TS_GPIO, 1);
+		_gpio.falling_detect(CHIPSEE_TS_GPIO, 1);
+		_gpio.irq_enable(CHIPSEE_TS_GPIO, 1);
 
-		_gpio.register_signal(_sig_rec.manage(&_sig_ctx), CHIPSEE_TS_GPIO);
+		_gpio.irq_sigh(_sig_rec.manage(&_sig_ctx), CHIPSEE_TS_GPIO);
 
 		// Configure SPI
 		_spi.set_module_ctrl(0, SINGLE);
@@ -291,9 +291,9 @@ public:
 
 	void handle_event()
 	{
-		_gpio.set_irq_enable(CHIPSEE_TS_GPIO, 0);
+		_gpio.irq_enable(CHIPSEE_TS_GPIO, 0);
 
-		if ( !_gpio.get_datain(CHIPSEE_TS_GPIO) )
+		if ( !_gpio.datain(CHIPSEE_TS_GPIO) )
 		{
 			if (verbose)
 				Genode::printf("handle_event\n");
@@ -312,7 +312,7 @@ public:
 					//PDBG("check pin");
 					_tsc2046_wr( ADS_START );
 					_timer.msleep(5);
-					if( _gpio.get_datain(CHIPSEE_TS_GPIO) )
+					if( _gpio.datain(CHIPSEE_TS_GPIO) )
 					{
 						//PDBG("break");
 						break;
@@ -329,7 +329,7 @@ public:
 			}
 		}
 
-		_gpio.set_irq_enable(CHIPSEE_TS_GPIO, 1);
+		_gpio.irq_enable(CHIPSEE_TS_GPIO, 1);
 	}
 };
 

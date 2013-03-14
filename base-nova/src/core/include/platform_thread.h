@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -22,6 +22,9 @@
 #include <base/thread.h>
 #include <base/pager.h>
 
+/* core includes */
+#include <address_space.h>
+
 namespace Genode {
 
 	class Platform_pd;
@@ -36,6 +39,7 @@ namespace Genode {
 			unsigned      _cpu_no;
 			bool          _is_main_thread;
 			bool          _is_vcpu;
+			char          _name[Thread_base::Context::NAME_LEN];
 
 			addr_t _sel_ec()       { return _id_base; }
 			addr_t _sel_sc()       { return _id_base + 1; }
@@ -84,14 +88,23 @@ namespace Genode {
 			void cancel_blocking();
 
 			/**
-			 * Request thread state
+			 * Override thread state with 's'
 			 *
-			 * \param  state_dst  destination state buffer
-			 *
-			 * \retval  0 successful
-			 * \retval -1 thread state not accessible
+			 * \throw Cpu_session::State_access_failed
 			 */
-			int state(Genode::Thread_state *state_dst);
+			void state(Thread_state s);
+
+			/**
+			 * Read thread state
+			 *
+			 * \throw Cpu_session::State_access_failed
+			 */
+			Thread_state state();
+
+			/**
+			 * Return the address space to which the thread is bound
+			 */
+			Weak_ptr<Address_space> address_space();
 
 
 			/************************

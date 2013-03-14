@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -24,20 +24,24 @@ using namespace Genode;
 static void empty_signal_handler(int) { }
 
 
-static void thread_start(void *)
+void Thread_base::_thread_start()
 {
 	/*
-	 * Set signal handler such that canceled system calls get not
-	 * transparently retried after a signal gets received.
+	 * Set signal handler such that canceled system calls get not transparently
+	 * retried after a signal gets received.
 	 */
 	lx_sigaction(LX_SIGUSR1, empty_signal_handler);
 
 	/*
-	 * Prevent children from becoming zombies. (SIG_IGN = 1)
+	 * Deliver SIGCHLD signals to no thread other than the main thread. Core's
+	 * main thread will handle the signals while executing the 'wait_for_exit'
+	 * function, which is known to not hold any locks that would interfere with
+	 * the handling of the signal.
 	 */
-	lx_sigaction(LX_SIGCHLD, (void (*)(int))1);
+	lx_sigsetmask(LX_SIGCHLD, false);
 
 	Thread_base::myself()->entry();
+	Thread_base::myself()->_join_lock.unlock();
 	sleep_forever();
 }
 
@@ -52,7 +56,7 @@ void Thread_base::start()
 {
 	/* align initial stack to 16 byte boundary */
 	void *thread_sp = (void *)((addr_t)(_context->stack) & ~0xf);
-	_tid.tid = lx_create_thread(thread_start, thread_sp, this);
+	_tid.tid = lx_create_thread(Thread_base::_thread_start, thread_sp, this);
 	_tid.pid = lx_getpid();
 }
 

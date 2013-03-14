@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -40,7 +40,7 @@ static Lock &startup_lock()
 static void thread_exit_signal_handler(int) { lx_exit(0); }
 
 
-static void thread_start(void *arg)
+void Thread_base::_thread_start()
 {
 	/*
 	 * Set signal handler such that canceled system calls get not
@@ -48,12 +48,7 @@ static void thread_start(void *arg)
 	 */
 	lx_sigaction(LX_SIGUSR1, empty_signal_handler);
 
-	/*
-	 * Prevent children from becoming zombies. (SIG_IGN = 1)
-	 */
-	lx_sigaction(LX_SIGCHLD, (void (*)(int))1);
-
-	Thread_base *thread = (Thread_base *)arg;
+	Thread_base * const thread = Thread_base::myself();
 
 	/* inform core about the new thread and process ID of the new thread */
 	Linux_cpu_session *cpu = dynamic_cast<Linux_cpu_session *>(env()->cpu_session());
@@ -63,7 +58,11 @@ static void thread_start(void *arg)
 	/* wakeup 'start' function */
 	startup_lock().unlock();
 
-	Thread_base::myself()->entry();
+	thread->entry();
+
+	/* unblock caller of 'join()' */
+	thread->_join_lock.unlock();
+
 	sleep_forever();
 }
 
@@ -125,7 +124,7 @@ void Thread_base::start()
 
 	/* align initial stack to 16 byte boundary */
 	void *thread_sp = (void *)((addr_t)(_context->stack) & ~0xf);
-	_tid.tid = lx_create_thread(thread_start, thread_sp, this);
+	_tid.tid = lx_create_thread(Thread_base::_thread_start, thread_sp, this);
 	_tid.pid = lx_getpid();
 
 	/* wait until the 'thread_start' function got entered */

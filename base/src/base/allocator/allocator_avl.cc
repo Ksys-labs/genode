@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -187,7 +187,7 @@ int Allocator_avl_base::add_range(addr_t new_addr, size_t new_size)
 	if (!new_block) return -4;
 
 	/* merge with predecessor */
-	if ((b = _find_by_address(new_addr - 1)) && !b->used()) {
+	if (new_addr != 0 && (b = _find_by_address(new_addr - 1)) && !b->used()) {
 
 		new_size += b->size();
 		new_addr  = b->addr();
@@ -247,11 +247,11 @@ int Allocator_avl_base::remove_range(addr_t base, size_t size)
 }
 
 
-bool Allocator_avl_base::alloc_aligned(size_t size, void **out_addr, int align)
+Range_allocator::Alloc_return Allocator_avl_base::alloc_aligned(size_t size, void **out_addr, int align)
 {
 	Block *dst1, *dst2;
 	if (!_alloc_two_blocks_metadata(&dst1, &dst2))
-		return false;
+		return Alloc_return(Alloc_return::OUT_OF_METADATA);
 
 	/* find best fitting block */
 	Block *b = _addr_tree.first();
@@ -260,7 +260,7 @@ bool Allocator_avl_base::alloc_aligned(size_t size, void **out_addr, int align)
 	if (!b) {
 		_md_alloc->free(dst1, sizeof(Block));
 		_md_alloc->free(dst2, sizeof(Block));
-		return false;
+		return Alloc_return(Alloc_return::RANGE_CONFLICT);
 	}
 
 	/* calculate address of new (aligned) block */
@@ -273,12 +273,12 @@ bool Allocator_avl_base::alloc_aligned(size_t size, void **out_addr, int align)
 	Block *new_block = _alloc_block_metadata();
 	if (!new_block) {
 		_md_alloc->free(new_block, sizeof(Block));
-		return false;
+		return Alloc_return(Alloc_return::OUT_OF_METADATA);
 	}
 	_add_block(new_block, new_addr, size, Block::USED);
 
 	*out_addr = reinterpret_cast<void *>(new_addr);
-	return true;
+	return Alloc_return(Alloc_return::OK);
 }
 
 
@@ -286,11 +286,11 @@ Range_allocator::Alloc_return Allocator_avl_base::alloc_addr(size_t size, addr_t
 {
 	/* sanity check */
 	if (!_sum_in_range(addr, size))
-		return Range_allocator::RANGE_CONFLICT;
+		return Alloc_return(Alloc_return::RANGE_CONFLICT);
 
 	Block *dst1, *dst2;
 	if (!_alloc_two_blocks_metadata(&dst1, &dst2))
-		return Range_allocator::OUT_OF_METADATA;
+		return Alloc_return(Alloc_return::OUT_OF_METADATA);
 
 	/* find block at specified address */
 	Block *b = _addr_tree.first();
@@ -301,7 +301,7 @@ Range_allocator::Alloc_return Allocator_avl_base::alloc_addr(size_t size, addr_t
 	{
 		_md_alloc->free(dst1, sizeof(Block));
 		_md_alloc->free(dst2, sizeof(Block));
-		return Range_allocator::RANGE_CONFLICT;
+		return Alloc_return(Alloc_return::RANGE_CONFLICT);
 	}
 
 	/* remove new block from containing block */
@@ -311,11 +311,11 @@ Range_allocator::Alloc_return Allocator_avl_base::alloc_addr(size_t size, addr_t
 	Block *new_block = _alloc_block_metadata();
 	if (!new_block) {
 		_md_alloc->free(new_block, sizeof(Block));
-		return Range_allocator::OUT_OF_METADATA;
+		return Alloc_return(Alloc_return::OUT_OF_METADATA);
 	}
 	_add_block(new_block, addr, size, Block::USED);
 
-	return Range_allocator::ALLOC_OK;
+	return Alloc_return(Alloc_return::OK);
 }
 
 

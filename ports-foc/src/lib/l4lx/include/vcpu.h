@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -81,13 +81,11 @@ namespace L4lx {
 				env()->pd_session()->bind_thread(_thread_cap);
 
 				/* create new pager object and assign it to the new thread */
-				Pager_capability pager_cap =
-					env()->rm_session()->add_client(_thread_cap);
-				vcpu_connection()->set_pager(_thread_cap, pager_cap);
+				_pager_cap = env()->rm_session()->add_client(_thread_cap);
+				vcpu_connection()->set_pager(_thread_cap, _pager_cap);
 
 				/* get gate-capability and badge of new thread */
-				Thread_state state;
-				vcpu_connection()->state(_thread_cap, &state);
+				Thread_state state = vcpu_connection()->state(_thread_cap);
 				_tid = state.kcap;
 				_context->utcb = state.utcb;
 

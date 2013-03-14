@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -320,11 +320,28 @@ extern "C" int _connect(int libc_fd, const struct sockaddr *addr,
 }
 
 
+extern "C" int _dup(int libc_fd)
+{
+	File_descriptor *fd = libc_fd_to_fd(libc_fd, "dup");
+	File_descriptor *ret_fd = (fd && fd->plugin) ? fd->plugin->dup(fd) : 0;
+	return ret_fd ? ret_fd->libc_fd : INVALID_FD;
+}
+
+
+extern "C" int dup(int libc_fd)
+{
+	return _dup(libc_fd);
+}
+
+
 extern "C" int _dup2(int libc_fd, int new_libc_fd)
 {
 	File_descriptor *fd = libc_fd_to_fd(libc_fd, "dup2");
 	if (!fd || !fd->plugin)
 		return INVALID_FD;
+
+	if (libc_fd == new_libc_fd)
+		return libc_fd;
 
 	/*
 	 * Check if 'new_libc_fd' is already in use. If so, close it before

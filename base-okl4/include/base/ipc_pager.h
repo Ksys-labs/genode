@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -40,7 +40,8 @@ namespace Genode {
 			 * Constructor
 			 */
 			Mapping(addr_t dst_addr, addr_t src_addr,
-			        bool write_combined, unsigned l2size = 12, bool rw = true);
+			        bool write_combined, bool io_mem,
+			        unsigned l2size = 12, bool rw = true);
 
 			/**
 			 * Construct invalid mapping

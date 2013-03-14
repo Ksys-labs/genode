@@ -7,7 +7,7 @@
 TARGET   = omap4_fb_drv
 REQUIRES = omap4
 SRC_CC   = main.cc
-LIBS     = cxx env server
+LIBS     = base
 INC_DIR += $(PRG_DIR)
 
 vpath main.cc $(PRG_DIR)

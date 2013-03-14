@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -35,6 +35,7 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <termios.h>
 #include <pwd.h>
@@ -165,7 +166,7 @@ extern "C" uid_t getuid()
 		return 0;
 
 	uid_t uid = sysio()->userinfo_out.uid;
-	PDBG("getuid(): %d", uid);
+
 	return uid;
 }
 
@@ -173,6 +174,13 @@ extern "C" uid_t getuid()
 extern "C" uid_t geteuid()
 {
 	return getuid();
+}
+
+
+extern "C" int getrlimit(int resource, struct rlimit *rlim)
+{
+	PDBG("not implemented");
+	return -1;
 }
 
 
@@ -237,11 +245,24 @@ static size_t marshal_fds(fd_set *src_fds, int nfds,
 /**
  * Unmarshal result of select syscall into fd set
  */
-static void unmarshal_fds(int *src_fds, size_t src_fds_len, fd_set *dst_fds)
+static void unmarshal_fds(int nfds, int *src_fds, size_t src_fds_len, fd_set *dst_fds)
 {
 	if (!dst_fds) return;
 
-	FD_ZERO(dst_fds);
+	/**
+	 * Calling FD_ZERO will not work because it will try to reset sizeof (fd_set)
+	 * which is typically 128 bytes but dst_fds might by even less bytes large if
+	 * it was allocated dynamically. So we will reset the fd_set manually which
+	 * will work fine as long as we are using FreeBSDs libc - another libc however
+	 * might use a different struct.
+	 *
+	 * Note: The fds are actually stored in a bit-array. So we need to calculate
+	 * how many array entries we have to reset. sizeof (fd_mask) will return the
+	 * size of one entry in bytes.
+	 */
+	int _ = nfds / (sizeof (fd_mask) * 8) + 1;
+	for (int i = 0; i < _; i++)
+		dst_fds->__fds_bits[i] = 0;
 
 	for (size_t i = 0; i < src_fds_len; i++)
 		FD_SET(src_fds[i], dst_fds);
@@ -321,19 +342,19 @@ extern "C" int select(int nfds, fd_set *readfds, fd_set *writefds,
 	int total_fds = 0;
 
 	if (readfds != NULL) {
-		unmarshal_fds(src, out_fds.num_rd, readfds);
+		unmarshal_fds(nfds, src, out_fds.num_rd, readfds);
 		src += out_fds.num_rd;
 		total_fds += out_fds.num_rd;
 	}
 
 	if (writefds != NULL) {
-		unmarshal_fds(src, out_fds.num_wr, writefds);
+		unmarshal_fds(nfds, src, out_fds.num_wr, writefds);
 		src += out_fds.num_wr;
 		total_fds += out_fds.num_wr;
 	}
 
 	if (exceptfds != NULL) {
-		unmarshal_fds(src, out_fds.num_ex, exceptfds);
+		unmarshal_fds(nfds, src, out_fds.num_ex, exceptfds);
 		/* exceptfds are currently ignored */
 	}
 
@@ -342,7 +363,6 @@ extern "C" int select(int nfds, fd_set *readfds, fd_set *writefds,
 
 
 #include <setjmp.h>
-#include <base/platform_env.h>
 
 
 static jmp_buf fork_jmp_buf;
@@ -356,8 +376,7 @@ extern "C" void stdout_reconnect(); /* provided by 'log_console.cc' */
  */
 extern "C" void fork_trampoline()
 {
-	static_cast<Genode::Platform_env *>(Genode::env())
-		->reload_parent_cap(new_parent.dst, new_parent.local_name);
+	Genode::env()->reload_parent_cap(new_parent.dst, new_parent.local_name);
 
 	stdout_reconnect();
 	noux_connection()->reconnect();
@@ -594,6 +613,7 @@ namespace {
 			Libc::File_descriptor *open(char const *, int);
 			ssize_t write(Libc::File_descriptor *, const void *, ::size_t);
 			int close(Libc::File_descriptor *);
+			Libc::File_descriptor *dup(Libc::File_descriptor*);
 			int dup2(Libc::File_descriptor *, Libc::File_descriptor *);
 			int execve(char const *filename, char *const argv[],
 			           char *const envp[]);
@@ -927,15 +947,50 @@ namespace {
 					PDBG("TIOCGETA - argp=0x%p", argp);
 				::termios *termios = (::termios *)argp;
 
+				termios->c_iflag = 0;
+				termios->c_oflag = 0;
+				termios->c_cflag = 0;
 				/*
 				 * Set 'ECHO' flag, needed by libreadline. Otherwise, echoing
 				 * user input doesn't work in bash.
 				 */
 				termios->c_lflag = ECHO;
+				memset(termios->c_cc, _POSIX_VDISABLE, sizeof(termios->c_cc));
+				termios->c_ispeed = 0;
+				termios->c_ospeed = 0;
+
 				return 0;
 			}
 
 			break;
+
+		case TIOCSETAF:
+			{
+				sysio()->ioctl_in.request = Noux::Sysio::Ioctl_in::OP_TIOCSETAF;
+
+				::termios *termios = (::termios *)argp;
+
+				/**
+				 * For now only enabling/disabling of ECHO is supported
+				 */
+				if (termios->c_lflag & (ECHO | ECHONL)) {
+					sysio()->ioctl_in.argp = (Noux::Sysio::Ioctl_in::VAL_ECHO |
+					                          Noux::Sysio::Ioctl_in::VAL_ECHONL);
+				}
+				else {
+					sysio()->ioctl_in.argp = Noux::Sysio::Ioctl_in::VAL_NULL;
+				}
+
+				break;
+			}
+
+		case TIOCSETAW:
+			{
+				sysio()->ioctl_in.request = Noux::Sysio::Ioctl_in::OP_TIOCSETAW;
+				sysio()->ioctl_in.argp = argp ? *(int*)argp : 0;
+
+				break;
+			}
 
 		case FIONBIO:
 			{
@@ -944,6 +999,8 @@ namespace {
 
 				sysio()->ioctl_in.request = Noux::Sysio::Ioctl_in::OP_FIONBIO;
 				sysio()->ioctl_in.argp = argp ? *(int*)argp : 0;
+
+				break;
 			}
 
 		default:
@@ -959,8 +1016,12 @@ namespace {
 
 		/* perform syscall */
 		if (!noux()->syscall(Noux::Session::SYSCALL_IOCTL)) {
-			PERR("ioctl error");
-			/* XXX set errno */
+			switch (sysio()->error.ioctl) {
+			case Noux::Sysio::IOCTL_ERR_INVALID: errno = EINVAL; break;
+			case Noux::Sysio::IOCTL_ERR_NOTTY:   errno = ENOTTY; break;
+			default: errno = 0; break;
+			}
+
 			return -1;
 		}
 
@@ -976,6 +1037,9 @@ namespace {
 				winsize->ws_col = sysio()->ioctl_out.tiocgwinsz.columns;
 				return 0;
 			}
+		case TIOCSETAF:
+		case TIOCSETAW:
+			return 0;
 
 		case FIONBIO:
 			return 0;
@@ -1000,6 +1064,23 @@ namespace {
 			pipefd[i] = Libc::file_descriptor_allocator()->alloc(this, context, sysio()->pipe_out.fd[i]);
 		}
 		return 0;
+	}
+
+
+	Libc::File_descriptor *Plugin::dup(Libc::File_descriptor* fd)
+	{
+		sysio()->dup2_in.fd    = noux_fd(fd->context);
+		sysio()->dup2_in.to_fd = -1;
+
+		if (!noux()->syscall(Noux::Session::SYSCALL_DUP2)) {
+			PERR("dup error");
+			/* XXX set errno */
+			return 0;
+		}
+
+		Libc::Plugin_context *context = noux_context(sysio()->dup2_out.fd);
+		return Libc::file_descriptor_allocator()->alloc(this, context,
+		                                                sysio()->dup2_out.fd);
 	}
 
 

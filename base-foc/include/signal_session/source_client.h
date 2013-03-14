@@ -5,15 +5,16 @@
  * \date   2010-02-03
  *
  * On Fiasco.OC, the signal source server does not provide a blocking
- * 'wait_for_signal' function because this kernel does no support
- * out-of-order IPC replies. Instead, we use an IRQ kernel-object
- * to let the client block until a signal is present at the
- * server. The IRQ object gets initialized with the first
- * call of 'wait_for_signal()'.
+ * 'wait_for_signal' function because this kernel does not support out-of-order
+ * IPC replies. Instead, we use an IRQ kernel-object to let the client block
+ * until a signal is present at the server.
+ *
+ * We request the IRQ object capability and attach to the IRQ on construction
+ * of the 'Signal_source_client' object.
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.

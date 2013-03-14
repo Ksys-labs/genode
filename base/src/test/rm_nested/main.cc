@@ -13,7 +13,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -75,8 +75,8 @@ class Local_fault_handler : public Thread<4096>
 			while (true) {
 				printf("fault handler: waiting for fault signal\n");
 				Signal signal = _receiver->wait_for_signal();
-				printf("received %d fault signals\n", signal.num());
-				for (int i = 0; i < signal.num(); i++)
+				printf("received %u fault signals\n", signal.num());
+				for (unsigned i = 0; i < signal.num(); i++)
 					handle_fault();
 			}
 		}

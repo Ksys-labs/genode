@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -42,6 +42,8 @@ namespace Genode {
 			 * Local name for this pager object
 			 */
 			unsigned long _badge;
+
+			Thread_capability _thread_cap;
 
 			/**
 			 * User-level signal handler registered for this pager object via
@@ -97,6 +99,13 @@ namespace Genode {
 				Signal_transmitter transmitter(_exception_sigh);
 				transmitter.submit();
 			}
+
+			/**
+			 * Remember thread cap so that rm_session can tell thread that
+			 * rm_client is gone.
+			 */
+			Thread_capability thread_cap() { return _thread_cap; } const
+			void thread_cap(Thread_capability cap) { _thread_cap = cap; }
 	};
 
 	/**

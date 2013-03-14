@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -24,7 +24,7 @@
 
 namespace Genode {
 
-	class Cap_selector_allocator : public Bit_allocator<4096> 
+	class Cap_selector_allocator : public Bit_allocator<2 * 4096> 
 	{
 		public:
 

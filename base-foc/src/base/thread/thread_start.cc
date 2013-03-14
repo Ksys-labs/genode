@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -29,9 +29,12 @@ void Thread_base::_deinit_platform_thread()
 {
 	using namespace Fiasco;
 
-	Cap_index *i = (Cap_index*)l4_utcb_tcr_u(_context->utcb)->user[UTCB_TCR_BADGE];
-	cap_map()->remove(i);
-	env()->cpu_session()->kill_thread(_thread_cap);
+	if (_context->utcb && _thread_cap.valid()) {
+		Cap_index *i = (Cap_index*)l4_utcb_tcr_u(_context->utcb)->user[UTCB_TCR_BADGE];
+		cap_map()->remove(i);
+		env()->cpu_session()->kill_thread(_thread_cap);
+		env()->rm_session()->remove_client(_pager_cap);
+	}
 }
 
 
@@ -48,12 +51,13 @@ void Thread_base::start()
 	env()->pd_session()->bind_thread(_thread_cap);
 
 	/* create new pager object and assign it to the new thread */
-	Pager_capability pager_cap = env()->rm_session()->add_client(_thread_cap);
-	env()->cpu_session()->set_pager(_thread_cap, pager_cap);
+	_pager_cap = env()->rm_session()->add_client(_thread_cap);
+	env()->cpu_session()->set_pager(_thread_cap, _pager_cap);
 
 	/* get gate-capability and badge of new thread */
 	Thread_state state;
-	env()->cpu_session()->state(_thread_cap, &state);
+	try { state = env()->cpu_session()->state(_thread_cap); }
+	catch (...) { throw Cpu_session::Thread_creation_failed(); }
 	_tid = state.kcap;
 	_context->utcb = state.utcb;
 

@@ -1,4 +1,5 @@
 ldso
+timer
 lwip
 rm_fault
 rom_blk
@@ -15,3 +16,5 @@ lx_hybrid_ctors
 lx_hybrid_exception
 lx_hybrid_pthread_ipc
 moon
+thread_join
+failsafe

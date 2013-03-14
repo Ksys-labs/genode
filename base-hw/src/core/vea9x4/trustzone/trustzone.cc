@@ -5,15 +5,16 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
  */
 
-/* Core includes */
+/* core includes */
 #include <trustzone.h>
-#include <kernel_support.h>
+#include <pic.h>
+#include <cpu.h>
 
 /* monitor exception vector address */
 extern int _mon_kernel_entry;
@@ -22,10 +23,10 @@ extern int _mon_kernel_entry;
 void Kernel::trustzone_initialization(Pic *pic)
 {
 	/* set exception vector entry */
-	Cpu::mon_exception_entry_at((Genode::addr_t)&_mon_kernel_entry);
+	Genode::Cpu::mon_exception_entry_at((Genode::addr_t)&_mon_kernel_entry);
 
 	/* enable coprocessor access for TZ VMs */
-	Cpu::allow_coprocessor_nonsecure();
+	Genode::Cpu::allow_coprocessor_nonsecure();
 
 	/* set unsecure IRQs */
 	pic->unsecure(34); //Timer 0/1

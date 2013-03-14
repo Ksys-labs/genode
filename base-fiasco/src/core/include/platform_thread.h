@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -21,6 +21,7 @@
 
 /* core includes */
 #include <platform_pd.h>
+#include <address_space.h>
 
 /* Fiasco includes */
 namespace Fiasco {
@@ -102,14 +103,18 @@ namespace Genode {
 			void unbind();
 
 			/**
-			 * Request thread state
+			 * Override thread state with 's'
 			 *
-			 * \param  state_dst  destination state buffer
-			 *
-			 * \retval  0 successful
-			 * \retval -1 thread state not accessible
+			 * \throw Cpu_session::State_access_failed
 			 */
-			int state(Genode::Thread_state *state_dst);
+			void state(Thread_state s);
+
+			/**
+			 * Read thread state
+			 *
+			 * \throw Cpu_session::State_access_failed
+			 */
+			Thread_state state();
 
 			/**
 			 * Set the executing CPU for this thread
@@ -117,6 +122,11 @@ namespace Genode {
 			 * SMP is not supported on L4/Fiasco.
 			 */
 			void affinity(unsigned) { }
+
+			/**
+			 * Return the address space to which the thread is bound
+			 */
+			Weak_ptr<Address_space> address_space();
 
 
 			/************************

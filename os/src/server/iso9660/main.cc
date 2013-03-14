@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2010-2012 Genode Labs GmbH
+ * Copyright (C) 2010-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -132,7 +132,7 @@ namespace Iso {
 						if (try_again)
 							break;
 
-						PINF("upgrade quota donation for RM session");
+						PINF("upgrading quota donation for RM session");
 						Genode::env()->parent()->upgrade(_rm->cap(), "ram_quota=32K");
 						try_again = true;
 					}
@@ -225,7 +225,7 @@ namespace Iso {
 					try {
 						Signal signal = _receiver.wait_for_signal();
 
-						for (int i = 0; i < signal.num(); i++)
+						for (unsigned i = 0; i < signal.num(); i++)
 							static_cast<File *>(signal.context())->handle_fault();
 					} catch (...) {
 						PDBG("unexpected error while waiting for signal");

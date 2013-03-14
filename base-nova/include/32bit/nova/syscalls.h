@@ -67,9 +67,9 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
-	inline uint8_t syscall_1(Syscall s, uint8_t flags, mword_t p1)
+	inline uint8_t syscall_1(Syscall s, uint8_t flags, unsigned sel, mword_t p1)
 	{
-		mword_t status = eax(s, flags, 0);
+		mword_t status = eax(s, flags, sel);
 
 		asm volatile ("  mov %%esp, %%ecx;"
 		              "  call 0f;"
@@ -155,6 +155,21 @@ namespace Nova {
 		return status;
 	}
 
+	ALWAYS_INLINE
+	inline uint8_t syscall_5(Syscall s, uint8_t flags, mword_t sel,
+	                         mword_t &p1, mword_t &p2)
+	{
+		mword_t status = eax(s, flags, sel);
+
+		asm volatile ("  movl %%esp, %%ecx;"
+		              "  movl $1f, %%edx;"
+		              "sysenter;"
+		              "1:"
+		              : "+a" (status), "+D" (p1), "+S" (p2)
+		              : 
+		              : "ecx", "edx", "memory");
+		return status;
+	}
 
 	ALWAYS_INLINE
 	inline uint8_t call(unsigned pt)
@@ -198,6 +213,7 @@ namespace Nova {
 		return syscall_0(NOVA_EC_CTRL, 0, ec);
 	}
 
+
 	ALWAYS_INLINE
 	inline uint8_t create_sc(unsigned sc, unsigned pd, unsigned ec, Qpd qpd)
 	{
@@ -206,9 +222,22 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
-	inline uint8_t create_pt(unsigned pt, unsigned pd, unsigned ec, Mtd mtd, mword_t eip)
+	inline uint8_t pt_ctrl(mword_t pt, mword_t pt_id)
 	{
-		return syscall_4(NOVA_CREATE_PT, 0, pt, pd, ec, mtd.value(), eip);
+		return syscall_1(NOVA_PT_CTRL, 0, pt, pt_id);
+	}
+
+
+	ALWAYS_INLINE
+	inline uint8_t create_pt(unsigned pt, unsigned pd, unsigned ec, Mtd mtd,
+	                         mword_t eip, bool id_equal_pt = true)
+	{
+		uint8_t res = syscall_4(NOVA_CREATE_PT, 0, pt, pd, ec, mtd.value(), eip);
+
+		if (!id_equal_pt || res != NOVA_OK)
+			return res;
+
+		return pt_ctrl(pt, pt);
 	}
 
 
@@ -222,7 +251,7 @@ namespace Nova {
 	ALWAYS_INLINE
 	inline uint8_t revoke(Crd crd, bool self = true)
 	{
-		return syscall_1(NOVA_REVOKE, self, crd.value());
+		return syscall_1(NOVA_REVOKE, self, 0, crd.value());
 	}
 
 
@@ -256,9 +285,18 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
-	inline uint8_t assign_gsi(unsigned sm, mword_t dev, mword_t cpu)
+	inline uint8_t assign_pci(mword_t pd, mword_t mem, mword_t rid)
 	{
-		return syscall_2(NOVA_ASSIGN_GSI, 0, sm, dev, cpu);
+		return syscall_2(NOVA_ASSIGN_PCI, 0, pd, mem, rid);
+	}
+
+	ALWAYS_INLINE
+	inline uint8_t assign_gsi(mword_t sm, mword_t dev, mword_t cpu, mword_t &msi_addr, mword_t &msi_data)
+	{
+		msi_addr = dev;
+		msi_data = cpu;
+
+		return syscall_5(NOVA_ASSIGN_GSI, 0, sm, msi_addr, msi_data);
 	}
 }
 #endif /* _PLATFORM__NOVA_SYSCALLS_H_ */

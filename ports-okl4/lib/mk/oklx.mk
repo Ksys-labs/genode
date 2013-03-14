@@ -1,8 +1,7 @@
 #
 # OKLinux support library
 #
-SRC_CC   = genode_audio.cc \
-           genode_block.cc \
+SRC_CC   = genode_block.cc \
            genode_config.cc \
            genode_exit.cc \
            genode_framebuffer.cc \
@@ -22,7 +21,7 @@ SRC_CC  += iguana_eas.cc \
            iguana_tls.cc
 INC_DIR += $(REP_DIR)/include/oklx_lib
 INC_DIR += $(REP_DIR)/src/lib/oklx/include
-LIBS     = cxx env thread signal
+LIBS     = base
 
 # do not produce position-independent code
 CC_OPT_PIC =

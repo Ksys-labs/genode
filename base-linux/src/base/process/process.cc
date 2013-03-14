@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2006-2012 Genode Labs GmbH
+ * Copyright (C) 2006-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -58,10 +58,10 @@ Process::Process(Dataspace_capability   elf_data_ds_cap,
                  Rm_session_capability  rm_session_cap,
                  Parent_capability      parent_cap,
                  char const            *name,
-                 char const            *root)
+                 Native_pd_args const  *pd_args)
 :
-	_pd(name, root),
-	_cpu_session_client(Cpu_session_capability()),
+	_pd(name, pd_args),
+	_cpu_session_client(cpu_session_cap),
 	_rm_session_client(Rm_session_capability())
 {
 	/* check for dynamic program header */
@@ -72,6 +72,15 @@ Process::Process(Dataspace_capability   elf_data_ds_cap,
 		}
 		elf_data_ds_cap = _dynamic_linker_cap;
 	}
+
+	/*
+	 * Register main thread at core
+	 *
+	 * At this point in time, we do not yet know the TID and PID of the new
+	 * thread. Those information will be provided to core by the constructor of
+	 * the 'Platform_env' of the new process.
+	 */
+	_thread0_cap = _cpu_session_client.create_thread(name);
 
 	Linux_pd_session_client lx_pd(static_cap_cast<Linux_pd_session>(_pd.cap()));
 

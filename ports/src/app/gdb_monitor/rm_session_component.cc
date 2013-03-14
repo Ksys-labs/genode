@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -42,7 +42,7 @@ Rm_session_component::Region *Rm_session_component::find_region(void *local_addr
 	*offset_in_region = ((addr_t)local_addr - (addr_t)region->start());
 //	PDBG("offset_in_region = %lx", *offset_in_region);
 
-	Dataspace_object *managed_ds_obj = _managed_ds_map->obj_by_cap(region->ds_cap());
+	Object_pool<Dataspace_object>::Guard managed_ds_obj(_managed_ds_map->lookup_and_lock(region->ds_cap()));
 	if (managed_ds_obj) {
 //		PDBG("managed dataspace detected");
 		region = managed_ds_obj->rm_session_component()->find_region((void*)*offset_in_region, offset_in_region);
@@ -115,6 +115,15 @@ Pager_capability Rm_session_component::add_client(Thread_capability thread)
 		PDBG("add_client()");
 
 	return _parent_rm_session.add_client(thread);
+}
+
+
+void Rm_session_component::remove_client(Pager_capability pager)
+{
+	if (verbose)
+		PDBG("remove_client()");
+
+	return _parent_rm_session.remove_client(pager);
 }
 
 

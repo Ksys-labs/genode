@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -18,7 +18,7 @@
 #include <cap_session/connection.h>
 
 #include "i8250.h"
-#include "terminal_component.h"
+#include "uart_component.h"
 
 
 int main(int argc, char **argv)
@@ -28,9 +28,9 @@ int main(int argc, char **argv)
 	printf("--- i8250 UART driver started ---\n");
 
 	/**
-	 * Factory used by 'Terminal::Root' at session creation/destruction time
+	 * Factory used by 'Uart::Root' at session creation/destruction time
 	 */
-	struct I8250_driver_factory : Terminal::Driver_factory
+	struct I8250_driver_factory : Uart::Driver_factory
 	{
 		enum { UART_NUM = 4 };
 		I8250 *created[UART_NUM];
@@ -62,29 +62,29 @@ int main(int argc, char **argv)
 				created[i] = 0;
 		}
 
-		Terminal::Driver *create(unsigned index, unsigned baudrate,
-		                         Terminal::Char_avail_callback &callback)
+		Uart::Driver *create(unsigned index, unsigned baudrate,
+		                     Uart::Char_avail_callback &callback)
 		{
 			/*
 			 * We assume the underlying kernel uses UART0 and, therefore, start at
 			 * index 1 for the user-level driver.
 			 */
 			if (index < 1 || index >= UART_NUM)
-				throw Terminal::Driver_factory::Not_available();
+				throw Uart::Driver_factory::Not_available();
 
+			enum { BAUD = 115200 };
 			if (baudrate == 0)
 			{
-				PDBG("Baudrate is not defined. Use default 115200");
-				baudrate = 115200;
+				PINF("Baudrate is not defined. Use default 115200");
+				baudrate = BAUD;
 			}
 
 			I8250 *uart =  created[index];
 
-
 			if (!uart) {
 				uart = new (env()->heap())
 				       I8250(io_port_base(index), irq_number(index),
-							 baudrate, callback);
+				             baudrate, callback);
 
 				/* update 'created' table */
 				created[index] = uart;
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 			return uart;
 		}
 
-		void destroy(Terminal::Driver *driver) { /* TODO */ }
+		void destroy(Uart::Driver *driver) { /* TODO */ }
 
 	} driver_factory;
 
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 	static Cap_connection cap;
 	static Rpc_entrypoint ep(&cap, STACK_SIZE, "uart_ep");
 
-	static Terminal::Root uart_root(&ep, env()->heap(), driver_factory);
+	static Uart::Root uart_root(&ep, env()->heap(), driver_factory);
 	env()->parent()->announce(ep.manage(&uart_root));
 
 	sleep_forever();

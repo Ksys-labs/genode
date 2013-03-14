@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -20,8 +20,12 @@
 #include <base/semaphore.h>
 #include <signal_session/signal_session.h>
 
+/* only needed for base-hw */
+namespace Kernel { struct Signal_receiver; }
+
 namespace Genode {
 
+	class Signal_source;
 	class Signal_receiver;
 	class Signal_context;
 	class Signal_context_registry;
@@ -48,42 +52,54 @@ namespace Genode {
 	{
 		private:
 
-			friend class Signal_receiver;
-			friend class Signal_context;
+			struct Data
+			{
+				Signal_context *context;
+				unsigned        num;
 
-			Signal_context *_context;
-			int             _num;
+				/**
+				 * Constructor
+				 *
+				 * \param context  signal context specific for the
+				 *                 signal-receiver capability used for signal
+				 *                 transmission
+				 * \param num      number of signals received from the same
+				 *                 transmitter
+				 */
+				Data(Signal_context *context, unsigned num)
+				: context(context), num(num) { }
+
+				/**
+				 * Default constructor, representing an invalid signal
+				 */
+				Data() : context(0), num(0) { }
+
+			} _data;
 
 			/**
 			 * Constructor
 			 *
-			 * \param context  signal context specific for the signal-receiver
-			 *                 capability used for signal transmission
-			 * \param num      number of signals received from the same transmitter
-			 *
-			 * Signal objects are constructed only by signal receivers.
+			 * Signal objects are constructed by signal receivers only.
 			 */
-			Signal(Signal_context *context, int num)
-			: _context(context), _num(num)
-			{ }
+			Signal(Data data);
+
+		    friend class Kernel::Signal_receiver;
+			friend class Signal_receiver;
+			friend class Signal_context;
+
+			void _dec_ref_and_unlock();
+			void _inc_ref();
 
 		public:
 
-			/**
-			 * Default constructor, creating an invalid signal
-			 */
-			Signal() : _context(0), _num(0) { }
+			Signal(Signal const &other);
+			Signal &operator=(Signal const &other);
+			~Signal();
 
-			/**
-			 * Return signal context
-			 */
-			Signal_context *context() { return _context; }
-
-			/**
-			 * Return number of signals received from the same transmitter
-			 */
-			int num() { return _num; }
+			Signal_context *context()       { return _data.context; }
+			unsigned        num()     const { return _data.num; }
 	};
+
 
 	/**
 	 * Signal context
@@ -115,9 +131,13 @@ namespace Genode {
 			 */
 			Signal_receiver *_receiver;
 
-			Lock   _lock;          /* protect '_curr_signal'         */
-			Signal _curr_signal;   /* most-currently received signal */
-			bool   _pending;       /* current signal is valid        */
+			Lock         _lock;          /* protect '_curr_signal'         */
+			Signal::Data _curr_signal;   /* most-currently received signal */
+			bool         _pending;       /* current signal is valid        */
+			unsigned int _ref_cnt;       /* number of references to this context */
+			Lock         _destroy_lock;  /* prevent destruction while the
+			                                context is in use */
+
 
 			/**
 			 * Capability assigned to this context after being assocated with
@@ -127,6 +147,7 @@ namespace Genode {
 			 */
 			Signal_context_capability _cap;
 
+			friend class Signal;
 			friend class Signal_receiver;
 			friend class Signal_context_registry;
 
@@ -137,7 +158,7 @@ namespace Genode {
 			 */
 			Signal_context()
 			: _receiver_le(this), _registry_le(this),
-			  _receiver(0), _pending(0) { }
+			  _receiver(0), _pending(0), _ref_cnt(0) { }
 
 			/**
 			 * Destructor
@@ -191,7 +212,7 @@ namespace Genode {
 			 *
 			 * \param cnt  number of signals to submit at once
 			 */
-			void submit(int cnt = 1);
+			void submit(unsigned cnt = 1);
 	};
 
 
@@ -202,7 +223,17 @@ namespace Genode {
 	{
 		private:
 
-			Semaphore _signal_available;  /* signal(s) awaiting to be picked up */
+			/**
+			 * Semaphore used to indicate that signal(s) are ready to be picked
+			 * up. This is needed for platforms other than 'base-hw' only.
+			 */
+			Semaphore _signal_available;
+
+			/**
+			 * Provides the kernel-object name via the 'dst' method. This is
+			 * needed for 'base-hw' only.
+			 */
+			Signal_receiver_capability _cap;
 
 			/**
 			 * List of associated contexts
@@ -271,7 +302,7 @@ namespace Genode {
 			/**
 			 * Locally submit signal to the receiver
 			 */
-			void local_submit(Signal signal);
+			void local_submit(Signal::Data signal);
 
 			/**
 			 * Framework-internal signal-dispatcher
@@ -281,6 +312,61 @@ namespace Genode {
 			 * purposes.
 			 */
 			static void dispatch_signals(Signal_source *signal_source);
+	};
+
+
+	/**
+	 * Abstract interface to be implemented by signal dispatchers
+	 */
+	struct Signal_dispatcher_base : Signal_context
+	{
+		virtual void dispatch(unsigned num) = 0;
+	};
+
+
+	/**
+	 * Adapter for directing signals to member functions
+	 *
+	 * This utility associates member functions with signals. It is intended to
+	 * be used as a member variable of the class that handles incoming signals
+	 * of a certain type. The constructor takes a pointer-to-member to the
+	 * signal handling function as argument. If a signal is received at the
+	 * common signal reception code, this function will be invoked by calling
+	 * 'Signal_dispatcher_base::dispatch'.
+	 *
+	 * \param T  type of signal-handling class
+	 */
+	template <typename T>
+	class Signal_dispatcher : private Signal_dispatcher_base,
+	                          public  Signal_context_capability
+	{
+		private:
+
+			T &obj;
+			void (T::*member) (unsigned);
+			Signal_receiver &sig_rec;
+
+		public:
+
+			/**
+			 * Constructor
+			 *
+			 * \param sig_rec     signal receiver to associate the signal
+			 *                    handler with
+			 * \param obj,member  object and member function to call when
+			 *                    the signal occurs
+			 */
+			Signal_dispatcher(Signal_receiver &sig_rec,
+			                  T &obj, void (T::*member)(unsigned))
+			:
+				Signal_context_capability(sig_rec.manage(this)),
+				obj(obj), member(member),
+				sig_rec(sig_rec)
+			{ }
+
+			~Signal_dispatcher() { sig_rec.dissolve(this); }
+
+			void dispatch(unsigned num) { (obj.*member)(num); }
 	};
 }
 

@@ -1,11 +1,11 @@
 /*
- * \brief  Vm_session_component for base-hw
+ * \brief  VM session component for 'base-hw'
  * \author Stefan Kalkowski
  * \date   2012-10-08
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -17,7 +17,7 @@
 #include <root/root.h>
 #include <cpu/cpu_state.h>
 
-/* Core includes */
+/* core includes */
 #include <vm_session_component.h>
 
 using namespace Genode;

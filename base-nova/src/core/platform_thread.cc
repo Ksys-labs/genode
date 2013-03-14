@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2009-2012 Genode Labs GmbH
+ * Copyright (C) 2009-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -64,7 +64,7 @@ int Platform_thread::start(void *ip, void *sp)
 			return -3;
 		}
 
-		/**
+		/*
 		 * Create semaphore required for Genode locking.
 		 * It is created at the root pager exception base +
 		 * SM_SEL_EC_CLIENT and can be later on requested by the thread
@@ -111,7 +111,6 @@ int Platform_thread::start(void *ip, void *sp)
 	_sel_exc_base = cap_selector_allocator()->alloc(NUM_INITIAL_PT_LOG2);
 
 	addr_t pd_core_sel  = Platform_pd::pd_core_sel();
-	addr_t sm_alloc_sel = _sel_exc_base + PD_SEL_CAP_LOCK;
 	addr_t sm_ec_sel    = _pager->exc_pt_sel() + SM_SEL_EC_CLIENT;
 
 	addr_t remap_src[] = { _pd->parent_pt_sel(),
@@ -128,14 +127,14 @@ int Platform_thread::start(void *ip, void *sp)
 
 	uint8_t res;
 
-	/* Create lock for EC used by lock_helper */
+	/* create lock for EC used by lock_helper */
 	res = create_sm(sm_ec_sel, pd_core_sel, 0);
 	if (res != NOVA_OK) {
 		PERR("could not create semaphore for new thread");
 		goto cleanup_base;
 	}
 
-	/* Remap exception portals for first thread */
+	/* remap exception portals for first thread */
 	if (map_local((Utcb *)Thread_base::myself()->utcb(),
 	              Obj_crd(_pager->exc_pt_sel(), 4),
 	              Obj_crd(_sel_exc_base, 4)))
@@ -156,19 +155,12 @@ int Platform_thread::start(void *ip, void *sp)
 		goto cleanup_base;
 	}
 
-	/* Remap Genode specific, RECALL and STARTUP portals for first thread */
+	/* remap Genode specific, RECALL and STARTUP portals for first thread */
 	for (unsigned i = 0; i < sizeof(remap_dst)/sizeof(remap_dst[0]); i++) {
 		if (map_local((Utcb *)Thread_base::myself()->utcb(),
 		              Obj_crd(remap_src[i], 0),
 		              Obj_crd(_sel_exc_base + remap_dst[i], 0)))
 			goto cleanup_base;
-	}
-
-	/* Create lock for cap allocator selector */
-	res = create_sm(sm_alloc_sel, pd_core_sel, 1);
-	if (res != NOVA_OK) {
-		PERR("could not create semaphore for capability allocator");
-		goto cleanup_base;
 	}
 
 	pd_sel = cap_selector_allocator()->alloc();
@@ -180,7 +172,7 @@ int Platform_thread::start(void *ip, void *sp)
 		goto cleanup_pd;
 	}
 
-	/* Create first thread in task */
+	/* create first thread in task */
 	enum { THREAD_GLOBAL = true };
 	res = create_ec(_sel_ec(), pd_sel, _cpu_no, pd_utcb, 0, 0,
 	                THREAD_GLOBAL);
@@ -189,7 +181,7 @@ int Platform_thread::start(void *ip, void *sp)
 		goto cleanup_pd;
 	}
 
-	/**
+	/*
 	 * We have to assign the pd here, because after create_sc the thread
 	 * becomes running immediately.
 	 */
@@ -198,10 +190,10 @@ int Platform_thread::start(void *ip, void *sp)
 	_pager->initial_eip((addr_t)ip);
 	_pager->initial_esp((addr_t)sp);
 
-	/* Let the thread run */
+	/* let the thread run */
 	res = create_sc(_sel_sc(), pd_sel, _sel_ec(), Qpd());
 	if (res != NOVA_OK) {
-		/**
+		/*
 		 * Reset pd cap since thread got not running and pd cap will
 		 * be revoked during cleanup.
 		 */
@@ -266,30 +258,32 @@ void Platform_thread::resume()
 }
 
 
-int Platform_thread::state(Thread_state *state_dst)
+Thread_state Platform_thread::state()
 {
-	if (!state_dst || !_pager) return -1;
+	Thread_state s;
+	if (!_pager) throw Cpu_session::State_access_failed();
+	_pager->copy_thread_state(&s);
+	return s;
+}
 
-	if (state_dst->transfer) {
-		/* Not permitted for main thread */
-		if (_is_main_thread) return -2;
 
-		/* You can do it only once */
-		if (_sel_exc_base != Native_thread::INVALID_INDEX) return -3;
+void Platform_thread::state(Thread_state s)
+{
+	/* not permitted for main thread */
+	if (_is_main_thread) throw Cpu_session::State_access_failed();
 
-		/**
-		 * _sel_exc_base  exception base of thread in caller
-		 *                protection domain - not in Core !
-		 * _is_vcpu       If true it will run as vCPU,
-		 *                 otherwise it will be a thread.
-		 */
-		_sel_exc_base = state_dst->sel_exc_base;
-		_is_vcpu      = state_dst->is_vcpu;
+	/* you can do it only once */
+	if (_sel_exc_base != Native_thread::INVALID_INDEX)
+		throw Cpu_session::State_access_failed();
 
-		return 0;
-	}
-
-	return  _pager->copy_thread_state(state_dst);
+	/*
+	 * _sel_exc_base  exception base of thread in caller
+	 *                protection domain - not in Core !
+	 * _is_vcpu       If true it will run as vCPU,
+	 *                 otherwise it will be a thread.
+	 */
+	_sel_exc_base = s.sel_exc_base;
+	_is_vcpu      = s.is_vcpu;
 }
 
 
@@ -300,6 +294,7 @@ void Platform_thread::cancel_blocking()
 	_pager->client_cancel_blocking();
 }
 
+
 void Platform_thread::single_step(bool on)
 {
 	if (!_pager) return;
@@ -307,16 +302,27 @@ void Platform_thread::single_step(bool on)
 	_pager->single_step(on);
 }
 
+
 unsigned long Platform_thread::pager_object_badge() const
 {
-	return Native_thread::INVALID_INDEX;
+	return reinterpret_cast<unsigned long>(_name);
+}
+
+
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _pd->Address_space::weak_ptr();
 }
 
 
 Platform_thread::Platform_thread(const char *name, unsigned, int thread_id)
-: _pd(0), _pager(0), _id_base(cap_selector_allocator()->alloc(1)),
-  _sel_exc_base(Native_thread::INVALID_INDEX), _cpu_no(0),
-  _is_main_thread(false), _is_vcpu(false) { }
+:
+	_pd(0), _pager(0), _id_base(cap_selector_allocator()->alloc(1)),
+	_sel_exc_base(Native_thread::INVALID_INDEX), _cpu_no(0),
+	_is_main_thread(false), _is_vcpu(false)
+{
+	strncpy(_name, name, sizeof(_name));
+}
 
 
 Platform_thread::~Platform_thread()

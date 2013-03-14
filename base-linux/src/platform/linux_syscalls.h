@@ -19,7 +19,7 @@
  */
 
 /*
- * Copyright (C) 2008-2012 Genode Labs GmbH
+ * Copyright (C) 2008-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -33,6 +33,7 @@
 #endif
 
 /* Linux includes */
+#include <linux/futex.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sched.h>
@@ -237,6 +238,7 @@ inline Genode::addr_t lx_vm_reserve(Genode::addr_t base, Genode::size_t size)
  ***********************************************************************/
 
 enum {
+	LX_SIGINT    =  2,  /* used by core to catch Control-C */
 	LX_SIGUSR1   = 10,  /* used for cancel-blocking mechanism */
 	LX_SIGCHLD   = 17,  /* child process changed state, i.e., terminated */
 	LX_SIGCANCEL = 32,  /* accoring to glibc, this equals SIGRTMIN,
@@ -306,7 +308,7 @@ inline int lx_tgkill(int pid, int tid, int signal)
 }
 
 
-inline int lx_create_thread(void (*entry)(void *), void *stack, void *arg)
+inline int lx_create_thread(void (*entry)(), void *stack, void *arg)
 {
 	int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
 	          | CLONE_THREAD | CLONE_SYSVSEM;
@@ -335,6 +337,16 @@ struct timespec;
 inline int lx_nanosleep(const struct timespec *req, struct timespec *rem)
 {
 	return lx_syscall(SYS_nanosleep, req, rem);
+}
+
+enum {
+	LX_FUTEX_WAIT = FUTEX_WAIT,
+	LX_FUTEX_WAKE = FUTEX_WAKE,
+};
+
+inline int lx_futex(const int *uaddr, int op, int val)
+{
+	return lx_syscall(SYS_futex, uaddr, op, val, 0, 0, 0);
 }
 
 
