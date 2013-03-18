@@ -28,11 +28,13 @@ static Pci::Connection *pci;
 #define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
 #define PCI_FUNC(devfn)         ((devfn) & 0x07)
 
+static bool DEBUG = false;
+#define CPDBG(x, arg...) do { if (DEBUG) PDBG(x, ##arg); } while (0)
+
 extern "C" {
 	unsigned genode_read_pci_config(unsigned char bus, unsigned char slot,
 		unsigned char func, unsigned char offset)
 	{
-		PINF("%s", __func__);
 		return 0;
 	}
 
@@ -40,18 +42,17 @@ extern "C" {
 		unsigned size, unsigned *value)
 	{
 		if (!data) {
-			PERR("%s: data is NULL", __func__);
+			CPDBG("%s: data is NULL", __func__);
 			return -1;
 		}
 
-		unsigned char fn = PCI_FUNC(devfn);
 		unsigned char slot = PCI_SLOT(devfn);
 
 		Pci::Device_client **devs = (Pci::Device_client**)data;
 		Pci::Device_client *dev = devs[slot];
 
 		if (!dev) {
-			PERR("%s: device %x not found", __func__, slot);
+			CPDBG("%s: device %x not found", __func__, slot);
 			return -1;
 		}
 
@@ -66,25 +67,31 @@ extern "C" {
 				break;
 		}
 		*value = dev->config_read(where, sz);
+	
+		CPDBG("%s: devfn=%x where=%x size=%x -> %x",
+			__func__, devfn, where, size, *value);
+
 		return 0;
 	}
 
 	int genode_pci_write(void *data, unsigned devfn, unsigned where,
 		unsigned size, unsigned value)
 	{
+		CPDBG("%s: devfn=%x where=%x size=%x value=%x",
+				__func__, devfn, where, size, value);
+
 		if (!data) {
-			PERR("%s: data is NULL", __func__);
+			CPDBG("%s: data is NULL", __func__);
 			return -1;
 		}
 
-		unsigned char fn = PCI_FUNC(devfn);
 		unsigned char slot = PCI_SLOT(devfn);
 
 		Pci::Device_client **devs = (Pci::Device_client**)data;
 		Pci::Device_client *dev = devs[slot];
 
 		if (!dev) {
-			PERR("%s: device %x not found", __func__, slot);
+			CPDBG("%s: device %x not found", __func__, slot);
 			return -1;
 		}
 
@@ -103,12 +110,11 @@ extern "C" {
 	}
 
 	void genode_pci_init_l4lx(void **busses) {
-		PINF("%s", __func__);
 		static Pci::Connection _pci;
 		pci = &_pci;
 
 		if (!busses) {
-			PINF("%s: busses is NULL", __func__);
+			CPDBG("%s: busses is NULL", __func__);
 			return;
 		}
 
@@ -120,7 +126,7 @@ extern "C" {
 			
 			unsigned char _dev, _bus, _fn;
 			device.bus_address(&_bus, &_dev, &_fn);
-			PINF("%s: found bus=%x dev=%x fn=%x vid=%x pid=%x",
+			CPDBG("%s: found bus=%x dev=%x fn=%x vid=%x pid=%x",
 				__func__, _bus, _dev, _fn,
 				device.vendor_id(), device.device_id());
 
@@ -132,6 +138,9 @@ extern "C" {
 			}
 
 			devs[_bus][_dev] = new (Genode::env()->heap()) Pci::Device_client(cap);
+			CPDBG("%s: devs=%p devs[%x]=%p devs[%x][%x]=%p",
+				__func__, devs, _bus, devs[_bus],
+				_bus, _dev, devs[_bus][_dev]);
 
 			cap = pci->next_device(cap);
 		}

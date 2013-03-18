@@ -121,7 +121,7 @@ static int pci_read(struct pci_bus *bus, unsigned int devfn, int where,
 		printk("%s: value is NULL\n", __func__);
 		return -1;
 	}
-	
+
 	return genode_pci_read(bus->sysdata, devfn, where, size, value);
 }
 
@@ -145,6 +145,7 @@ static int __init genode_pci_init(void) {
 	printk(KERN_INFO "genode_pci: init\n");
 
 	void* busses[GENODE_MAX_PCI_BUS] = {};
+	memset(busses, 0, sizeof(busses));
 	genode_pci_init_l4lx(busses);
 	
 	size_t i;
