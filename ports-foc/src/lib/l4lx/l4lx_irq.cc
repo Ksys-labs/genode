@@ -66,6 +66,13 @@ unsigned int l4lx_irq_dev_startup(struct irq_data *data)
 	 * this IRQ number */
 	p->irq_cap = l4x_have_irqcap(irq);
 	p->cpu     = l4x_smp_processor_id();
+	
+	if (l4_is_invalid_cap(p->irq_cap)) {
+		PINF("allocating capability for irq %d", irq);
+		Genode::Foc_cpu_session_client cpu(Genode::env()->cpu_session_cap());
+		p->irq_cap = cpu.alloc_irq().dst();
+	}
+
 	if (l4_is_invalid_cap(p->irq_cap)) {
 		PERR("Invalid irq cap!");
 		return 0;
@@ -109,7 +116,8 @@ void l4lx_irq_dev_enable(struct irq_data *data)
 		PDBG("irq=%d cap=%lx", data->irq, p->irq_cap);
 
 	l4x_irq_save(&flags);
-	l4_msgtag_t ret = l4_irq_attach(p->irq_cap, data->irq << 2,
+
+	l4_msgtag_t ret = l4_irq_attach(p->irq_cap, data->irq,
 	                                l4x_cpu_thread_get_cap(p->cpu));
 	if (l4_error(ret))
 		PWRN("Attach to irq %lx failed with error %ld!", p->irq_cap, l4_error(ret));
