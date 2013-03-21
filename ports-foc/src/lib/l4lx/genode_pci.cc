@@ -32,11 +32,6 @@ static bool DEBUG = false;
 #define CPDBG(x, arg...) do { if (DEBUG) PDBG(x, ##arg); } while (0)
 
 extern "C" {
-	unsigned genode_read_pci_config(unsigned char bus, unsigned char slot,
-		unsigned char func, unsigned char offset)
-	{
-		return 0;
-	}
 
 	int genode_pci_read(void *data, unsigned devfn, unsigned where,
 		unsigned size, unsigned *value)

@@ -44,9 +44,21 @@ unsigned int pcibios_assign_all_busses(void) { return 1; }
  *****************************************************************************/
 int pcibios_enable_device(struct pci_dev *dev, int mask)
 {
-	int err;
+	int err, i;
 
-	printk("%s: dev=%x\n", __func__, dev);
+	if (!dev) {
+		printk(KERN_ERR "%s: dev is NULL\n", __func__);
+		return -1;
+	}
+
+	printk("%s: dev=%x\n", __func__, __func__, dev);
+
+	//assign a fake resource parent to make pci/setup-res.c happy
+	for (i = 0; i < PCI_NUM_RESOURCES; i++) {
+		if (!dev->resource[i].parent) {
+			dev->resource[i].parent = dev;
+		}
+	}
 
 	if ((err = pci_enable_resources(dev, mask)) < 0) {
 		printk("%s: failed to enable resources\n");
@@ -86,7 +98,7 @@ u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
 {
 	printk("%s: bus=%02x slot=%02x func=%02x offset=%02x\n",
 		__func__, bus, slot, func, offset);
-	return genode_read_pci_config(bus, slot, func, offset);
+	return 0;
 }
 
 u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
