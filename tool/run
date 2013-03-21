@@ -452,7 +452,7 @@ proc spawn_qemu { wait_for_re timeout_value } {
 		if {[have_spec boot_pxe]} {
 			append qemu_args " -boot n -tftp [run_dir] -bootp boot/pulsar -no-reboot -no-shutdown "
 		} else {
-			append qemu_args " -cdrom [run_dir].iso "
+			append qemu_args " -M q35 -device ahci,id=ide -device ide-drive,bus=ide.2,drive=cd-disk1 -drive file=[run_dir].iso,if=none,id=cd-disk1,media=cdrom,format=raw,cache=none "
 		}
 	}
 
