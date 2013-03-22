@@ -12,8 +12,6 @@ set build_components {
 	drivers/uart
 	drivers/atapi
 	server/part_blk
-	server/nit_fb
-	server/nitpicker
 	server/rom_loopdev
 	l4linux-ata
 }
@@ -133,8 +131,6 @@ set boot_modules {
 	atapi_drv
 	part_blk
 	rom_loopdev
-	nitpicker
-	nit_fb
 	l4linux-ata
 	fedora-initrd.cpio.gz
 	fedora18.img
