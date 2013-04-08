@@ -1,0 +1,88 @@
+assert_spec foc
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	test/x86_usb
+}
+
+lappend_if [have_spec     pci] build_components drivers/pci
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+
+	<start name="pci_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="PCI"/></provides>
+	</start>
+	
+	<start name="test-x86-usb">
+		<resource name="RAM" quantum="1M"/>
+	</start>
+
+</config>
+}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules { core init timer test-x86-usb }
+lappend_if [have_spec     pci] boot_modules pci_drv
+
+if {[have_spec x86]} {
+	set uri "http://genode.org/files/release-11.11/l4lx/initrd-ia32.gz"
+} elseif {[have_spec arm]} {
+	set uri "http://genode.org/files/release-11.11/l4lx/initrd-arm.gz"
+}
+if {![file exists bin/initrd.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/initrd.gz $uri
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 128 -nographic "
+append qemu_args " -serial stdio "
+#append_if [have_spec     x86] qemu_args " -smp 2,cores=2 "
+#append_if [have_spec     x86] qemu_args " -net nic,model=e1000 -net user "
+#append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 -net user "
+
+#
+# Execute test case
+#
+#run_genode_until {.*\/ #.*} 120
