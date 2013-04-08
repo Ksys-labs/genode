@@ -32,7 +32,10 @@ private:
 		}
 	}
 public:
-	Irq_watcher(int irq) : _irq_no(irq), _irq(Irq_connection(irq)) {
+	Irq_watcher(int irq) : _irq_no(irq),
+		_irq(Irq_connection(irq, Irq_session::TRIGGER_EDGE,
+			Irq_session::POLARITY_HIGH))
+	{
 		start();
 	}
 };
@@ -58,6 +61,11 @@ enum Pci_class {
 };
 
 enum HCI_Regs {
+	UHCI_LEGSUP = 0xc0,
+	UHCI_INTR = 0x4,
+
+	OHCI_CONTROL = 0x4,
+	OHCI_INTERRUPT_ENABLE = 0x10,
 
 	EHCI_CAP = 0,
 	EHCI_CAP_CMD = 0,
@@ -96,15 +104,34 @@ int main() {
 		uint32_t uclass = pclass & PCI_USB_MASK;
 
 		uint32_t ecap = 0;
+		uint32_t octl;
 
 		if ((uclass & PCI_USB) == PCI_USB) {
 			PINF("USB");
 			switch (uclass) {
 				case PCI_UHCI:
 					PINF("UHCI");
+					device.config_write(UHCI_LEGSUP,
+						0x8000, Pci::Device::ACCESS_16BIT);
+
+					device.config_write(UHCI_INTR,
+						0xf, Pci::Device::ACCESS_16BIT);
+
 					break;
 				case PCI_OHCI:
 					PINF("OHCI");
+					octl = device.config_read(OHCI_CONTROL,
+						Pci::Device::ACCESS_32BIT);
+
+					octl &= ~0xc0;
+					octl |= 0x3c;
+					octl |= 0x3;
+					octl |= 0x80;
+					device.config_write(OHCI_CONTROL,
+						octl, Pci::Device::ACCESS_32BIT);
+
+					device.config_write(OHCI_INTERRUPT_ENABLE,
+						0xffffffff, Pci::Device::ACCESS_32BIT);
 					break;
 				case PCI_EHCI:
 					PINF("EHCI");
@@ -125,6 +152,8 @@ int main() {
 			}
 		}
 
+		PDBG("===================");
+		PDBG("");
 		cap = pci.next_device(cap);
 	}
 

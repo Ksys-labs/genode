@@ -7,6 +7,7 @@ set build_components {
 	core
 	init
 	drivers/timer
+	drivers/acpi
 	test/x86_usb
 }
 
@@ -41,13 +42,21 @@ set config  {
 		<provides><service name="Timer"/></provides>
 	</start>
 
-	<start name="pci_drv">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="PCI"/></provides>
+	<start name="acpi_drv">
+		<resource name="RAM" quantum="40M"/>
+		<provides>
+			<service name="IRQ"/>
+			<service name="PCI"/>
+		</provides>
 	</start>
 	
 	<start name="test-x86-usb">
 		<resource name="RAM" quantum="1M"/>
+		<route>
+			<service name="IRQ"><child name="acpi_drv"/></service>
+			<service name="PCI"><child name="acpi_drv"/></service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
 	</start>
 
 </config>
@@ -58,7 +67,7 @@ install_config $config
 #
 # Boot modules
 #
-set boot_modules { core init timer test-x86-usb }
+set boot_modules { core init timer test-x86-usb acpi_drv }
 lappend_if [have_spec     pci] boot_modules pci_drv
 
 if {[have_spec x86]} {
