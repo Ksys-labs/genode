@@ -7,12 +7,12 @@ set build_components {
 	core
 	init
 	drivers/timer
-	drivers/framebuffer
-	l4linux
+	drivers/acpi
+	drivers/usb
+	test/x86-irq
 }
 
 lappend_if [have_spec pci] build_components drivers/pci
-lappend_if [have_spec ps2] build_components drivers/input/ps2
 
 build $build_components
 create_boot_directory
@@ -43,33 +43,48 @@ set config  {
 		<provides><service name="Timer"/></provides>
 	</start>
 
+<!--
 	<start name="pci_drv">
 		<binary name="pci_drv"/>
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="PCI"/></provides>
 	</start>
+-->
 
-	<start name="fb_drv">
-		<binary name="vesa_drv"/>
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start>
-
-	<start name="input_drv">
-		<binary name="ps2_drv"/>
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Input"/></provides>
-	</start>
-
-	<start name="l4linux" priority="-1">
-		<resource name="RAM" quantum="300M"/>
-		<config args="mem=52M l4x_rd=initrd.gz console=tty0 verbose"/>
+	<start name="acpi">
+	  <resource name="RAM" quantum="40M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+		  <service name="PCI"/>
+		  <service name="IRQ" />
+		</provides>
 		<route>
+		  <!--
 		  <service name="PCI"> <child name="pci_drv" /> </service>
+		  -->
 		  <any-service> <parent/> <any-child /> </any-service>
 		</route>
 	</start>
-	
+
+<!--
+	<start name="usb_drv" priority="-1">
+		<resource name="RAM" quantum="60M"/>
+		<provides>
+			<service name="Input"/>
+		</provides>
+		<config>
+			<hid/>
+		</config>
+	</start>
+-->
+
+	<start name="test-x86-irq">
+		<resource name="RAM" quantum="1M"/>
+		<route>
+		  <service name="IRQ"> <child name="acpi" /> </service>
+		  <any-service> <parent/> <any-child /> </any-service>
+		</route>
+	</start>
 </config>}
 
 install_config $config
@@ -81,12 +96,11 @@ set boot_modules {
 	core
 	init
 	timer
-	l4linux
-	initrd.gz
+	acpi_drv
+	test-x86-irq
+	usb_drv
 }
 lappend_if [have_spec   pci] boot_modules pci_drv
-lappend_if [have_spec   ps2] boot_modules ps2_drv
-lappend_if [have_spec  vesa] boot_modules vesa_drv
 
 if {[have_spec x86]} {
 	set uri "https://github.com/downloads/skalk/genode/busybox-initrd-x86-20120618.gz"
@@ -111,5 +125,4 @@ append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 -net user "
 #
 # Execute test case
 #
-#run_genode_until forever
-exec cp var/run/linux_pci.iso /srv/tftp/pxeboot.iso 
+run_genode_until forever

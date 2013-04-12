@@ -9,6 +9,7 @@ set build_components {
 	drivers/timer
 	drivers/framebuffer
 	l4linux
+	drivers/acpi
 }
 
 lappend_if [have_spec pci] build_components drivers/pci
@@ -43,10 +44,27 @@ set config  {
 		<provides><service name="Timer"/></provides>
 	</start>
 
+<!--
 	<start name="pci_drv">
 		<binary name="pci_drv"/>
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="PCI"/></provides>
+	</start>
+-->
+
+	<start name="acpi">
+	  <resource name="RAM" quantum="10M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+		  <service name="PCI"/>
+		  <service name="IRQ" />
+		</provides>
+		<route>
+<!--
+		  <service name="PCI"> <child name="pci_drv" /> </service>
+-->
+		  <any-service> <parent/> <any-child /> </any-service>
+		</route>
 	</start>
 
 	<start name="fb_drv">
@@ -65,7 +83,8 @@ set config  {
 		<resource name="RAM" quantum="300M"/>
 		<config args="mem=52M l4x_rd=initrd.gz console=tty0 verbose"/>
 		<route>
-		  <service name="PCI"> <child name="pci_drv" /> </service>
+		  <service name="PCI"> <child name="acpi" /> </service>
+		  <service name="IRQ"> <child name="acpi" /> </service>
 		  <any-service> <parent/> <any-child /> </any-service>
 		</route>
 	</start>
@@ -83,6 +102,7 @@ set boot_modules {
 	timer
 	l4linux
 	initrd.gz
+	acpi_drv
 }
 lappend_if [have_spec   pci] boot_modules pci_drv
 lappend_if [have_spec   ps2] boot_modules ps2_drv
@@ -112,4 +132,4 @@ append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 -net user "
 # Execute test case
 #
 #run_genode_until forever
-exec cp var/run/linux_pci.iso /srv/tftp/pxeboot.iso 
+exec cp var/run/linux_acpi.iso /srv/tftp/pxeboot.iso 
