@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2012 Genode Labs GmbH
+ * Copyright (C) 2011-2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -56,7 +56,6 @@ namespace Ipxe {
 			: _alloc(alloc)
 			{
 				PINF("--- init iPXE NIC");
-				
 				int cnt = dde_ipxe_nic_init();
 				PINF("    number of devices: %d", cnt);
 
@@ -72,7 +71,6 @@ namespace Ipxe {
 
 			void rx_handler(const char *packet, unsigned packet_len)
 			{
-// 				PDBG("packet_len = %d", packet_len);
 				void *buffer = _alloc.alloc(packet_len);
 				Genode::memcpy(buffer, packet, packet_len);
 				_alloc.submit();
@@ -87,7 +85,6 @@ namespace Ipxe {
 
 			void tx(char const *packet, Genode::size_t size)
 			{
-// 				PDBG("size = %d", size);
 				if (dde_ipxe_nic_tx(1, packet, size))
 					PWRN("Sending packet failed!");
 			}
@@ -97,10 +94,7 @@ namespace Ipxe {
 			 ** Irq_activation interface **
 			 ******************************/
 
-			void handle_irq(int) { 
-// 				PDBG("");
-				/* not used */ 
-			}
+			void handle_irq(int) { /* not used */ }
 	};
 
 	class Driver_factory : public Nic::Driver_factory
@@ -147,7 +141,6 @@ int main(int, char **)
 	try {
 		Genode::Xml_node nic_node = Genode::config()->xml_node().sub_node("nic");
 		char     pci_dev[16] = {0};
-		char     irq[3] = {0};
 
 		do {
 			try {
@@ -155,7 +148,7 @@ int main(int, char **)
 			}
 			catch(Genode::Xml_node::Nonexistent_attribute)
 			{
-				PERR("Missing \"device\" attribute. Ignore node.");
+				PWRN("Missing \"device\" attribute. Ignore node.");
 				break;
 			}
 
@@ -197,7 +190,6 @@ int main(int, char **)
 			nic_cfg.is_configured = 1;
 
 			PDBG("nic device=%02x:%02x.%x", nic_cfg.bus, nic_cfg.dev, nic_cfg.func);
-
 
 		} while(0);
 	}

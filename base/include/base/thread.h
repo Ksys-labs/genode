@@ -230,18 +230,19 @@ namespace Genode {
 			 */
 			void _deinit_platform_thread();
 
-			/* hook only used for microblaze kernel */
-			void _init_context(Context* c);
-
 		protected:
 
 			/**
 			 * Capability for this thread (set by _start())
 			 *
 			 * Used if thread creation involves core's CPU service.
-			 * Currently, this is not the case for NOVA.
 			 */
 			Genode::Thread_capability _thread_cap;
+
+			/**
+			 * Capability to pager paging this thread (created by _start())
+			 */
+			Genode::Pager_capability  _pager_cap;
 
 			/**
 			 * Pointer to corresponding thread context

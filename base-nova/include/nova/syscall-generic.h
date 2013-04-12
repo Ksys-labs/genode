@@ -59,9 +59,10 @@ namespace Nova {
 		NOVA_LOOKUP     = 0x8,
 		NOVA_EC_CTRL    = 0x9,
 		NOVA_SC_CTRL    = 0xa,
-		NOVA_SM_CTRL    = 0xb,
-		NOVA_ASSIGN_PCI = 0xc,
-		NOVA_ASSIGN_GSI = 0xd,
+		NOVA_PT_CTRL    = 0xb,
+		NOVA_SM_CTRL    = 0xc,
+		NOVA_ASSIGN_PCI = 0xd,
+		NOVA_ASSIGN_GSI = 0xe,
 	};
 
 	/**
@@ -330,6 +331,8 @@ namespace Nova {
 
 			enum {
 				RIGHT_EC_RECALL = 0x1U,
+				RIGHT_PT_CTRL   = 0x1U,
+				RIGHT_PT_CALL   = 0x2U
 			};
 
 			Obj_crd() : Crd(0, 0)
@@ -464,6 +467,11 @@ namespace Nova {
 		unsigned msg_words() { return items & 0xffffU; }
 
 		/**
+		 * Return current number of message items on UTCB
+		 */
+		unsigned msg_items() { return items >> 16; }
+
+		/**
 		 * Append message-transfer item to message buffer
 		 *
 		 * \param exception  true to append the item to an exception reply
@@ -472,11 +480,13 @@ namespace Nova {
 		bool append_item(Crd crd, mword_t sel_hotspot,
 		                 bool kern_pd = false,
 		                 bool update_guest_pt = false,
-		                 bool translate_map = false)
+		                 bool translate_map = false,
+		                 bool dma_mem = false)
 		{
 			/* transfer items start at the end of the UTCB */
 			items += 1 << 16;
-			Item *item = reinterpret_cast<Item *>(this) + (PAGE_SIZE_BYTE / sizeof(struct Item)) - (items >> 16);
+			Item *item = reinterpret_cast<Item *>(this);
+			item += (PAGE_SIZE_BYTE / sizeof(struct Item)) - msg_items();
 
 			/* check that there is enough space left on UTCB */
 			if (msg + msg_words() >= reinterpret_cast<mword_t *>(item)) {
@@ -490,7 +500,13 @@ namespace Nova {
 			/* update guest page table */
 			unsigned g = update_guest_pt ? (1 << 10) : 0;
 
-			item->hotspot = crd.hotspot(sel_hotspot) | g | h | (translate_map ? 2 : 1);
+			/* mark memory dma able */
+			unsigned d = dma_mem ? (1 << 9) : 0;
+
+			/* set type of delegation, either 'map' or 'translate and map' */
+			unsigned m = translate_map ? 2 : 1;
+
+			item->hotspot = crd.hotspot(sel_hotspot) | g | h | d | m;
 			item->crd = crd.value();
 
 			return true;

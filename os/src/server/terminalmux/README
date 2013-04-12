@@ -1,0 +1,17 @@
+The 'terminalmux' server allows to multiplex several terminal connections to one 
+serial port. It is compatible with Freescale's mux_server application. More 
+information about mux_server is available at 
+http://www.freescale.com/infocenter/index.jsp?topic=%2FQORIQSDK%2F1331080.html 
+in chapter "Mux-server Utility (Linux)".
+
+Example:
+Run script 'terminalmux.run', and then run 'mux_server' on the host use command:
+mux_server -s 115200 /dev/pts/10 8001 8002 8003 &
+
+Run 3 copy of socat utility with parameters:
+socat -,raw,echo=0 tcp:0:8001
+socat -,raw,echo=0 tcp:0:8002
+socat -,raw,echo=0 tcp:0:8003
+
+First and second session show messages from two test-terminal applications, 
+third session connected to terminal-echo application.

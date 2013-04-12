@@ -33,7 +33,7 @@ namespace Nic {
 		Connection(Genode::Range_allocator *tx_block_alloc,
 		           Genode::size_t           tx_buf_size = 64*1024,
 		           Genode::size_t           rx_buf_size = 64*1024,
-				   const char              *label = "")
+		           const char              *label = "")
 		:
 			Genode::Connection<Session>(
 				session("ram_quota=%zd, tx_buf_size=%zd, rx_buf_size=%zd, label=\"%s\"",

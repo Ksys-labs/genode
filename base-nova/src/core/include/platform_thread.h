@@ -22,6 +22,9 @@
 #include <base/thread.h>
 #include <base/pager.h>
 
+/* core includes */
+#include <address_space.h>
+
 namespace Genode {
 
 	class Platform_pd;
@@ -36,6 +39,7 @@ namespace Genode {
 			unsigned      _cpu_no;
 			bool          _is_main_thread;
 			bool          _is_vcpu;
+			char          _name[Thread_base::Context::NAME_LEN];
 
 			addr_t _sel_ec()       { return _id_base; }
 			addr_t _sel_sc()       { return _id_base + 1; }
@@ -96,6 +100,11 @@ namespace Genode {
 			 * \throw Cpu_session::State_access_failed
 			 */
 			Thread_state state();
+
+			/**
+			 * Return the address space to which the thread is bound
+			 */
+			Weak_ptr<Address_space> address_space();
 
 
 			/************************

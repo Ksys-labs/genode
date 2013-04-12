@@ -1,0 +1,192 @@
+assert_spec foc
+assert_spec x86
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	drivers/framebuffer
+	drivers/uart
+	drivers/atapi
+	server/part_blk
+	server/rom_loopdev
+	l4linux-ata
+}
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+	<start name="pci_drv">
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="PCI"/></provides>
+	</start>
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="atapi_drv">
+		<resource name="RAM" quantum="8M" />
+		<provides><service name="Block" /></provides>
+		<config ata="yes"/>
+	</start>
+	<start name="part_blk">
+		<resource name="RAM" quantum="10M" />
+		<provides><service name="Block" /></provides>
+		<config>
+			<policy label="fedora -> sdb" partition="1"/>
+		</config>
+		<route>
+			<service name="Block">  <child name="atapi_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="uart_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="fedora" uart="1"/>
+		</config>
+	</start>
+	<start name="rom_loopdev">
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="fedora18.img" block_size="4096"/>
+	</start>
+	<start name="fedora">
+		<binary name="l4linux-ata"/>
+		<resource name="RAM" quantum="512M"/>
+		<config args="mem=256M console=tty1 console=ttyS0 l4x_rd=fedora-initrd.cpio.gz root=/dev/sda l4x_cpus=2 l4x_cpus_map=0,1 readonlyroot">
+			<block label="sda"/>
+			<block label="sdb"/>
+		</config>
+		<route>
+			<service name="Block">
+				<if-arg key="label" value="sda"/> <child name="rom_loopdev"/>
+			</service>
+			<service name="Block">
+				<if-arg key="label" value="sdb"/> <child name="part_blk"/>
+			</service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer
+	uart_drv
+	atapi_drv
+	part_blk
+	rom_loopdev
+	l4linux-ata
+	fedora-initrd.cpio.gz
+	fedora18.img
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+set initrd_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora-initrd.cpio.gz"
+set rootfs_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora18.img"
+set disk_image "bin/hda.img"
+
+if {![file exists bin/fedora-initrd.cpio.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/fedora-initrd.cpio.gz $initrd_uri
+}
+
+if {![file exists bin/fedora18.img]} {
+	puts "Download rootfs (use for login/password root/root) ..."
+	exec >& /dev/null wget -c -O bin/fedora18.img $rootfs_uri
+}
+
+if { [file exists $disk_image] == 0 } then {
+	puts "creating disk image \"$disk_image\""
+	catch {
+		exec dd if=/dev/zero of=$disk_image bs=512 count=1M
+	}
+	puts "using sfdisk to partition disk image, requires root privileges"
+	catch { 
+		exec echo -e "0,22,83\n22,22,83\n44,21,83\n" | sudo sfdisk -f $disk_image
+	}
+	puts "creating ext4 fs"
+	catch { 
+		exec sudo kpartx -a $disk_image
+		exec sudo mkfs.ext4 /dev/mapper/loop0p1
+		exec sudo mkfs.ext4 /dev/mapper/loop0p2
+		exec sudo mkfs.ext4 /dev/mapper/loop0p3
+		exec sudo kpartx -d $disk_image
+	}
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 3072 "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -serial pty"
+append qemu_args " -smp 2,cores=2 "
+append qemu_args " -net nic,model=e1000 -net user "
+append qemu_args " -boot d -hda $disk_image  "
+
+#
+# Execute test case
+#
+run_genode_until forever

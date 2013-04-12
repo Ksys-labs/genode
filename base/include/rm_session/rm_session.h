@@ -100,6 +100,7 @@ namespace Genode {
 		class Out_of_metadata   : public Attach_failed { };
 
 		class Invalid_thread    : public Exception { };
+		class Unbound_thread    : public Exception { };
 
 		/**
 		 * Destructor
@@ -156,6 +157,7 @@ namespace Genode {
 		 * \param thread  thread that will be paged
 		 * \throw         Invalid_thread
 		 * \throw         Out_of_metadata
+		 * \throw         Unbound_thread
 		 * \return        capability to be used for handling page faults
 		 *
 		 * This method must be called at least once to establish a valid
@@ -163,6 +165,13 @@ namespace Genode {
 		 * and the client thread.
 		 */
 		virtual Pager_capability add_client(Thread_capability thread) = 0;
+
+		/**
+		 * Remove client from pager
+		 *
+		 * \param pager  pager capability of client to be removed
+		 */
+		virtual void remove_client(Pager_capability) = 0;
 
 		/**
 		 * Register signal handler for region-manager faults
@@ -197,12 +206,14 @@ namespace Genode {
 		GENODE_RPC_THROW(Rpc_add_client, Pager_capability, add_client,
 		                 GENODE_TYPE_LIST(Invalid_thread, Out_of_metadata),
 		                 Thread_capability);
+		GENODE_RPC(Rpc_remove_client, void, remove_client, Pager_capability);
 		GENODE_RPC(Rpc_fault_handler, void, fault_handler, Signal_context_capability);
 		GENODE_RPC(Rpc_state, State, state);
 		GENODE_RPC(Rpc_dataspace, Dataspace_capability, dataspace);
 
 		GENODE_RPC_INTERFACE(Rpc_attach, Rpc_detach, Rpc_add_client,
-		                     Rpc_fault_handler, Rpc_state, Rpc_dataspace);
+		                     Rpc_remove_client, Rpc_fault_handler, Rpc_state,
+		                     Rpc_dataspace);
 	};
 }
 

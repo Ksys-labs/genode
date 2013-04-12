@@ -19,6 +19,9 @@
 #include <base/thread_state.h>
 #include <base/native_types.h>
 
+/* core includes */
+#include <address_space.h>
+
 namespace Genode {
 
 	class Platform_pd;
@@ -80,15 +83,21 @@ namespace Genode {
 			 */
 			Thread_state state();
 
+			/**
+			 * Return the address space to which the thread is bound
+			 */
+			Weak_ptr<Address_space> address_space();
+
 
 			/************************
 			 ** Accessor functions **
 			 ************************/
 
 			/**
-			 * Set pager
+			 * Set/get pager
 			 */
 			void pager(Pager_object *pager) { }
+			Pager_object *pager() const { return 0; }
 
 			/**
 			 * Return identification of thread when faulting

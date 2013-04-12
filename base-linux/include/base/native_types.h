@@ -29,25 +29,9 @@
 namespace Genode {
 
 	/**
-	 * Native lock type
+	 * Thread ID
 	 *
-	 * We are using a sleeping spinlock as lock implementation on Linux. This
-	 * is a temporary solution until we have implemented futex-based locking.
-	 * In a previous version, we have relied on POSIX semaphores as provided by
-	 * the glibc. However, relying on the glibc badly interferes with a custom
-	 * libc implementation. The glibc semaphore implementation expects to find
-	 * a valid pthread structure via the TLS pointer. We do not have such a
-	 * structure because we create threads via the 'clone' system call rather
-	 * than 'pthread_create'. Hence we have to keep the base framework clean
-	 * from glibc usage altogether.
-	 */
-	typedef volatile int Native_lock;
-
-	/**
-	 * Thread ID used in lock implementation
-	 *
-	 * Unfortunately, both - PID and TID - are needed for lx_tgkill() in
-	 * thread_check_stopped_and_restart().
+	 * Unfortunately, both - PID and TID - are needed for lx_tgkill()
 	 */
 	struct Native_thread_id
 	{
@@ -78,6 +62,11 @@ namespace Genode {
 		bool is_ipc_server;
 
 		/**
+		 * Natively aligned memory location used in the lock implementation
+		 */
+		int futex_counter __attribute__((aligned(sizeof(Genode::addr_t))));
+
+		/**
 		 * Opaque pointer to additional thread-specific meta data
 		 *
 		 * This pointer is used by hybrid Linux/Genode program to maintain
@@ -86,7 +75,7 @@ namespace Genode {
 		 */
 		Thread_meta_data *meta_data;
 
-		Native_thread() : is_ipc_server(false), meta_data(0) { }
+		Native_thread() : is_ipc_server(false), futex_counter(0), meta_data(0) { }
 	};
 
 	inline bool operator == (Native_thread_id t1, Native_thread_id t2) {

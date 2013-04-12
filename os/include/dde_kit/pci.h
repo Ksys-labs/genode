@@ -136,9 +136,42 @@ int dde_kit_pci_first_device(int *bus, int *dev, int *fun);
 int dde_kit_pci_next_device(int *bus, int *dev, int *fun);
 
 /**
- * Initialize PCI subsystem
+ * Allocate a DMA buffer and map it. If an IOMMU is available this functions
+ * takes care that DMA to this buffer for the given PCI device is permitted.
+ *
+ * \retval bus  bus number
+ * \retval dev  device number
+ * \retval fun  function number
+ * 
+ * \return 0 in case of failure, otherwise the virtual address of the buffer.
  */
-void dde_kit_pci_init(void);
+dde_kit_addr_t dde_kit_pci_alloc_dma_buffer(int bus, int dev, int fun,
+                                            dde_kit_size_t size);
+
+/**
+ * Initialize PCI subsystem
+ *
+ * The PCI subsystem can be instructed to request solely a specific PCI device
+ * or a specific PCI subset (one class or multiple). The parameters are
+ * described by the parameters device_class and class_mask, which are used to
+ * filter PCI class codes as described by the pseudo code:
+ *
+ * for each 'pci_device' out of 'all_pci_devices' try
+ * {
+ *    bool nohit = (pci_device.class_code() ^ device_class) & class_mask
+ *    if (!nohit)
+ *      use 'pci_device' with this PCI subsystem
+ * }
+ *
+ * If no restriction to the PCI subsystem should be applied, use 0 for the
+ * device_class and class_mask.
+ *
+ * \param device_class filter applied with 'bitwise XOR' operand to the class
+ *                     code of each PCI device
+ * \param class_mask   filter applied with 'bitwise AND' operand to the result
+ *                     out of device_class and PCI class code of each device
+ */
+void dde_kit_pci_init(unsigned device_class, unsigned class_mask);
 
 
 #endif /* _INCLUDE__DDE_KIT__PCI_H_ */

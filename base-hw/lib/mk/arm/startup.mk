@@ -1,22 +1,10 @@
 #
-# \brief  Essential platform specific sources for common programs
+# \brief  Linked against any program expect LDSO and dynamic binaries
 # \author Martin Stein
 # \date   2012-04-16
 #
 
-# add libraries
-LIBS += cxx lock
+include $(BASE_DIR)/lib/mk/startup.inc
 
-# add C++ sources
-SRC_CC += _main.cc
+vpath crt0.s $(REP_DIR)/src/platform/arm
 
-# add assembly sources
-SRC_S += crt0.s syscall.cc
-
-# add include paths
-INC_DIR += $(REP_DIR)/src/platform $(BASE_DIR)/src/platform
-
-# declare source paths
-vpath crt0.s     $(REP_DIR)/src/platform
-vpath _main.cc   $(BASE_DIR)/src/platform
-vpath syscall.cc $(REP_DIR)/src/base/arm

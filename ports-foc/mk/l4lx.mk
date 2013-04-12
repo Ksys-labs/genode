@@ -7,25 +7,9 @@ LX_BASE_TARGET     ?= $(LX_TARGET)
 VERBOSE_LX_MK      ?= 0
 REQUIRES           += foc
 INC_DIR            += $(L4LX_REP_DIR)/include
-LIBS               += l4lx l4sys
-GENODE_LIBS        := allocator_avl \
-                      avl_tree \
-                      cap_alloc \
-                      console \
-                      cxx \
-                      env \
-                      heap \
-                      ipc \
-                      l4lx \
-                      l4sys \
-                      lock \
-                      log_console \
-                      server \
-                      signal \
-                      slab \
-                      startup \
-                      syscalls \
-                      thread
+LIBS                = l4lx l4sys
+GENODE_LIBS        := base base-common startup syscall cxx l4lx l4sys
+
 GENODE_LIBS        := $(foreach l,$(GENODE_LIBS),$(BUILD_BASE_DIR)/var/libcache/$l/$l.lib.a)
 GENODE_LIBS_SORTED  = $(sort $(wildcard $(GENODE_LIBS)))
 GENODE_LIBS_SORTED += $(shell $(CC) $(CC_MARCH) -print-libgcc-file-name)

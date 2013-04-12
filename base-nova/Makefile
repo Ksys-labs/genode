@@ -7,8 +7,9 @@
 
 VERBOSE     ?= @
 ECHO        = @echo
-GIT_URL     = git://github.com/IntelLabs/NOVA.git 
-GIT_REV     = 16dd65c15dac298dc5b36d636d79fa0110bd5736
+GIT_URL     = https://github.com/alex-ab/NOVA.git
+GIT_REV     = HEAD
+GIT_BRANCH  = r2
 CONTRIB_DIR = contrib
 PATCHES     = $(shell find patches -name '*.patch')
 
@@ -39,8 +40,11 @@ help::
 $(CONTRIB_DIR)/.git:
 	$(VERBOSE)git clone $(GIT_URL) $(CONTRIB_DIR)
 
+.PHONY: $(CONTRIB_DIR)
+
 $(CONTRIB_DIR): $(CONTRIB_DIR)/.git
-	$(VERBOSE)cd $(CONTRIB_DIR); git reset --hard $(GIT_REV)
+	$(VERBOSE)cd $(CONTRIB_DIR); git pull
+	$(VERBOSE)cd $(CONTRIB_DIR); git reset --hard $(GIT_REV); git checkout $(GIT_BRANCH)
 	$(ECHO) "applying patches to '$(CONTRIB_DIR)/'"
 	$(VERBOSE)for i in $(PATCHES); do patch -d $@ -p1 < $$i; done
 
