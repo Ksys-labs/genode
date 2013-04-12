@@ -1,0 +1,249 @@
+assert_spec foc
+assert_spec x86
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer
+	drivers/framebuffer
+	drivers/uart
+	drivers/acpi
+	server/nit_fb
+	server/nitpicker
+	server/terminalmux
+	server/rom_loopdev
+	l4linux-ata
+	l4linux-ata-srv
+}
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+set config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="acpi">
+		<resource name="RAM" quantum="8M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+			<service name="PCI"/>
+			<service name="IRQ" />
+		</provides>
+		<route>
+			<service name="PCI"> <any-child /> </service>
+			<any-service> <parent/> <any-child /> </any-service>
+		</route>
+	</start>
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="nic_drv.2">
+		<binary name="nic_drv"/>
+		<resource name="RAM" quantum="8M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="IRQ"><child name="acpi" /></service>
+			<any-service> <parent /> <any-child /></any-service>
+		</route>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="nitpicker">
+		<resource name="RAM" quantum="2M"/>
+		<provides><service name="Nitpicker"/></provides>
+		<route>
+			<service name="Input">       <child name="ps2_drv"/> </service>
+			<service name="Framebuffer"> <child name="vesa_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="uart_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="terminalmux" uart="1"/>
+		</config>
+	</start>
+	<start name="terminalmux">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="l4linux.1" channel="0"/>
+			<policy label="l4linux.2" channel="1"/>
+		</config>
+		<route>
+			<service name="Terminal"> <child name="uart_drv"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="linux.1.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="0" width="1024" height="370"/>
+	</start>
+	<start name="linux.2.fb">
+		<binary name="nit_fb"/>
+		<resource name="RAM" quantum="4M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config xpos="0" ypos="372" width="1024" height="370"/>
+	</start>
+	<start name="blockdev.1">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="linux1.img" block_size="4096"/>
+	</start>
+	<start name="blockdev.2">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="linux2.img" block_size="4096"/>
+	</start>
+	<start name="l4linux.1">
+		<binary name="l4linux-ata-srv"/>
+		<resource name="RAM" quantum="1000M"/>
+		<config args="mem=512M console=tty1 console=ttyS0 root=/dev/sda">
+			<block label="sda"/>
+		</config>
+		<provides>
+			<service name="Nic"/>
+		</provides>
+		<route>
+			<service name="Input">       <child name="linux.1.fb"/>  </service>
+			<service name="Framebuffer"> <child name="linux.1.fb"/>  </service>
+			<service name="Nic">         <child name="nic_drv.1"/>   </service> 
+			<service name="Terminal">    <child name="terminalmux"/> </service>
+			<service name="Block">       <child name="blockdev.1"/>  </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	<start name="l4linux.2">
+		<binary name="l4linux-ata"/>
+		<resource name="RAM" quantum="1000M"/>
+		<config args="mem=512M console=tty1 console=ttyS0 root=/dev/sda genode_net.if_nums=2">
+			<block label="sda"/>
+		</config>
+		<route>
+			<service name="Input">       <child name="linux.2.fb"/>  </service>
+			<service name="Framebuffer"> <child name="linux.2.fb"/>  </service>
+			<service name="Nic">
+				<if-arg key="label" value="eth0"/> <child name="nic_drv.2"/>
+			</service>
+			<service name="Nic">
+				<if-arg key="label" value="eth1"/> <child name="l4linux.1"/>
+			</service>
+			<service name="Terminal">    <child name="terminalmux"/> </service>
+			<service name="Block">       <child name="blockdev.2"/>  </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+#		<config args="mem=512M console=tty1 console=ttyS0 root=/dev/sda l4x_cpus=1 l4x_cpus_map=0">
+#		<config args="mem=512M console=tty1 console=ttyS0 root=/dev/sda l4x_cpus=1 l4x_cpus_map=1 genode_net.if_nums=2">
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer
+	uart_drv
+	acpi_drv
+	rom_loopdev
+	nitpicker
+	nit_fb
+	terminalmux
+	l4linux-ata-srv
+	l4linux-ata
+	linux1.img
+	linux2.img
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 2048 "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -serial pty"
+#append qemu_args " -smp 2,cores=2 "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap0,script=no,downscript=no "
+append qemu_args " -net nic,model=e1000 -net tap,ifname=tap1,script=no,downscript=no "
+
+#
+# Execute test case
+#
+run_genode_until forever
