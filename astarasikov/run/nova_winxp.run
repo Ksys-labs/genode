@@ -75,7 +75,7 @@ puts $vm_cfg_fd {<config>
 	</machine>
 	<multiboot>
 		<rom name="munich"/>
-		<rom name="bzImage" cmdline="mem=64M vga=788 root=/dev/ram0 console=ttyS0 earlyprintk=ttyS0"/>
+		<rom name="bzImage" cmdline="mem=512M vga=788 root=/dev/ram0 console=ttyS0 earlyprintk=ttyS0"/>
 		<rom name="ramdisk"/>
 	</multiboot>
 </config>}
@@ -118,8 +118,8 @@ puts $launchpad_cfg_fd {<config>
 				<config>
 					<animate>off</animate>
 					<x>10</x><y>10</y>
-					<width>800</width>
-					<height>600</height>
+					<width>640</width>
+					<height>480</height>
 				</config>
 			</start>
 
@@ -245,6 +245,13 @@ append config {
 		<route> <any-service><parent/></any-service> </route>
 	</start>
 
+	<start name="vancouver">
+		<binary name="vancouver"/>
+		<resource name="RAM" quantum="1024M"/>
+		<configfile name="vm_linux.cfg"/>
+	</start>
+	
+	<!--
 	<start name="nitpicker">
 		<resource name="RAM" quantum="8M"/>
 		<route>
@@ -256,13 +263,6 @@ append config {
 		<provides><service name="Nitpicker"/></provides>
 	</start>
 
-	<start name="vancouver">
-		<binary name="vancouver"/>
-		<resource name="RAM" quantum="512M"/>
-		<configfile name="vm_linux.cfg"/>
-	</start>
-	
-	<!--
 	<start name="launchpad">
 		<resource name="RAM" quantum="2500M"/>
 		<configfile name="launchpad-config"/>
