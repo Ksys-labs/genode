@@ -572,7 +572,7 @@ struct kmem_cache
 struct kmem_cache *kmem_cache_create(const char *name, size_t size, size_t align,
                                      unsigned long falgs, void (*ctor)(void *))
 {
-	dde_kit_log(DEBUG_SLAB, "\"%s\" obj_size=%d", name, size);
+	dde_kit_log(DEBUG_SLAB, "\"%s\" obj_size=%zd", name, size);
 
 	struct kmem_cache *cache;
 
@@ -643,7 +643,7 @@ void *_ioremap(resource_size_t phys_addr, unsigned long size, int wc)
 {
 	dde_kit_addr_t map_addr;
 	if (dde_kit_request_mem(phys_addr, size, wc, &map_addr)) {
-		PERR("Failed to request I/O memory: [%x,%lx)", phys_addr, phys_addr + size);
+		PERR("Failed to request I/O memory: [%zx,%lx)", phys_addr, phys_addr + size);
 		return 0;
 	}
 
@@ -801,6 +801,20 @@ long find_next_zero_bit_le(const void *addr,
  ** linux/byteorder/generic.h **
  *******************************/
 
+u16 get_unaligned_le16(const void *p)
+{
+	const struct __una_u16 *ptr = (const struct __una_u16 *)p;
+	return ptr->x;
+}
+
+
+u32 get_unaligned_le32(const void *p)
+{
+	const struct __una_u32 *ptr = (const struct __una_u32 *)p;
+	return ptr->x;
+}
+
+
 void put_unaligned_le32(u32 val, void *p)
 {
 	struct __una_u32 *ptr = (struct __una_u32 *)p;
@@ -810,7 +824,7 @@ void put_unaligned_le32(u32 val, void *p)
 
 u64 get_unaligned_le64(const void *p)
 {
-	struct __una_u64 *ptr = (struct __una_u64 *)p;
+	const struct __una_u64 *ptr = (const struct __una_u64 *)p;
 	return ptr->x;
 }
 
