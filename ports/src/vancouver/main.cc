@@ -57,7 +57,6 @@
 /* NOVA userland includes */
 #include <nul/vcpu.h>
 #include <nul/motherboard.h>
-#include <nul/service_timer.h>
 #include <sys/hip.h>
 
 /* local includes */
@@ -70,7 +69,7 @@
 enum {
 	PAGE_SIZE_LOG2 = 12UL,
 	PAGE_SIZE      = 1UL << PAGE_SIZE_LOG2,
-	STACK_SIZE     = 4096,
+	STACK_SIZE     = 1024*sizeof(Genode::addr_t),
 };
 
 
@@ -223,6 +222,8 @@ class Guest_memory
 			remaining_size(backing_store_size-fb_size)
 		{
 			try {
+				/* free up preliminary mapping to reserve lower address space */
+				Genode::env()->rm_session()->detach(PAGE_SIZE);
 
 				/*
 				 * Attach reservation to the beginning of the local address space.
@@ -239,7 +240,9 @@ class Guest_memory
 				_fb_addr = Genode::env()->rm_session()->attach_at(_fb_ds,
 				        ((Genode::addr_t) _local_addr)+backing_store_size-fb_size);
 
-			} catch (Genode::Rm_session::Region_conflict) {  }
+			} catch (Genode::Rm_session::Region_conflict) {
+				PERR("region conflict");
+			}
 		}
 
 		~Guest_memory()
@@ -1094,7 +1097,7 @@ class Machine : public StaticReceiver<Machine>
 					Vcpu_dispatcher *vcpu_dispatcher =
 						new Vcpu_dispatcher(msg.vcpu, _guest_memory,
 						                    _motherboard,
-						                    _hip->has_svm(), _hip->has_vmx());
+						                    _hip->has_feature_svm(), _hip->has_feature_vmx());
 
 					msg.value = vcpu_dispatcher->sel_sm_ec();
 					return true;
@@ -1292,7 +1295,7 @@ class Machine : public StaticReceiver<Machine>
 			}
 			msg.wallclocktime = _rtc->get_current_time();
 			Logging::printf("Got time %llx\n", msg.wallclocktime);
-			msg.timestamp = _motherboard.clock()->clock(TimerProtocol::WALLCLOCK_FREQUENCY);
+			msg.timestamp = _motherboard.clock()->clock(1000000U);
 
 			*Genode::Thread_base::myself()->utcb() = utcb_backup;
 
@@ -1374,7 +1377,7 @@ class Machine : public StaticReceiver<Machine>
 		:
 			_hip_rom("hypervisor_info_page"),
 			_hip(Genode::env()->rm_session()->attach(_hip_rom.dataspace())),
-			_clock(_hip->freq_tsc*1000),
+			_clock(_hip->tsc_freq*1000),
 			_motherboard(&_clock, _hip),
 			_guest_memory(guest_memory),
 			_boot_modules(boot_modules)
@@ -1511,21 +1514,33 @@ class Machine : public StaticReceiver<Machine>
 extern unsigned long _prog_img_beg;  /* begin of program image (link address) */
 extern unsigned long _prog_img_end;  /* end of program image */
 
-namespace Genode { Rm_session *env_context_area_rm_session(); }
+namespace Genode {
+	Rm_session *env_context_area_rm_session();
 
+	void __attribute__((constructor)) init_context_area_vmm() {
+		/**
+		 * XXX Invoke env_context_rm_session to make sure the virtual region of
+		 *     the context area is reserved at core. Typically this happens
+		 *     when the first time a thread is allocated. Unfortunately,
+		 *     beforehand the VMM may try to grab the same region for
+		 *     large VM sizes.
+		 */
+		env_context_area_rm_session();
+	}
+}
 
 int main(int argc, char **argv)
 {
-	Genode::printf("--- Vancouver VMM starting ---\n");
-
-	/**
-	 * XXX Invoke env_context_rm_session to make sure the virtual region of
-	 *     the context area is reserved at core. Typically this happens when
-	 *     the first time a thread is allocated.
-	 *     Unfortunately, beforehand the VMM tries to grab the same region for
-	 *     large VM sizes.
+	/*
+	 * Reserve complete lower address space so that nobody else can take it.
+	 * When we found out how much memory we actually should use for the VM,
+	 * the reservation is adjusted to the real size.
 	 */
-	Genode::env_context_area_rm_session();
+	Genode::Rm_connection pre_reservation(0, Genode::Native_config::context_area_virtual_base());
+	Genode::env()->rm_session()->attach_at(pre_reservation.dataspace(),
+	                                       PAGE_SIZE, 0, PAGE_SIZE);
+
+	Genode::printf("--- Vancouver VMM starting ---\n");
 
 	/* request max available memory */
 	Genode::addr_t vm_size = Genode::env()->ram_session()->avail();
@@ -1545,6 +1560,8 @@ int main(int argc, char **argv)
 	} catch (...) { }
 
 	static Guest_memory guest_memory(vm_size, fb_size);
+	/* free up temporary rm_session */
+	Genode::env()->parent()->close(pre_reservation.cap());
 
 	/* diagnostic messages */
 	Genode::printf("[0x%08lx, 0x%08lx) - %lu MiB - guest physical memory\n",

@@ -190,6 +190,7 @@ namespace Terminal {
 
 			Read_buffer _read_buffer;
 
+			Ncurses         &_ncurses;
 			Ncurses::Window &_window;
 
 			struct Label
@@ -223,6 +224,7 @@ namespace Terminal {
 			                  Session_manager &session_manager,
 			                  char const      *label)
 			:
+				_ncurses(ncurses),
 				_window(*ncurses.create_window(0, 1, ncurses.columns(), ncurses.lines() - 1)),
 				_label(label),
 				_session_manager(session_manager),
@@ -238,6 +240,7 @@ namespace Terminal {
 			~Session_component()
 			{
 				_session_manager.remove(this);
+				_ncurses.destroy_window(&_window);
 			}
 
 
@@ -357,7 +360,6 @@ namespace Terminal {
 
 			Session_component *_create_session(const char *args)
 			{
-				PLOG("new session args=\"%s\"", args);
 				/*
 				 * XXX read I/O buffer size from args
 				 */
@@ -405,6 +407,11 @@ class Status_window
 			_window(*_ncurses.create_window(0, 0, ncurses.columns(), 1))
 		{
 			_label[0] = 0;
+		}
+
+		~Status_window()
+		{
+			_ncurses.destroy_window(&_window);
 		}
 
 		void label(char const *label)
@@ -501,6 +508,11 @@ class Menu : public Registry::Entry
 			_selected_idx(0),
 			_max_idx(0)
 		{ }
+
+		~Menu()
+		{
+			_ncurses.destroy_window(&_window);
+		}
 
 		void reset_selection() { _selected_idx = 0; }
 
@@ -611,6 +623,7 @@ void Session_manager::activate_menu()
 	_menu.reset_selection();
 	_registry.to_front(&_menu);
 	_status_window.label(_menu.label());
+	_ncurses.clear_ok();
 	_menu.flush_all();
 }
 

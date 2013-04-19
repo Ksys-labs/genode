@@ -39,8 +39,9 @@ usage:
 	@echo "                  'foc_vea9x4'"
 	@echo "                  'foc_panda'"
 	@echo "                  'foc_arndale'"
-	@echo "                  'lx_hybrid_x86'"
 	@echo "                  'foc_overo'"
+	@echo "                  'foc_cubieboard'"
+	@echo "                  'lx_hybrid_x86'"
 	@echo
 	@echo "  <build-dir>  is the location of the build directory to create"
 	@echo
@@ -121,7 +122,7 @@ $(BUILD_DIR)/Makefile:
 #
 # Add 'ports-foc' repository to Fiasco.OC build directory
 #
-ifeq ($(filter-out foc_x86_32 foc_imx53 foc_pbxa9 foc_vea9x4 foc_panda,$(PLATFORM)),)
+ifeq ($(filter-out foc_x86_32 foc_imx53 foc_pbxa9 foc_vea9x4 foc_panda foc_overo foc_cubieboard,$(PLATFORM)),)
 $(BUILD_DIR)/etc/build.conf::
 	@cat $(BUILD_CONF).ports-foc >> $@
 endif
@@ -137,7 +138,7 @@ endif
 #
 # Add ARM drivers repositories to ARM build directories
 #
-ifeq ($(filter-out foc_panda foc_arndale hw_panda foc_imx53 foc_overo,$(PLATFORM)),)
+ifeq ($(filter-out foc_panda foc_arndale hw_panda foc_imx53 foc_overo foc_cubieboard,$(PLATFORM)),)
 $(BUILD_DIR)/etc/build.conf::
 	@cat $(BUILD_CONF).drivers_arm >> $@
 endif
@@ -184,6 +185,12 @@ foc_imx53::
 foc_arndale::
 	@echo "SPECS = genode foc_arndale" > $(BUILD_DIR)/etc/specs.conf
 
+foc_overo::
+	@echo "SPECS = genode foc_overo" > $(BUILD_DIR)/etc/specs.conf
+
+foc_cubieboard::
+	@echo "SPECS = genode foc_cubieboard" > $(BUILD_DIR)/etc/specs.conf
+
 codezero_vpb926::
 	@echo "CODEZERO_DIR = $(GENODE_DIR)/base-codezero/contrib" > $(BUILD_DIR)/etc/codezero.conf
 
@@ -208,9 +215,6 @@ hw_arndale::
 lx_hybrid_x86::
 	@echo "CROSS_DEV_PREFIX =" > $(BUILD_DIR)/etc/tools.conf
 	@echo "SPECS += always_hybrid" >> $(BUILD_DIR)/etc/specs.conf
-
-foc_overo::
-	@echo "SPECS = genode foc_overo" > $(BUILD_DIR)/etc/specs.conf
 
 $(PLATFORM)::
 	@echo "successfully created build directory at $(BUILD_DIR)"

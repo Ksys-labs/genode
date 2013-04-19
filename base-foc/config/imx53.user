@@ -40,6 +40,7 @@ CONFIG_PLATFORM_TYPE_imx53=y
 # CONFIG_PLATFORM_TYPE_rv_vexpress is not set
 # CONFIG_PLATFORM_TYPE_tegra2 is not set
 # CONFIG_PLATFORM_TYPE_custom is not set
+# CONFIG_PLATFORM_TYPE_cubieboard is not set
 CONFIG_PLATFORM_TYPE="imx53"
 # CONFIG_USE_DROPS_STDDIR is not set
 # CONFIG_USE_DICE is not set
