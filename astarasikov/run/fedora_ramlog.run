@@ -1,0 +1,257 @@
+assert_spec foc
+assert_spec x86
+
+#
+# Build
+#
+set build_components {
+	core
+	init
+	drivers/timer drivers/framebuffer drivers/uart drivers/acpi
+	server/terminalmux
+	server/rom_loopdev
+	server/ram_fs
+	server/fs_log
+	server/nic_bridge
+	app/lighttpd
+	l4linux-ata
+}
+
+lappend_if [have_spec     x86] build_components drivers/nic
+lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec     ps2] build_components drivers/input/ps2
+
+build $build_components
+create_boot_directory
+
+#
+# Config
+#
+append config  {
+<config prio_levels="2">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="acpi_drv">
+		<resource name="RAM" quantum="24M"/>
+		<provides>
+			<service name="PCI"/>
+			<service name="IRQ"/>
+		</provides>
+	</start>
+	<start name="timer">
+		<resource name="RAM" quantum="10M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+	<start name="vesa_drv">
+		<config width="1024" height="768" depth="16" buffered="no" />
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Framebuffer"/></provides>
+	</start>
+	<start name="ps2_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+	</start>
+	<start name="uart_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Uart"/>
+			<service name="Terminal"/>
+		</provides>
+		<config>
+			<policy label="terminalmux" uart="1"/>
+		</config>
+	</start>
+
+	<start name="blockdev">
+		<binary name="rom_loopdev"/>
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="Block"/>
+		</provides>
+		<config file="fedora1.img" block_size="4096"/>
+	</start>
+	
+	<start name="ram_fs">
+		<resource name="RAM" quantum="40M"/>
+		<provides><service name="File_system"/></provides>
+		<config>
+			<policy label="lighttpd" root="/" />
+			<policy label="fs_log" root="/website" writeable="yes" />
+			<content>
+				<dir name="etc">
+					<dir name="lighttpd">
+						<inline name="lighttpd.conf">
+# lighttpd configuration
+server.port          = 80
+server.document-root = "/website"
+server.event-handler = "select"
+server.network-backend = "write"
+index-file.names     = (
+  "index.xhtml", "index.html", "index.htm"
+)
+mimetype.assign      = (
+  ".html"         =>      "text/html",
+  ".htm"          =>      "text/html"
+)
+						</inline>
+					</dir>
+				</dir>
+				<dir name="website">
+					<inline name="index.html">
+<html>
+	<head>
+		<title>Hello</title>
+	</head>
+	<body>
+		<p>Hello Genode!</p>
+		<b>I am bold ;-)</b>
+	</body>
+</html>
+					</inline>
+				</dir>
+			</content>
+		</config>
+	</start>
+	
+	<start name="fs_log">
+		<resource name="RAM" quantum="10M"/>
+		<provides>
+			<service name="LOG"/>
+		</provides>
+	</start>
+	
+	<start name="nic_drv.1">
+		<binary name="nic_drv"/>
+		<resource name="RAM" quantum="18M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="PCI"> <child name="acpi_drv"/> </service>
+			<service name="IRQ"> <child name="acpi_drv"/> </service>
+			<service name="LOG"> <child name="fs_log"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="nic_bridge">
+		<resource name="RAM" quantum="40M"/>
+		<provides><service name="Nic"/></provides>
+		<route>
+			<service name="Nic"> <child name="nic_drv.1"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="lighttpd">
+		<resource name="RAM" quantum="400M" />
+		<config>
+			<arg value="lighttpd" />
+			<arg value="-f" />
+			<arg value="/etc/lighttpd/lighttpd.conf" />
+			<arg value="-D" />
+		</config>
+		<route>
+			<service name="Nic">         <child name="nic_bridge"/>  </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+	
+	<start name="l4linux">
+		<binary name="l4linux-ata"/>
+		<resource name="RAM" quantum="300M"/>
+		<config args="mem=64M console=tty1 console=ttyS0 l4x_rd=fedora-initrd.cpio.gz root=/dev/sda l4x_cpus=1 l4x_cpus_map=0 readonlyroot">
+			<block label="sda"/>
+		</config>
+		<route>
+			<service name="Input">       <child name="ps2_drv"/>  </service>
+			<service name="Framebuffer"> <child name="vesa_drv"/>  </service>
+			<service name="Nic">         <child name="nic_bridge"/>  </service>
+			<service name="Terminal">    <child name="uart_drv"/> </service>
+			<service name="Block">       <child name="blockdev"/>  </service>
+			<service name="Block">
+				<if-arg key="label" value="sdb"/> <child name="part_blk"/>
+			</service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+set boot_modules {
+	core
+	init
+	timer
+	uart_drv
+	rom_loopdev
+	terminalmux
+	l4linux-ata
+	acpi_drv
+	nic_bridge
+
+	ram_fs
+	fs_log
+	ld.lib.so libc.lib.so libc_fs.lib.so
+	
+	libm.lib.so libc_log.lib.so
+	lwip.lib.so zlib.lib.so libcrypto.lib.so libssl.lib.so
+	lighttpd
+	
+	fedora-initrd.cpio.gz
+	fedora1.img
+}
+
+lappend_if [have_spec     pci] boot_modules pci_drv
+lappend_if [have_spec     ps2] boot_modules ps2_drv
+lappend_if [have_spec    vesa] boot_modules vesa_drv
+lappend_if [have_spec     x86] boot_modules nic_drv
+
+set initrd_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora-initrd.cpio.gz"
+set rootfs_uri "http://ksyslabs.org/lib/exe/fetch.php?media=fedora18.img"
+set disk_image "bin/hda.img"
+
+if {![file exists bin/fedora-initrd.cpio.gz]} {
+	puts "Download initramfs ..."
+	exec >& /dev/null wget -c -O bin/fedora-initrd.cpio.gz $initrd_uri
+}
+
+if {![file exists bin/fedora18.img]} {
+	puts "Download rootfs (use for login/password root/root) ..."
+	exec >& /dev/null wget -c -O bin/fedora18.img $rootfs_uri
+}
+
+# Example for 3 different rootfs
+if {![file exists bin/fedora1.img]} {
+	exec >& /dev/null cp bin/fedora18.img bin/fedora1.img
+}
+
+build_boot_image  [join $boot_modules " "]
+
+#
+# Qemu
+#
+append qemu_args " -m 2048 "
+append qemu_args " -serial mon:stdio "
+append qemu_args " -net nic,model=e1000 -net user "
+append qemu_args " -net user -redir tcp:5555::80 "
+
+#
+# Execute test case
+#
+#run_genode_until forever
