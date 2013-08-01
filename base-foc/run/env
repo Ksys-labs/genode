@@ -107,6 +107,10 @@ proc copy_and_strip_binaries {binaries} {
 		exec cp bin/$binary [run_dir]/genode
 		catch {
 			exec [cross_dev_prefix]strip [run_dir]/genode/$binary }
+			
+		if {[have_spec sign]} {
+			exec bin/signfile.py $binary [run_dir]
+		}
 	}
 
 	#
