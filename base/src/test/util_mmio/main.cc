@@ -54,12 +54,6 @@ struct Cpu_state : Register<16>
 	inline static void write(access_t & v) { cpu_state = v; }
 };
 
-struct A : public Mmio {
-
-	A(addr_t const base) : Mmio(base) { }
-
-};
-
 /**
  * Exemplary MMIO region type
  */
@@ -116,6 +110,10 @@ struct Test_mmio : public Mmio
 		struct B : Bitfield<2,4> { };
 	};
 
+	struct Simple_array_1 : Register_array<0x0, 32, 2, 32> { };
+
+	struct Simple_array_2 : Register_array<0x2, 16, 4, 16> { };
+
 	struct Strict_reg : Register<0x0, 32, true>
 	{
 		struct A : Bitfield<3,2> { };
@@ -170,10 +168,11 @@ int compare_mem(uint8_t * base1, uint8_t * base2, size_t size)
  */
 int test_failed(unsigned test_id)
 {
-	PERR("Test ended, test %i failed", test_id);
+	printf("Test %i failed\n", test_id);
 	printf("  mmio_mem:  0x ");
 	dump_mem(mmio_mem, sizeof(mmio_mem));
 	printf("\n  cpu_state: 0x%4X\n", cpu_state);
+	printf("Test done\n");
 	return -1;
 }
 
@@ -405,7 +404,21 @@ int main()
 	if (compare_mem(mmio_mem, mmio_cmpr_15, sizeof(mmio_mem))) {
 		return test_failed(15); }
 
-	printf("Test ended successfully\n");
+	/**
+	 * Test 16, writing to simple register array
+	 */
+	zero_mem(mmio_mem, sizeof(mmio_mem));
+	*(uint8_t*)((addr_t)mmio_mem + sizeof(uint16_t)) = 0xaa;
+	mmio.write<Test_mmio::Simple_array_1>(0x12345678, 0);
+	mmio.write<Test_mmio::Simple_array_1>(0x87654321, 1);
+
+	mmio.write<Test_mmio::Simple_array_2>(0xfedc, 0);
+	mmio.write<Test_mmio::Simple_array_2>(0xabcd, 2);
+	static uint8_t mmio_cmpr_16[MMIO_SIZE] = {0x78,0x56,0xdc,0xfe,0x21,0x43,0xcd,0xab};
+	if (compare_mem(mmio_mem, mmio_cmpr_16, sizeof(mmio_mem))) {
+	  return test_failed(16); }
+
+	printf("Test done\n");
 	return 0;
 }
 

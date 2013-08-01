@@ -47,6 +47,7 @@
 #include <nic_session/connection.h>
 #include <os/config.h>
 #include <os/alarm.h>
+#include <os/synced_interface.h>
 #include <timer_session/connection.h>
 #include <nova_cpu_session/connection.h>
 #include <rtc_session/connection.h>
@@ -57,10 +58,10 @@
 /* NOVA userland includes */
 #include <nul/vcpu.h>
 #include <nul/motherboard.h>
-#include <nul/service_timer.h>
 #include <sys/hip.h>
 
 /* local includes */
+#include <synced_motherboard.h>
 #include <device_model_registry.h>
 #include <boot_module_provider.h>
 #include <console.h>
@@ -70,7 +71,7 @@
 enum {
 	PAGE_SIZE_LOG2 = 12UL,
 	PAGE_SIZE      = 1UL << PAGE_SIZE_LOG2,
-	STACK_SIZE     = 4096,
+	STACK_SIZE     = 1024*sizeof(Genode::addr_t),
 };
 
 
@@ -85,32 +86,23 @@ Genode::Lock *utcb_lock()
 	return &inst;
 }
 
-/**
- * Semaphore used as global lock
- *
- * Used for startup synchronization and coarse-grained locking.
- */
-Genode::Lock global_lock(Genode::Lock::LOCKED);
-Genode::Lock timeouts_lock(Genode::Lock::UNLOCKED);
-
-volatile bool console_init = false;
-volatile bool disk_init = false;
-
 
 /* timer service */
 using Genode::Thread;
 using Genode::Alarm_scheduler;
 using Genode::Alarm;
 
+typedef Genode::Synced_interface<TimeoutList<32, void> > Synced_timeout_list;
+
 class Alarm_thread : Thread<4096>, public Alarm_scheduler
 {
 	private:
 
-		Timer::Connection      _timer;
-		Alarm::Time            _curr_time;   /* jiffies value */
+		Timer::Connection    _timer;
+		Alarm::Time          _curr_time;   /* jiffies value */
 
-		Motherboard           &_motherboard;
-		TimeoutList<32, void> &_timeouts;
+		Synced_motherboard  &_motherboard;
+		Synced_timeout_list &_timeouts;
 
 		/**
 		 * Thread entry function
@@ -118,26 +110,18 @@ class Alarm_thread : Thread<4096>, public Alarm_scheduler
 		void entry()
 		{
 			while (true) {
-				unsigned long long now = _motherboard.clock()->time();
+				unsigned long long now = _motherboard()->clock()->time();
 				unsigned nr;
 
-				timeouts_lock.lock();
+				while ((nr = _timeouts()->trigger(now))) {
 
-				while ((nr = _timeouts.trigger(now))) {
+					MessageTimeout msg(nr, _timeouts()->timeout());
 
-					MessageTimeout msg(nr, _timeouts.timeout());
-
-					if (_timeouts.cancel(nr) < 0)
+					if (_timeouts()->cancel(nr) < 0)
 						Logging::printf("Timeout not cancelled.\n");
 
-					timeouts_lock.unlock();
-
-					_motherboard.bus_timeout.send(msg);
-
-					timeouts_lock.lock();
+					_motherboard()->bus_timeout.send(msg);
 				}
-
-				timeouts_lock.unlock();
 
 				_timer.usleep(1000);
 			}
@@ -148,11 +132,11 @@ class Alarm_thread : Thread<4096>, public Alarm_scheduler
 		/**
 		 * Constructor
 		 */
-		Alarm_thread(Motherboard &mb, TimeoutList<32, void> &timeouts)
+		Alarm_thread(Synced_motherboard &mb, Synced_timeout_list &timeouts)
 		: _curr_time(0), _motherboard(mb), _timeouts(timeouts) { start(); }
 
 		Alarm::Time curr_time() { return _curr_time; }
-		unsigned long long curr_time_long() { return _motherboard.clock()->time(); }
+		unsigned long long curr_time_long() { return _motherboard()->clock()->time(); }
 };
 
 
@@ -223,6 +207,8 @@ class Guest_memory
 			remaining_size(backing_store_size-fb_size)
 		{
 			try {
+				/* free up preliminary mapping to reserve lower address space */
+				Genode::env()->rm_session()->detach(PAGE_SIZE);
 
 				/*
 				 * Attach reservation to the beginning of the local address space.
@@ -239,7 +225,9 @@ class Guest_memory
 				_fb_addr = Genode::env()->rm_session()->attach_at(_fb_ds,
 				        ((Genode::addr_t) _local_addr)+backing_store_size-fb_size);
 
-			} catch (Genode::Rm_session::Region_conflict) {  }
+			} catch (Genode::Rm_session::Region_conflict) {
+				PERR("region conflict");
+			}
 		}
 
 		~Guest_memory()
@@ -354,7 +342,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 		/**
 		 * Pointer to corresponding VCPU model
 		 */
-		VCpu * const _vcpu;
+		Genode::Synced_interface<VCpu> _vcpu;
 
 		Vcpu_thread _vcpu_thread;
 
@@ -366,7 +354,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 		/**
 		 * Motherboard representing the inter-connections of all device models
 		 */
-		Motherboard &_motherboard;
+		Synced_motherboard &_motherboard;
 
 
 		/***************
@@ -413,12 +401,10 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			if (skip == SKIP)
 				_skip_instruction(msg);
 
-			Genode::Lock::Guard guard(global_lock);
-
 			/**
 			 * Send the message to the VCpu.
 			 */
-			if (!_vcpu->executor.send(msg, true))
+			if (!_vcpu()->executor.send(msg, true))
 				Logging::panic("nobody to execute %s at %x:%x\n",
 				               __func__, msg.cpu->cs.sel, msg.cpu->eip);
 
@@ -427,7 +413,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			 */
 			if (msg.mtr_in & MTD_INJ && msg.type != CpuMessage::TYPE_CHECK_IRQ) {
 				msg.type = CpuMessage::TYPE_CHECK_IRQ;
-				if (!_vcpu->executor.send(msg, true))
+				if (!_vcpu()->executor.send(msg, true))
 					Logging::panic("nobody to execute %s at %x:%x\n",
 					               __func__, msg.cpu->cs.sel, msg.cpu->eip);
 			}
@@ -437,7 +423,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			 */
 			if (msg.mtr_out & MTD_INJ) {
 				msg.type = CpuMessage::TYPE_CALC_IRQWINDOW;
-				if (!_vcpu->executor.send(msg, true))
+				if (!_vcpu()->executor.send(msg, true))
 					Logging::panic("nobody to execute %s at %x:%x\n",
 					               __func__, msg.cpu->cs.sel, msg.cpu->eip);
 			}
@@ -510,7 +496,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 
 			MessageMemRegion mem_region(vm_fault_addr >> PAGE_SIZE_LOG2);
 
-			if (!_motherboard.bus_memregion.send(mem_region, false) ||
+			if (!_motherboard()->bus_memregion.send(mem_region, false) ||
 			    !mem_region.ptr)
 				return false;
 
@@ -564,7 +550,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 				CpuMessage _win(CpuMessage::TYPE_CALC_IRQWINDOW,
 				                static_cast<CpuState *>(utcb), utcb->mtd);
 				_win.mtr_out = MTD_INJ;
-				if (!_vcpu->executor.send(_win, true))
+				if (!_vcpu()->executor.send(_win, true))
 					Logging::panic("nobody to execute %s at %x:%x\n",
 					               __func__, utcb->cs.sel, utcb->eip);
 			}
@@ -588,8 +574,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			               port, &utcb->eax, utcb->mtd);
 			_skip_instruction(msg);
 			{
-				Genode::Lock::Guard l(global_lock);
-				if (!_vcpu->executor.send(msg, true))
+				if (!_vcpu()->executor.send(msg, true))
 					Logging::panic("nobody to execute %s at %x:%x\n",
 					               __func__, msg.cpu->cs.sel, msg.cpu->eip);
 			}
@@ -812,13 +797,14 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 
 	public:
 
-		Vcpu_dispatcher(VCpu                   *vcpu,
+		Vcpu_dispatcher(Genode::Lock           &vcpu_lock,
+		                VCpu                   *unsynchronized_vcpu,
 		                Guest_memory           &guest_memory,
-		                Motherboard            &motherboard,
+		                Synced_motherboard     &motherboard,
 		                bool                   has_svm,
 		                bool                   has_vmx)
 		:
-			_vcpu(vcpu),
+			_vcpu(vcpu_lock, unsynchronized_vcpu),
 			_vcpu_thread("vCPU thread"),
 			_guest_memory(guest_memory),
 			_motherboard(motherboard)
@@ -949,7 +935,7 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			_vcpu_thread.start(sel_sm_ec() + 1);
 
 			/* handle cpuid overrides */
-			vcpu->executor.add(this, receive_static<CpuMessage>);
+			unsynchronized_vcpu->executor.add(this, receive_static<CpuMessage>);
 		}
 
 		/**
@@ -993,9 +979,28 @@ class Vcpu_dispatcher : public Genode::Thread<STACK_SIZE>,
 			if (msg.type != CpuMessage::TYPE_CPUID)
 				return false;
 
-			PDBG("CpuMessage::TYPE_CPUID - not implemented");
-			for (;;);
-			return false;
+			/*
+			 * Linux kernels with guest KVM support compiled in, executed
+			 * CPUID to query the presence of KVM.
+			 */
+			enum { CPUID_KVM_SIGNATURE = 0x40000000 };
+
+			switch (msg.cpuid_index) {
+
+			case CPUID_KVM_SIGNATURE:
+
+				msg.cpu->eax = 0;
+				msg.cpu->ebx = 0;
+				msg.cpu->ecx = 0;
+				msg.cpu->edx = 0;
+				break;
+
+			default:
+				PDBG("CpuMessage::TYPE_CPUID index %x ignored, return true)",
+				     msg.cpuid_index);
+			}
+
+			return true;
 		}
 };
 
@@ -1010,8 +1015,12 @@ class Machine : public StaticReceiver<Machine>
 		Genode::Rom_connection _hip_rom;
 		Hip * const            _hip;
 		Clock                  _clock;
-		Motherboard            _motherboard;
-		TimeoutList<32, void>  _timeouts;
+		Genode::Lock           _motherboard_lock;
+		Motherboard            _unsynchronized_motherboard;
+		Synced_motherboard     _motherboard;
+		Genode::Lock           _timeouts_lock;
+		TimeoutList<32, void>  _unsynchronized_timeouts;
+		Synced_timeout_list    _timeouts;
 		Guest_memory          &_guest_memory;
 		Boot_module_provider  &_boot_modules;
 		Alarm_thread          *_alarm_thread;
@@ -1092,9 +1101,10 @@ class Machine : public StaticReceiver<Machine>
 						Logging::printf("OP_VCPU_CREATE_BACKEND\n");
 
 					Vcpu_dispatcher *vcpu_dispatcher =
-						new Vcpu_dispatcher(msg.vcpu, _guest_memory,
+						new Vcpu_dispatcher(_motherboard_lock, msg.vcpu,
+						                    _guest_memory,
 						                    _motherboard,
-						                    _hip->has_svm(), _hip->has_vmx());
+						                    _hip->has_feature_svm(), _hip->has_feature_vmx());
 
 					msg.value = vcpu_dispatcher->sel_sm_ec();
 					return true;
@@ -1118,11 +1128,11 @@ class Machine : public StaticReceiver<Machine>
 					if (verbose_debug)
 						Logging::printf("OP_VCPU_BLOCK\n");
 
-					global_lock.unlock();
+					_motherboard_lock.unlock();
 					bool res = (Nova::sm_ctrl(msg.value, Nova::SEMAPHORE_DOWN) == 0);
 					if (verbose_debug)
 						Logging::printf("woke up from vcpu sem, block on global_lock\n");
-					global_lock.lock();
+					_motherboard_lock.lock();
 					return res;
 				}
 
@@ -1252,19 +1262,14 @@ class Machine : public StaticReceiver<Machine>
 					_alarm_thread = new Alarm_thread(_motherboard, _timeouts);
 				}
 
-				timeouts_lock.lock();
-				msg.nr = _timeouts.alloc();
-				timeouts_lock.unlock();
+				msg.nr = _timeouts()->alloc();
 
 				return true;
 
 			case MessageTimer::TIMER_REQUEST_TIMEOUT:
-				timeouts_lock.lock();
 
-				if (_timeouts.request(msg.nr, msg.abstime) < 0)
+				if (_timeouts()->request(msg.nr, msg.abstime) < 0)
 					Logging::printf("Could not program timeout.\n");
-
-				timeouts_lock.unlock();
 
 				return true;
 
@@ -1285,14 +1290,14 @@ class Machine : public StaticReceiver<Machine>
 					Logging::printf("No RTC present, returning dummy time.\n");
 					msg.wallclocktime = msg.timestamp = 0;
 
-				        *Genode::Thread_base::myself()->utcb() = utcb_backup;
+					*Genode::Thread_base::myself()->utcb() = utcb_backup;
 
 					return true;
 				}
 			}
 			msg.wallclocktime = _rtc->get_current_time();
 			Logging::printf("Got time %llx\n", msg.wallclocktime);
-			msg.timestamp = _motherboard.clock()->clock(TimerProtocol::WALLCLOCK_FREQUENCY);
+			msg.timestamp = _unsynchronized_motherboard.clock()->clock(1000000U);
 
 			*Genode::Thread_base::myself()->utcb() = utcb_backup;
 
@@ -1374,22 +1379,25 @@ class Machine : public StaticReceiver<Machine>
 		:
 			_hip_rom("hypervisor_info_page"),
 			_hip(Genode::env()->rm_session()->attach(_hip_rom.dataspace())),
-			_clock(_hip->freq_tsc*1000),
-			_motherboard(&_clock, _hip),
+			_clock(_hip->tsc_freq*1000),
+			_motherboard_lock(Genode::Lock::LOCKED),
+			_unsynchronized_motherboard(&_clock, _hip),
+			_motherboard(_motherboard_lock, &_unsynchronized_motherboard),
+			_timeouts(_timeouts_lock, &_unsynchronized_timeouts),
 			_guest_memory(guest_memory),
 			_boot_modules(boot_modules)
 		{
-			_timeouts.init();
+			_timeouts()->init();
 
 			/* register host operations, called back by the VMM */
-			_motherboard.bus_hostop.add  (this, receive_static<MessageHostOp>);
-			_motherboard.bus_disk.add    (this, receive_static<MessageDisk>);
-			_motherboard.bus_timer.add   (this, receive_static<MessageTimer>);
-			_motherboard.bus_time.add    (this, receive_static<MessageTime>);
-			_motherboard.bus_network.add (this, receive_static<MessageNetwork>);
-			_motherboard.bus_hwpcicfg.add(this, receive_static<MessageHwPciConfig>);
-			_motherboard.bus_acpi.add    (this, receive_static<MessageAcpi>);
-			_motherboard.bus_legacy.add  (this, receive_static<MessageLegacy>);
+			_unsynchronized_motherboard.bus_hostop.add  (this, receive_static<MessageHostOp>);
+			_unsynchronized_motherboard.bus_disk.add    (this, receive_static<MessageDisk>);
+			_unsynchronized_motherboard.bus_timer.add   (this, receive_static<MessageTimer>);
+			_unsynchronized_motherboard.bus_time.add    (this, receive_static<MessageTime>);
+			_unsynchronized_motherboard.bus_network.add (this, receive_static<MessageNetwork>);
+			_unsynchronized_motherboard.bus_hwpcicfg.add(this, receive_static<MessageHwPciConfig>);
+			_unsynchronized_motherboard.bus_acpi.add    (this, receive_static<MessageAcpi>);
+			_unsynchronized_motherboard.bus_legacy.add  (this, receive_static<MessageLegacy>);
 		}
 
 
@@ -1453,7 +1461,7 @@ class Machine : public StaticReceiver<Machine>
 				 * We never pass any argument string to a device model because
 				 * it is not examined by the existing device models.
 				 */
-				dmi->create(_motherboard, argv, "", 0);
+				dmi->create(_unsynchronized_motherboard, argv, "", 0);
 
 				if (node.is_last())
 					break;
@@ -1466,7 +1474,7 @@ class Machine : public StaticReceiver<Machine>
 		void boot()
 		{
 			/* init VCPUs */
-			for (VCpu *vcpu = _motherboard.last_vcpu; vcpu; vcpu = vcpu->get_last()) {
+			for (VCpu *vcpu = _unsynchronized_motherboard.last_vcpu; vcpu; vcpu = vcpu->get_last()) {
 
 				/* init CPU strings */
 				const char *short_name = "NOVA microHV";
@@ -1493,13 +1501,18 @@ class Machine : public StaticReceiver<Machine>
 
 			Logging::printf("RESET device state\n");
 			MessageLegacy msg2(MessageLegacy::RESET, 0);
-			_motherboard.bus_legacy.send_fifo(msg2);
+			_unsynchronized_motherboard.bus_legacy.send_fifo(msg2);
 
-			global_lock.unlock();
 			Logging::printf("INIT done\n");
+
+			_motherboard_lock.unlock();
 		}
 
-		Motherboard& get_mb() { return _motherboard; }
+		Synced_motherboard &motherboard() { return _motherboard; }
+
+		Motherboard &unsynchronized_motherboard() { return _unsynchronized_motherboard; }
+
+		Genode::Lock &motherboard_lock() { return _motherboard_lock; }
 
 		~Machine()
 		{
@@ -1511,21 +1524,33 @@ class Machine : public StaticReceiver<Machine>
 extern unsigned long _prog_img_beg;  /* begin of program image (link address) */
 extern unsigned long _prog_img_end;  /* end of program image */
 
-namespace Genode { Rm_session *env_context_area_rm_session(); }
+namespace Genode {
+	Rm_session *env_context_area_rm_session();
 
+	void __attribute__((constructor)) init_context_area_vmm() {
+		/**
+		 * XXX Invoke env_context_rm_session to make sure the virtual region of
+		 *     the context area is reserved at core. Typically this happens
+		 *     when the first time a thread is allocated. Unfortunately,
+		 *     beforehand the VMM may try to grab the same region for
+		 *     large VM sizes.
+		 */
+		env_context_area_rm_session();
+	}
+}
 
 int main(int argc, char **argv)
 {
-	Genode::printf("--- Vancouver VMM starting ---\n");
-
-	/**
-	 * XXX Invoke env_context_rm_session to make sure the virtual region of
-	 *     the context area is reserved at core. Typically this happens when
-	 *     the first time a thread is allocated.
-	 *     Unfortunately, beforehand the VMM tries to grab the same region for
-	 *     large VM sizes.
+	/*
+	 * Reserve complete lower address space so that nobody else can take it.
+	 * When we found out how much memory we actually should use for the VM,
+	 * the reservation is adjusted to the real size.
 	 */
-	Genode::env_context_area_rm_session();
+	Genode::Rm_connection pre_reservation(0, Genode::Native_config::context_area_virtual_base());
+	Genode::env()->rm_session()->attach_at(pre_reservation.dataspace(),
+	                                       PAGE_SIZE, 0, PAGE_SIZE);
+
+	Genode::printf("--- Vancouver VMM starting ---\n");
 
 	/* request max available memory */
 	Genode::addr_t vm_size = Genode::env()->ram_session()->avail();
@@ -1545,6 +1570,8 @@ int main(int argc, char **argv)
 	} catch (...) { }
 
 	static Guest_memory guest_memory(vm_size, fb_size);
+	/* free up temporary rm_session */
+	Genode::env()->parent()->close(pre_reservation.cap());
 
 	/* diagnostic messages */
 	Genode::printf("[0x%08lx, 0x%08lx) - %lu MiB - guest physical memory\n",
@@ -1578,16 +1605,21 @@ int main(int argc, char **argv)
 
 	static Machine machine(boot_modules, guest_memory);
 
+	Genode::Lock fb_lock;
+
 	/* create console thread */
-	Vancouver_console vcon(machine.get_mb(), fb_size, guest_memory.fb_ds());
+	Vancouver_console vcon(machine.motherboard(),
+	                       fb_lock,
+	                       fb_size, guest_memory.fb_ds());
+
+	vcon.register_host_operations(machine.unsynchronized_motherboard());
 
 	/* create disk thread */
-	Vancouver_disk vdisk(machine.get_mb(),
+	Vancouver_disk vdisk(machine.motherboard(),
 	                     guest_memory.backing_store_local_base(),
 	                     guest_memory.backing_store_fb_local_base());
 
-	/* wait for services */
-	while (!console_init || !disk_init);
+	vdisk.register_host_operations(machine.unsynchronized_motherboard());
 
 	machine.setup_devices(Genode::config()->xml_node().sub_node("machine"));
 

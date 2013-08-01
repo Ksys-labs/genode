@@ -31,39 +31,31 @@ extern "C" {
 #include <dde_kit/timer.h>
 #include <dde_kit/resources.h>
 
-#include <linux/usb/storage.h>
 
-#define VERBOSE_LX_EMUL  0
-
-
-#if VERBOSE_LX_EMUL
 #define DEBUG_COMPLETION 0
 #define DEBUG_DMA        0
-#define DEBUG_DRIVER     1
-#define DEBUG_IRQ        1
-#define DEBUG_KREF       0
-#define DEBUG_PCI        0
-#define DEBUG_SKB        0
-#define DEBUG_SLAB       0
-#define DEBUG_TIMER      0
-#define DEBUG_THREAD     0
-#else
-#define DEBUG_COMPLETION 0
 #define DEBUG_DRIVER     0
-#define DEBUG_DMA        0
 #define DEBUG_IRQ        0
 #define DEBUG_KREF       0
+#define DEBUG_PRINTK     0
 #define DEBUG_PCI        0
 #define DEBUG_SKB        0
 #define DEBUG_SLAB       0
 #define DEBUG_TIMER      0
 #define DEBUG_THREAD     0
-#endif
+#define DEBUG_TRACE      0
 
 #define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
-#define LINUX_VERSION_CODE KERNEL_VERSION(3,2,2)
+#define LINUX_VERSION_CODE KERNEL_VERSION(3,9,0)
 
 #define KBUILD_MODNAME "mod-noname"
+
+
+/*****************
+ ** linux/bcd.h **
+ *****************/
+
+#define bin2bcd(x) ((((x) / 10) << 4) + (x) % 10)
 
 /***************
  ** asm/bug.h **
@@ -89,6 +81,11 @@ extern "C" {
 
 #define BUG_ON(condition) do { if (condition) BUG(); } while(0)
 
+/*********************
+ ** linux/kconfig.h **
+ *********************/
+
+#define IS_ENABLED(x) x
 
 /*****************
  ** asm/param.h **
@@ -169,6 +166,7 @@ typedef __u16 __sum16;
 typedef __u32 __wsum;
 
 typedef u64 sector_t;
+typedef int clockid_t;
 
 struct list_head {
 	struct list_head *next, *prev;
@@ -227,6 +225,8 @@ typedef unsigned long dma_addr_t;
 typedef unsigned short mode_t;
 
 
+#include <linux/usb/storage.h>
+
 /******************
  ** asm/system.h **
  ******************/
@@ -280,12 +280,20 @@ enum irqreturn {
 
 typedef enum irqreturn irqreturn_t;
 
+/******************
+ ** linux/swab.h **
+ ******************/
+
+__u16 __swab16p(const __u16 *);
+__u32 __swab32p(const __u32 *);
+__u64 __swab64p(const __u64 *);
+
 
 /*************************************
  ** linux/byteorder/little_endian.h **
  *************************************/
 
-#include <linux/byteorder/little_endian.h>
+#include <uapi/linux/byteorder/little_endian.h>
 
 
 /*******************************
@@ -300,19 +308,26 @@ typedef enum irqreturn irqreturn_t;
 #define cpu_to_le16p __cpu_to_le16p
 #define cpu_to_be16p __cpu_to_be16p
 #define cpu_to_le16  __cpu_to_le16
+#define cpu_to_le16s __cpu_to_le16s
 #define cpu_to_be16  __cpu_to_be16
 #define cpu_to_le32  __cpu_to_le32
 #define cpu_to_be32  __cpu_to_be32
+#define cpu_to_le32s __cpu_to_le32s
+#define cpu_to_le64  __cpu_to_le64
 #define le16_to_cpup __le16_to_cpup
 #define be16_to_cpup __be16_to_cpup
 #define le32_to_cpup __le32_to_cpup
+#define le32_to_cpus __le32_to_cpus
 #define be32_to_cpup __be32_to_cpup
+#define le64_to_cpu  __le64_to_cpu
 
 
+struct __una_u16 { u16 x; } __attribute__((packed));
 struct __una_u32 { u32 x; } __attribute__((packed));
 struct __una_u64 { u64 x; } __attribute__((packed));
 
 u16 get_unaligned_le16(const void *p);
+void put_unaligned_le16(u16 val, void *p);
 
 void put_unaligned_le32(u32 val, void *p);
 u32  get_unaligned_le32(const void *p);
@@ -321,7 +336,11 @@ void put_unaligned_le64(u64 val, void *p);
 u64 get_unaligned_le64(const void *p);
 
 #define put_unaligned put_unaligned_le32
+#ifdef __LP64__
+#define get_unaligned get_unaligned_le64
+#else
 #define get_unaligned get_unaligned_le32
+#endif
 
 
 /****************
@@ -374,64 +393,74 @@ struct page
  * Note that the codes do not correspond to those of the Linux kernel.
  */
 enum {
-	EINVAL       =  1,
-	ENODEV       =  2,
-	ENOMEM       =  3,
-	EFAULT       =  4,
-	EBADF        =  5,
-	EAGAIN       =  6,
-	ERESTARTSYS  =  7,
-	ENOSPC       =  8,
-	EIO          =  9,
-	EBUSY        = 10,
-	EPERM        = 11,
-	EINTR        = 12,
-	ENOMSG       = 13,
-	ECONNRESET   = 14,
-	ENOENT       = 15,
-	EHOSTUNREACH = 16,
-	ESRCH        = 17,
-	EPIPE        = 18,
-	ENODATA      = 19,
-	EREMOTEIO    = 20,
-	ENOTTY       = 21,
-	ENOIOCTLCMD  = 22,
-	EADDRINUSE   = 23,
-	ENFILE       = 23,
-	EXFULL       = 24,
-	EIDRM        = 25,
-	ESHUTDOWN    = 26,
-	EMSGSIZE     = 27,
-	E2BIG        = 28,
-	EINPROGRESS  = 29,
-	ESPIPE       = 29,
-	ETIMEDOUT    = 30,
-	ENOSYS       = 31,
-	ENOTCONN     = 32,
-	EPROTO       = 33,
-	ENOTSUPP     = 34,
-	EISDIR       = 35,
-	EEXIST       = 36,
-	ENOTEMPTY    = 37,
-	ENXIO        = 38,
-	ENOEXEC      = 39,
-	EXDEV        = 40,
-	EOVERFLOW    = 41,
-	ENOSR        = 42,
-	ECOMM        = 43,
-	EFBIG        = 44,
-	EILSEQ       = 45,
-	ETIME        = 46,
-	EALREADY     = 47,
-	EOPNOTSUPP   = 48,
-	EDOM         = 49,
-	ENOLINK      = 50,
+	EINVAL        =  1,
+	ENODEV        =  2,
+	ENOMEM        =  3,
+	EFAULT        =  4,
+	EBADF         =  5,
+	EAGAIN        =  6,
+	ERESTARTSYS   =  7,
+	ENOSPC        =  8,
+	EIO           =  9,
+	EBUSY         = 10,
+	EPERM         = 11,
+	EINTR         = 12,
+	ENOMSG        = 13,
+	ECONNRESET    = 14,
+	ENOENT        = 15,
+	EHOSTUNREACH  = 16,
+	ESRCH         = 17,
+	EPIPE         = 18,
+	ENODATA       = 19,
+	EREMOTEIO     = 20,
+	ENOTTY        = 21,
+	ENOIOCTLCMD   = 22,
+	EADDRINUSE    = 23,
+	ENFILE        = 23,
+	EXFULL        = 24,
+	EIDRM         = 25,
+	ESHUTDOWN     = 26,
+	EMSGSIZE      = 27,
+	E2BIG         = 28,
+	EINPROGRESS   = 29,
+	ESPIPE        = 29,
+	ETIMEDOUT     = 30,
+	ENOSYS        = 31,
+	ENOTCONN      = 32,
+	EPROTO        = 33,
+	ENOTSUPP      = 34,
+	EISDIR        = 35,
+	EEXIST        = 36,
+	ENOTEMPTY     = 37,
+	ENXIO         = 38,
+	ENOEXEC       = 39,
+	EXDEV         = 40,
+	EOVERFLOW     = 41,
+	ENOSR         = 42,
+	ECOMM         = 43,
+	EFBIG         = 44,
+	EILSEQ        = 45,
+	ETIME         = 46,
+	EALREADY      = 47,
+	EOPNOTSUPP    = 48,
+	EDOM          = 49,
+	ENOLINK       = 50,
+	EADDRNOTAVAIL = 51,
+	EPROBE_DEFER  = 52,
 };
 
-static inline bool IS_ERR(void *ptr) {
+
+/*****************
+ ** linux/err.h **
+ *****************/
+
+static inline bool IS_ERR(void const *ptr) {
 	return (unsigned long)(ptr) > (unsigned long)(-1000); }
 
 long PTR_ERR(const void *ptr);
+
+static inline long IS_ERR_OR_NULL(const void *ptr) {
+	return !ptr || IS_ERR(ptr); }
 
 
 /*******************
@@ -457,15 +486,15 @@ enum {
 /*
  * Debug macros
  */
-#if VERBOSE_LX_EMUL
+#if DEBUG_PRINTK
 #define printk  dde_kit_printf
 #define vprintk dde_kit_vprintf
 #define panic   dde_kit_panic
-#else /* VERBOSE_LX_EMUL */
+#else
 #define printk(...)
 #define vprintk(...)
 #define panic(...)
-#endif /* VERBOSE_LX_EMUL */
+#endif
 
 /*
  * Bits and types
@@ -512,13 +541,31 @@ static inline size_t min(size_t a, size_t b) {
                   typeof (x) _x = (x); \
                   _x < 0 ? -_x : _x;  })
 
+#define lower_32_bits(n) ((u32)(n))
+#define upper_32_bits(n) ((u32)(((n) >> 16) >> 16))
+
+#define roundup(x, y) (                           \
+{                                                 \
+	const typeof(y) __y = y;                        \
+	(((x) + (__y - 1)) / __y) * __y;                \
+})
+
+#define clamp_val(val, min, max) ({             \
+        typeof(val) __val = (val);              \
+        typeof(val) __min = (min);              \
+        typeof(val) __max = (max);              \
+        __val = __val < __min ? __min: __val;   \
+        __val > __max ? __max: __val; })
+
+
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #define BUILD_BUG_ON(condition)
 
 void might_sleep();
 
-#define INT_MAX ((int)(~0U>>1))
+#define INT_MAX  ((int)(~0U>>1))
+#define UINT_MAX (~0U)
 
 char *kasprintf(gfp_t gfp, const char *fmt, ...);
 int kstrtouint(const char *s, unsigned int base, unsigned int *res);
@@ -531,6 +578,23 @@ int kstrtouint(const char *s, unsigned int base, unsigned int *res);
 	(void) (&__val == &__max);              \
 	__val = __val < __min ? __min: __val;   \
 	__val > __max ? __max: __val; })
+
+#define DIV_ROUND_CLOSEST(x, divisor)(      \
+{                                           \
+	typeof(x) __x = x;                        \
+	typeof(divisor) __d = divisor;            \
+	(((typeof(x))-1) > 0 ||                   \
+	((typeof(divisor))-1) > 0 || (__x) > 0) ? \
+	(((__x) + ((__d) / 2)) / (__d)) :         \
+	(((__x) - ((__d) / 2)) / (__d));          \
+})
+
+#define PTR_ALIGN(p, a) ({              \
+  unsigned long _p = (unsigned long)p;  \
+  _p = (_p + a - 1) & ~(a - 1);         \
+  p = (typeof(p))_p;                    \
+	p;                                    \
+})
 
 int strict_strtoul(const char *s, unsigned int base, unsigned long *res);
 long simple_strtoul(const char *cp, char **endp, unsigned int base);
@@ -561,6 +625,7 @@ int  roundup_pow_of_two(u32 n);
 
 #define MINORBITS 20
 #define MKDEV(ma,mi) (((ma) << MINORBITS) | (mi))
+#define MINOR(dev)   ((dev) & 0xff)
 
 
 /********************
@@ -580,12 +645,8 @@ void print_hex_dump(const char *level, const char *prefix_str,
 #define pr_warning(fmt, ...) printk(KERN_WARNING fmt, ##__VA_ARGS__)
 #define pr_warn pr_warning
 
-#define printk_ratelimit() \
-	({ dde_kit_debug("printk_ratelimit called - not implemented\n"); (0); })
-
-static inline bool printk_timed_ratelimit(unsigned long *caller_jiffies,
-                                          unsigned int interval_msec) {
-	return false; }
+bool printk_ratelimit();
+bool printk_timed_ratelimit(unsigned long *, unsigned int);
 
 
 /**********************************
@@ -623,6 +684,16 @@ long find_next_zero_bit_le(const void *addr,
 int ffs(int x);
 int fls(int x);
 
+#define for_each_set_bit(bit, addr, size) for ((bit) = 0; !bit; bit++, dev_err(0, "for_each_set_bit should not be called\n"))
+
+
+/*****************************************
+ ** asm-generic//bitops/const_hweight.h **
+ *****************************************/
+
+/* count number of 1s in 'w' */
+#define hweight32(w) __builtin_popcount((unsigned)w)
+
 
 /********************
  ** linux/string.h **
@@ -647,6 +718,7 @@ char * strsep(char **,const char *);
 char *strstr(const char *, const char *);
 char  *kstrdup(const char *s, gfp_t gfp);
 void  *kmemdup(const void *src, size_t len, gfp_t gfp);
+void  *memmove(void *, const void *, size_t);
 
 
 /*****************
@@ -690,6 +762,7 @@ int isprint(int);
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 #define MODULE_AUTHOR(x)
+#define MODULE_VERSION(x)
 #define MODULE_DESCRIPTION(x)
 #define MODULE_LICENSE(x)
 #define MODULE_PARM_DESC(x, y)
@@ -705,6 +778,20 @@ struct module;
 #define MOD_CONCAT(a,b) _MOD_CONCAT(a,b)
 #define module_init(fn) void MOD_CONCAT(fn, MOD_SUFFIX)(void) { fn(); }
 #define module_exit(exit_fn) void MOD_CONCAT(exit_fn, MOD_SUFFIX)(void) { exit_fn(); }
+
+#define module_driver(__driver, __register, __unregister, ...) \
+	static int __init __driver##_init(void)                      \
+	{                                                            \
+		return __register(&(__driver) , ##__VA_ARGS__);            \
+	}                                                            \
+	module_init(__driver##_init);                                \
+	static void __exit __driver##_exit(void)                     \
+	{                                                            \
+		__unregister(&(__driver) , ##__VA_ARGS__);                 \
+	}                                                            \
+	module_exit(__driver##_exit);
+
+
 
 static inline void module_put(struct module *module) { }
 static inline void __module_get(struct module *module) { }
@@ -746,6 +833,11 @@ struct kmem_cache *kmem_cache_create(const char *, size_t, size_t,
  * Destroy slab cache using DDE kit
  */
 void kmem_cache_destroy(struct kmem_cache *);
+
+/**
+ * Alloc from cache
+ */
+void *kmem_cache_alloc(struct kmem_cache *, gfp_t);
 
 /**
  * Allocate and zero slab
@@ -836,9 +928,16 @@ static inline ktime_t ktime_add_us(const ktime_t kt, const u64 usec)
 {
 	return ktime_add_ns(kt, usec * 1000);
 }
-
 s64 ktime_us_delta(const ktime_t later, const ktime_t earlier);
 
+struct timeval ktime_to_timeval(const ktime_t);
+
+ktime_t ktime_get_real(void);
+ktime_t ktime_get(void);
+ktime_t ktime_sub(const ktime_t, const ktime_t);
+ktime_t ktime_get_monotonic_offset(void);
+ktime_t ktime_add(const ktime_t, const ktime_t);
+ktime_t ktime_set(const long, const unsigned long);
 
 /*******************
  ** linux/timer.h **
@@ -848,6 +947,7 @@ struct timer_list {
 	void (*function)(unsigned long);
 	unsigned long data;
 	void *timer;
+	unsigned long expires;
 };
 
 void init_timer(struct timer_list *);
@@ -859,13 +959,27 @@ void setup_timer(struct timer_list *timer,void (*function)(unsigned long),
 int timer_pending(const struct timer_list * timer);
 unsigned long round_jiffies(unsigned long j);
 
+void add_timer(struct timer_list *timer);
+void set_timer_slack(struct timer_list *time, int slack_hz);
+
 
 /*********************
  ** linux/hrtimer.h **
  *********************/
 
-ktime_t ktime_get_real(void);
+enum hrtimer_mode { HRTIMER_MODE_ABS = 0 };
+enum hrtimer_restart { HRTIMER_NORESTART = 0 };
 
+struct hrtimer
+{
+	enum hrtimer_restart (*function)(struct hrtimer *);
+};
+
+int hrtimer_start_range_ns(struct hrtimer *, ktime_t,
+                          unsigned long, const enum hrtimer_mode);
+
+void hrtimer_init(struct hrtimer *, clockid_t, enum hrtimer_mode);
+int hrtimer_cancel(struct hrtimer *);
 
 /*******************
  ** linux/delay.h **
@@ -897,6 +1011,8 @@ bool cancel_work_sync(struct work_struct *work);
 int cancel_delayed_work_sync(struct delayed_work *work);
 int schedule_delayed_work(struct delayed_work *work, unsigned long delay);
 int schedule_work(struct work_struct *work);
+
+bool flush_work(struct work_struct *work);
 bool flush_work_sync(struct work_struct *work);
 
 
@@ -921,6 +1037,13 @@ bool flush_work_sync(struct work_struct *work);
 		init_timer(&(_work)->timer); \
 	} while (0)
 
+
+/* dummy for queue_delayed_work call in storage/usb.c */
+#define system_freezable_wq 0
+struct workqueue_struct { };
+
+bool queue_delayed_work(struct workqueue_struct *,
+                        struct delayed_work *, unsigned long);
 
 /******************
  ** linux/wait.h **
@@ -1016,6 +1139,15 @@ void do_gettimeofday(struct timeval *tv);
 #define CURRENT_TIME (current_kernel_time())
 
 
+
+enum {
+	CLOCK_REALTIME  = 0,
+	CLOCK_MONOTONIC = 1,
+	NSEC_PER_USEC   = 1000L,
+	NSEC_PER_MSEC   = 1000000L,
+};
+
+
 /*******************
  ** linux/sched.h **
  *******************/
@@ -1053,6 +1185,8 @@ extern struct task_struct *current;
 /* asm/processor.h */
 void cpu_relax(void);
 
+#define memalloc_noio_save() 0
+#define memalloc_noio_restore(x)
 
 /*********************
  ** linux/kthread.h **
@@ -1159,7 +1293,7 @@ int  kref_put(struct kref *kref, void (*release) (struct kref *kref));
  ** linux/kobject.h **
  *********************/
 
-struct kobject { int dummy; };
+struct kobject { struct kobject *parent; };
 struct kobj_uevent_env
 {
 	char buf[32];
@@ -1202,38 +1336,59 @@ struct bin_attribute {
 	.store = _store, \
 }
 
+#define __ATTR_NULL { .attr = { .name = NULL } }
+#define __ATTR_RO(name) __ATTR_NULL
+
+static const char* modalias = "";
+
 int sysfs_create_group(struct kobject *kobj,
                        const struct attribute_group *grp);
 void sysfs_remove_group(struct kobject *kobj,
                         const struct attribute_group *grp);
+int sysfs_create_link(struct kobject *kobj, struct kobject *target,
+                      const char *name);
+void sysfs_remove_link(struct kobject *kobj, const char *name);
 
 
 /****************
  ** linux/pm.h **
  ****************/
 
+struct device;
+
 typedef struct pm_message { int event; } pm_message_t;
 
 struct dev_pm_info { bool is_prepared; };
 
+struct dev_pm_ops {
+	int (*suspend)(struct device *dev);
+	int (*resume)(struct device *dev);
+};
+
 #define PMSG_IS_AUTO(msg) 0
+
+enum { PM_EVENT_AUTO_SUSPEND = 0x402 };
 
 /************************
  ** linux/pm_runtime.h **
  ************************/
 
-struct device;
-
 int  pm_runtime_set_active(struct device *dev);
 void pm_suspend_ignore_children(struct device *dev, bool enable);
 void pm_runtime_enable(struct device *dev);
 void pm_runtime_disable(struct device *dev);
+void pm_runtime_allow(struct device *dev);
+void pm_runtime_forbid(struct device *dev);
 void pm_runtime_set_suspended(struct device *dev);
 void pm_runtime_get_noresume(struct device *dev);
 void pm_runtime_put_noidle(struct device *dev);
 void pm_runtime_use_autosuspend(struct device *dev);
 int  pm_runtime_put_sync_autosuspend(struct device *dev);
 void pm_runtime_no_callbacks(struct device *dev);
+void pm_runtime_set_autosuspend_delay(struct device *dev, int delay);
+int  pm_runtime_get_sync(struct device *dev);
+int  pm_runtime_put_sync(struct device *dev);
+int  pm_runtime_put(struct device *dev);
 
 
 /***********************
@@ -1246,6 +1401,14 @@ bool device_may_wakeup(struct device *dev);
 int  device_set_wakeup_enable(struct device *dev, bool enable);
 bool device_can_wakeup(struct device *dev);
 
+
+/********************
+ ** linux/pm_qos.h **
+ ********************/
+
+ enum { PM_QOS_FLAG_NO_POWER_OFF = 1 };
+
+ int dev_pm_qos_expose_flags(struct device *dev, s32 value);
 
 /********************
  ** linux/device.h **
@@ -1262,7 +1425,7 @@ bool device_can_wakeup(struct device *dev);
 #define dev_err( dev, format, arg...) dde_kit_printf("dev_error: " format, ## arg)
 #define dev_notice(dev, format, arg...) dde_kit_printf("dev_notice: " format, ## arg)
 
-#if VERBOSE_LX_EMUL
+#if DEBUG_PRINTK
 #define dev_dbg(dev, format, arg...) dde_kit_printf("dev_dbg: " format, ## arg)
 #else
 #define dev_dbg( dev, format, arg...)
@@ -1270,6 +1433,9 @@ bool device_can_wakeup(struct device *dev);
 
 #define dev_printk(level, dev, format, arg...) \
 	dde_kit_printf("dev_printk: " format, ## arg)
+
+#define dev_warn_ratelimited(dev, format, arg...) \
+	dde_kit_printf("dev_warn_ratelimited: " format "\n", ## arg)
 
 enum {
 	BUS_NOTIFY_ADD_DEVICE = 0x00000001,
@@ -1280,6 +1446,7 @@ struct device_driver;
 
 struct bus_type {
 	const char *name;
+	struct device_attribute *dev_attrs;
 	int (*match)(struct device *dev, struct device_driver *drv);
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	int (*probe)(struct device *dev);
@@ -1291,6 +1458,7 @@ struct device_driver {
 	struct bus_type *bus;
 	struct module   *owner;
 	const char      *mod_name;
+	const struct of_device_id  *of_match_table;
 	int            (*probe)  (struct device *dev);
 	int            (*remove) (struct device *dev);
 
@@ -1305,6 +1473,7 @@ struct device_type {
 	void      (*release)(struct device *dev);
 	int       (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	char     *(*devnode)(struct device *dev, mode_t *mode);
+	const struct dev_pm_ops *pm;
 };
 
 struct class
@@ -1312,6 +1481,8 @@ struct class
 	const char *name;
 	char *(*devnode)(struct device *dev, mode_t *mode);
 };
+
+struct dma_parms;
 
 /* DEVICE */
 struct device {
@@ -1330,6 +1501,8 @@ struct device {
 	struct bus_type               *bus;
 	struct class                  *class;
 	void                          *driver_data;
+	struct device_node            *of_node;
+	struct device_dma_parameters  *dma_parms;
 };
 
 struct device_attribute {
@@ -1426,6 +1599,17 @@ int class_register(struct class *cls);
 void class_unregister(struct class *cls);
 void class_destroy(struct class *cls);
 
+typedef void (*dr_release_t)(struct device *dev, void *res);
+typedef int (*dr_match_t)(struct device *dev, void *res, void *match_data);
+
+void *devres_alloc(dr_release_t release, size_t size, gfp_t gfp);
+void  devres_add(struct device *dev, void *res);
+int   devres_destroy(struct device *dev, dr_release_t release,
+                   dr_match_t match, void *match_data);
+void  devres_free(void *res);
+
+void *devm_kzalloc(struct device *dev, size_t size, gfp_t gfp);
+
 #ifdef __cplusplus
 #undef class
 #endif
@@ -1467,9 +1651,9 @@ void  dma_free_coherent(struct device *, size_t, void *, dma_addr_t);
  ** linux/dma-mapping.h **
  *************************/
 
-static inline u64 DMA_BIT_MASK(unsigned n) {
-	return (n == 64) ? ~0ULL : (1ULL << n) - 1; }
-
+#define DMA_BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
+static inline int dma_set_coherent_mask(struct device *dev, u64 mask) { dev->coherent_dma_mask = mask; return 0; }
+int dma_set_mask(struct device *dev, u64 mask);
 
 /*********************
  ** linux/uaccess.h **
@@ -1517,6 +1701,8 @@ static inline const char * dmi_get_system_info(int field) { return NULL; }
 /********************
  ** linux/dcache.h **
  ********************/
+
+#define __read_mostly
 
 enum dentry_d_lock_class
 {
@@ -1636,8 +1822,11 @@ struct inode {
 	const struct inode_operations *i_op;
 	struct super_block            *i_sb;
 	unsigned int                   i_flags;
-	void                          *i_private;
 	loff_t                         i_size;
+	union {
+		struct cdev             *i_cdev;
+	};
+	void                          *i_private;
 };
 
 struct seq_file;
@@ -1711,6 +1900,7 @@ extern const struct inode_operations simple_dir_inode_operations;
 static inline loff_t no_llseek(struct file *file, loff_t offset, int origin) {
 	 return -ESPIPE; }
 
+struct inode *file_inode(struct file *f);
 
 /*******************
  ** linux/namei.h **
@@ -1825,13 +2015,18 @@ void kunmap(struct page *page);
 
 void *ioremap(resource_size_t offset, unsigned long size);
 void  iounmap(volatile void *addr);
+void *devm_ioremap(struct device *dev, resource_size_t offset,
+                   unsigned long size);
+void *devm_ioremap_nocache(struct device *dev, resource_size_t offset,
+                           unsigned long size);
+
 
 /**
  * Map I/O memory write combined
  */
 void *ioremap_wc(resource_size_t phys_addr, unsigned long size);
 
-#define ioremap_nocache ioremap_wc
+#define ioremap_nocache ioremap
 
 #define writel(value, addr) (*(volatile uint32_t *)(addr) = (value))
 #define readl(addr) (*(volatile uint32_t *)(addr))
@@ -1876,6 +2071,9 @@ struct resource *request_region(resource_size_t start, resource_size_t n,
                                 const char *name);
 struct resource *request_mem_region(resource_size_t start, resource_size_t n,
                                     const char *name);
+struct resource * devm_request_mem_region(struct device *dev, resource_size_t start,
+                                          resource_size_t n, const char *name);
+
 
 void release_region(resource_size_t start, resource_size_t n);
 void release_mem_region(resource_size_t start, resource_size_t n);
@@ -1904,6 +2102,7 @@ void free_irq(unsigned int, void *);
  *********************/
 
 void synchronize_irq(unsigned int irq);
+bool in_interrupt(void);
 
 
 /*****************
@@ -1911,7 +2110,7 @@ void synchronize_irq(unsigned int irq);
  *****************/
 
 #include <linux/pci_ids.h>
-#include <linux/pci_regs.h>
+#include <uapi/linux/pci_regs.h>
 
 /*
  * Definitions normally found in pci_regs.h
@@ -1919,7 +2118,7 @@ void synchronize_irq(unsigned int irq);
 //enum { PCI_BASE_ADDRESS_MEM_MASK = ~0x0fUL };
 //enum { PCI_CAP_ID_AGP            = 0x02 };
 extern struct  bus_type pci_bus_type;
-enum { PCI_ANY_ID = ~0 };
+enum { PCI_ANY_ID = ~0U };
 enum { DEVICE_COUNT_RESOURCE = 6 };
 //enum { PCIBIOS_MIN_MEM = 0UL };
 
@@ -1933,6 +2132,10 @@ enum { DEVICE_COUNT_RESOURCE = 6 };
 #define PCI_DEVICE(vend,dev) \
 	.vendor = (vend), .device = (dev), \
 	.subvendor = PCI_ANY_ID, .subdevice = PCI_ANY_ID
+
+#define PCI_VDEVICE(vendor, device)             \
+        PCI_VENDOR_ID_##vendor, (device),       \
+        PCI_ANY_ID, PCI_ANY_ID, 0, 0
 
 typedef enum { PCI_D0 = 0 } pci_power_t;
 
@@ -1963,9 +2166,29 @@ struct pci_dev {
 	pci_power_t     current_state;
 };
 
+struct pci_fixup {
+	u16 vendor;             /* You can use PCI_ANY_ID here of course */
+	u16 device;             /* You can use PCI_ANY_ID here of course */
+	u32 class;              /* You can use PCI_ANY_ID here too */
+	unsigned int class_shift;       /* should be 0, 8, 16 */
+	void (*hook)(struct pci_dev *dev);
+};
 #ifdef __cplusplus
 #undef class
 #endif /* __cplusplus */
+
+
+/* quirks */
+#define DECLARE_PCI_FIXUP_SECTION(section, name, vendor, device, class, \
+                                  class_shift, hook)                    \
+        static const struct pci_fixup __pci_fixup_##name __used         \
+        __attribute__((__section__(#section), aligned((sizeof(void *)))))    \
+                = { vendor, device, class, class_shift, hook };
+
+#define DECLARE_PCI_FIXUP_CLASS_FINAL(vendor, device, class,            \
+                                         class_shift, hook)             \
+        DECLARE_PCI_FIXUP_SECTION(.pci_fixup_final,                     \
+                vendor##device##hook, vendor, device, class, class_shift, hook)
 
 enum {
 	PCI_ROM_RESOURCE = 6
@@ -2162,7 +2385,7 @@ void security_task_getsecid(struct task_struct *p, u32 *secid);
  *************************/
 
 /*
- * Needed by usb/core/devio.h, used to calculate ioctl opcodes
+ * Needed by drivers/input/evdev.c, used to calculate ioctl opcodes
  */
 #include <asm-generic/ioctl.h>
 
@@ -2171,7 +2394,7 @@ void security_task_getsecid(struct task_struct *p, u32 *secid);
  ** linux/cdev.h **
  ******************/
 
-struct cdev { int dummy; };
+struct cdev { struct kobject kobj; };
 void cdev_init(struct cdev *, const struct file_operations *);
 int cdev_add(struct cdev *, dev_t, unsigned);
 void cdev_del(struct cdev *);
@@ -2310,7 +2533,7 @@ struct hid_device;
 
 static inline int hidraw_init(void) { return 0; }
 static inline void hidraw_exit(void) { }
-static inline void hidraw_report_event(struct hid_device *hid, u8 *data, int len) { }
+static inline int hidraw_report_event(struct hid_device *hid, u8 *data, int len) { return 0; }
 static inline int hidraw_connect(struct hid_device *hid) { return -1; }
 static inline void hidraw_disconnect(struct hid_device *hid) { }
 
@@ -2325,6 +2548,8 @@ static inline void synchronize_rcu(void) { }
 
 #define rcu_dereference(p) p
 #define rcu_assign_pointer(p,v) p = v
+
+#define rcu_dereference_protected(p, c) p
 
 
 /*********************
@@ -2345,13 +2570,20 @@ static inline void list_del_rcu(struct list_head *entry) {
 	list_del(entry); }
 
 
+/*********************
+ ** linux/lockdep.h **
+ *********************/
+
+bool lockdep_is_held(void *);
+
+
 /********************
  ** linux/random.h **
  ********************/
 
 static inline void add_input_randomness(unsigned int type, unsigned int code,
                                         unsigned int value) { }
-
+void add_device_randomness(const void *, unsigned int);
 
 /*********************
  ** linux/vmalloc.h **
@@ -2414,7 +2646,10 @@ unsigned int queue_max_hw_sectors(struct request_queue *q);
  ** scsi/scsi_eh.h **
  *******************/
 
-struct scsi_eh_save { };
+struct scsi_eh_save
+{
+	unsigned char cmd_len;
+};
 
 struct scsi_sense_hdr
 {
@@ -2528,6 +2763,8 @@ unsigned scsi_bufflen(struct scsi_cmnd *cmd);
 void scsi_set_resid(struct scsi_cmnd *cmd, int resid);
 int scsi_get_resid(struct scsi_cmnd *cmd);
 
+struct scsi_driver *scsi_cmd_to_driver(struct scsi_cmnd *cmd);
+struct scsi_target *scsi_target(struct scsi_device *sdev);
 
 
 /************************
@@ -2540,7 +2777,9 @@ struct scsi_target
 	struct device    dev;
 	unsigned int     channel;
 	unsigned int     id;
-	unsigned int     pdt_1f_for_no_lun;      /* PDT = 0x1f */
+	unsigned int     pdt_1f_for_no_lun:1;    /* PDT = 0x1f */
+	unsigned int     no_report_luns:1;       /* Don't use
+	                                          * REPORT LUNS for scanning. */
 	unsigned int     target_blocked;
 	char             scsi_level;
 };
@@ -2579,8 +2818,11 @@ struct scsi_device
 	unsigned              ordered_tags:1;         /* ordered queue tag messages are enabled */
 	unsigned              use_10_for_rw:1;        /* first try 10-byte read / write */
 	unsigned              use_10_for_ms:1;        /* first try 10-byte mode sense/select */
+	unsigned              no_report_opcodes:1;    /* no REPORT SUPPORTED OPERATION CODES */
+	unsigned              no_write_same:1;        /* no WRITE SAME command */
 	unsigned              skip_ms_page_8:1;       /* do not use MODE SENSE page 0x08 */
 	unsigned              skip_ms_page_3f:1;      /* do not use MODE SENSE page 0x3f */
+	unsigned              skip_vpd_pages:1;       /* do not read VPD pages */
 	unsigned              use_192_bytes_for_3f:1; /* ask for 192 bytes from page 0x3f */
 	unsigned              allow_restart:1;        /* issue START_UNIT in error handler */
 	unsigned              fix_capacity:1;         /* READ_CAPACITY is too high by 1 */
@@ -2590,6 +2832,8 @@ struct scsi_device
 	unsigned              last_sector_bug:1;      /* do not use multisector accesses on
 	                                                 SD_LAST_BUGGY_SECTORS */
 	unsigned              no_read_disc_info:1;    /* avoid READ_DISC_INFO cmds */
+	unsigned              try_rc_10_first:1;      /* Try READ_CAPACACITY_10 first */
+	unsigned              wce_default_on:1;       /* Cache is ON by default */
 
 	unsigned int          device_blocked;         /* device returned QUEUE_FULL. */
 
@@ -2619,20 +2863,37 @@ struct scsi_driver
  ** Networking support **
  ************************/
 
+/*********************
+ ** linux/if_vlan.h **
+ *********************/
+
+enum { VLAN_HLEN = 4 };
+
+/*****************
+ ** linux/net.h **
+ *****************/
+
+int net_ratelimit(void);
 
 /********************
  ** linux/skbuff.h **
  ********************/
 
+struct net_device;
+
 enum {
-	NET_IP_ALIGN      = 2,
-	CHECKSUM_COMPLETE = 2,
-	CHECKSUM_PARTIAL  = 3,
+	CHECKSUM_NONE        = 0,
+	CHECKSUM_UNNECESSARY = 1,
+	CHECKSUM_COMPLETE    = 2,
+	CHECKSUM_PARTIAL     = 3,
+
+	NET_IP_ALIGN         = 2,
 };
 
 struct skb_shared_info
 {
 	unsigned short nr_frags;
+	unsigned short gso_size;
 };
 
 struct sk_buff
@@ -2666,6 +2927,7 @@ struct sk_buff
 	__be16         protocol;
 	unsigned char *start;
 	unsigned char *end;
+	unsigned char *head;
 	unsigned char *data;
 	unsigned char *tail;
 	unsigned char *phys;
@@ -2682,11 +2944,10 @@ struct sk_buff_head
 	spinlock_t lock;
 };
 
-
-#define skb_queue_walk_safe(queue, skb, tmp)                           \
-                            for (skb = (queue)->next, tmp = skb->next; \
-                            skb != (struct sk_buff *)(queue);          \
-                            skb = tmp, tmp = skb->next)
+#define skb_queue_walk(queue, skb)                       \
+                       for (skb = (queue)->next;         \
+                       skb != (struct sk_buff *)(queue); \
+                       skb = skb->next)
 
 struct skb_shared_info *skb_shinfo(struct sk_buff *);
 struct sk_buff *alloc_skb(unsigned int, gfp_t);
@@ -2703,6 +2964,26 @@ int skb_tailroom(const struct sk_buff *);
 void skb_set_tail_pointer(struct sk_buff *, const int);
 struct sk_buff *skb_clone(struct sk_buff *, gfp_t);
 void skb_reserve(struct sk_buff *, int);
+int skb_header_cloned(const struct sk_buff *);
+int skb_linearize(struct sk_buff *);
+
+
+struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev, unsigned int length);
+
+static inline 
+struct sk_buff *__netdev_alloc_skb_ip_align(struct net_device *dev,
+                                            unsigned int length, gfp_t gfp)
+{
+	return netdev_alloc_skb_ip_align(dev, length);
+}
+
+
+static inline int skb_cloned(const struct sk_buff *skb) {
+	return skb->cloned; }
+static inline void skb_copy_to_linear_data(struct sk_buff *skb,
+                                           const void *from,
+                                           const unsigned int len) {
+	memcpy(skb->data, from, len); }
 
 struct sk_buff *skb_dequeue(struct sk_buff_head *);
 void skb_queue_head_init(struct sk_buff_head *);
@@ -2717,15 +2998,17 @@ bool skb_defer_rx_timestamp(struct sk_buff *);
 
 void dev_kfree_skb(struct sk_buff *);
 void dev_kfree_skb_any(struct sk_buff *);
+void kfree_skb(struct sk_buff *);
 
 
-/****************
- ** linux/if.h **
- ****************/
+/*********************
+ ** linux/uapi/if.h **
+ *********************/
 
 enum {
-	IFF_PROMISC   = 0x100, /* receive all packets */
-	IFF_ALLMULTI  = 0x200, /* receive all multicast packets */
+	IFF_NOARP     = 0x80,   /* no APR protocol */
+	IFF_PROMISC   = 0x100,  /* receive all packets */
+	IFF_ALLMULTI  = 0x200,  /* receive all multicast packets */
 	IFF_MULTICAST = 0x1000, /* supports multicast */
 	IFNAMSIZ      = 16,
 };
@@ -2739,6 +3022,7 @@ struct ifreq { };
 
 enum {
 	ETH_ALEN    = 6,      /* octets in one ethernet addr */
+	ETH_HLEN    = 14,     /* total octets in header */
 	ETH_P_8021Q = 0x8100, /* 802.1Q VLAN Extended Header  */
 
 	ETH_FRAME_LEN = 1514,
@@ -2750,10 +3034,21 @@ enum {
  *********************/
 
 enum {
+	DUPLEX_HALF  = 0x0,
 	DUPLEX_FULL  = 0x1,
 	ETHTOOL_GSET = 0x1,
 	ETHTOOL_FWVERS_LEN = 32,
 	ETHTOOL_BUSINFO_LEN = 32,
+
+	WAKE_PHY     = 0,
+	WAKE_UCAST   = (1 << 1),
+	WAKE_MCAST   = (1 << 2),
+	WAKE_BCAST   = (1 << 3),
+	WAKE_ARP     = (1 << 4),
+	WAKE_MAGIC   = (1 << 5),
+
+	SPEED_100    = 100,
+	SPEED_1000   = 1000,
 };
 
 
@@ -2761,6 +3056,11 @@ struct ethtool_cmd
 {
 	u32 cmd;
 	u8  duplex;
+};
+
+struct ethtool_regs
+{
+	 u32   version;
 };
 
 struct ethtool_eeprom
@@ -2777,17 +3077,25 @@ struct ethtool_drvinfo
 	char    fw_version[ETHTOOL_FWVERS_LEN]; /* firmware version string */
 	char    bus_info[ETHTOOL_BUSINFO_LEN];  /* Bus info for this IF. */
 	                                        /* For PCI devices, use pci_name(pci_dev). */
+	u32     eedump_len;
+};
+
+struct ethtool_wolinfo {
+	u32 supported;
+	u32	wolopts;
 };
 
 struct ethhdr { };
+struct ethtool_ts_info; 
 
-struct net_device;
 
 struct ethtool_ops
 {
 	int     (*get_settings)(struct net_device *, struct ethtool_cmd *);
 	int     (*set_settings)(struct net_device *, struct ethtool_cmd *);
 	void    (*get_drvinfo)(struct net_device *, struct ethtool_drvinfo *);
+	int     (*get_regs_len)(struct net_device *);
+	void    (*get_regs)(struct net_device *, struct ethtool_regs *, void *);
 	int     (*nway_reset)(struct net_device *);
 	u32     (*get_link)(struct net_device *);
 	int     (*get_eeprom_len)(struct net_device *);
@@ -2795,15 +3103,22 @@ struct ethtool_ops
 	int     (*set_eeprom)(struct net_device *, struct ethtool_eeprom *, u8 *);
 	u32     (*get_msglevel)(struct net_device *);
 	void    (*set_msglevel)(struct net_device *, u32);
+	void    (*get_wol)(struct net_device *, struct ethtool_wolinfo *);
+	int     (*set_wol)(struct net_device *, struct ethtool_wolinfo *);
+	int     (*get_ts_info)(struct net_device *, struct ethtool_ts_info *);
+
 };
 
-__u32 ethtool_cmd_speed(const struct ethtool_cmd *ep);
+__u32 ethtool_cmd_speed(const struct ethtool_cmd *);
 u32 ethtool_op_get_link(struct net_device *);
+int ethtool_op_get_ts_info(struct net_device *, struct ethtool_ts_info *);
 
 
 /***********************
  ** linux/netdevice.h **
  ***********************/
+
+#include <linux/netdev_features.h>
 
 #define netif_err(priv, type, dev, fmt, args...) dde_kit_printf("netif_err: " fmt, ## args);
 #define netif_info(priv, type, dev, fmt, args...) dde_kit_printf("netif_info: " fmt, ## args);
@@ -2814,9 +3129,9 @@ u32 ethtool_op_get_link(struct net_device *);
 
 #define netdev_for_each_mc_addr(a, b) if (0)
 
-#if VERBOSE_LX_EMUL
+#if DEBUG_PRINTK
 #define netif_dbg(priv, type, dev, fmt, args...) dde_kit_printf("netif_dbg: "  fmt, ## args)
-#define netdev_dbg(dev, fmt, args...)  dde_kit_printf("nedev_dbg: " fmt, ##args)
+#define netdev_dbg(dev, fmt, args...)  dde_kit_printf("netdev_dbg: " fmt, ##args)
 #else
 #define netif_dbg(priv, type, dev, fmt, args...)
 #define netdev_dbg(dev, fmt, args...)
@@ -2830,10 +3145,6 @@ typedef enum netdev_tx netdev_tx_t;
 
 enum {
 	MAX_ADDR_LEN    = 32,
-
-	NETIF_F_HW_CSUM = 8,
-	NETIF_F_RXCSUM  = (1 << 29),
-
 	NET_RX_SUCCESS  = 0,
 
 	NETIF_MSG_DRV   = 0x1,
@@ -2852,7 +3163,7 @@ struct net_device_ops
 	int         (*ndo_do_ioctl)(struct net_device *dev, struct ifreq *ifr, int cmd);
 	void        (*ndo_tx_timeout) (struct net_device *dev);
 	int         (*ndo_change_mtu)(struct net_device *dev, int new_mtu);
-	int         (*ndo_set_features)(struct net_device *dev, u32 features);
+	int         (*ndo_set_features)(struct net_device *dev, netdev_features_t features);
 };
 
 struct net_device_stats
@@ -2887,18 +3198,32 @@ struct net_device
 	unsigned int   flags;
 	unsigned short hard_header_len; /* hardware hdr length  */
 	unsigned int   mtu;
+	unsigned short needed_headroom;
+	unsigned short needed_tailroom;
+	unsigned char  perm_addr[MAX_ADDR_LEN];
 	unsigned char *dev_addr;
 	unsigned char  _dev_addr[ETH_ALEN];
 	unsigned long  trans_start;    /* Time (in jiffies) of last Tx */
 	int            watchdog_timeo; /* used by dev_watchdog() */
 	struct device  dev;
 	void          *priv;
+	unsigned       net_ip_align;
+
+	struct phy_device *phydev;
 };
 
 
 struct netdev_hw_addr
 {
 	unsigned char addr[MAX_ADDR_LEN];
+};
+
+enum netdev_state_t {
+	__LINK_STATE_START,
+	__LINK_STATE_PRESENT,
+	__LINK_STATE_NOCARRIER,
+	__LINK_STATE_LINKWATCH_PENDING,
+	__LINK_STATE_DORMANT,
 };
 
 #define netif_msg_tx_err(p) ({ printk("netif_msg_tx_err called not implemented\n"); 0; })
@@ -2909,8 +3234,13 @@ u32 netif_msg_init(int, int);
 
 static inline void *netdev_priv(const struct net_device *dev) { return dev->priv; }
 
-int netif_running(const struct net_device *);
-int netif_device_present(struct net_device *);
+int  netif_running(const struct net_device *);
+int  netif_carrier_ok(const struct net_device *dev);
+int  netif_device_present(struct net_device *);
+
+void netif_carrier_on(struct net_device *dev);
+void netif_carrier_off(struct net_device *dev);
+
 void netif_device_detach(struct net_device *);
 void netif_start_queue(struct net_device *);
 void netif_stop_queue(struct net_device *);
@@ -2918,10 +3248,11 @@ void netif_wake_queue(struct net_device *);
 void netif_device_attach(struct net_device *);
 void unregister_netdev(struct net_device *);
 void free_netdev(struct net_device *);
-int netif_rx(struct sk_buff *);
-void netif_carrier_off(struct net_device *);
+int  netif_rx(struct sk_buff *);
+void netif_tx_wake_all_queues(struct net_device *);
 
 int netdev_mc_empty(struct net_device *);
+unsigned netdev_mc_count(struct net_device * dev);
 int register_netdev(struct net_device *);
 
 /*****************
@@ -2933,10 +3264,17 @@ enum {
 	FLOW_CTRL_RX = 0x2,
 
 	MII_BMCR      = 0x0,
+	MII_BMSR      = 0x1,
+	MII_PHYSID1   = 0x2,
+	MII_PHYSID2   = 0x3,
 	MII_ADVERTISE = 0x4,
 	MII_LPA       = 0x5,
+	MII_CTRL1000  = 0x9,
 
-	BMCR_RESET = 0x8000, /* reset to default state */
+	BMCR_RESET    = 0x8000, /* reset to default state */
+	BMCR_ANENABLE = 0x1000, /* enable auto negotiation */
+
+	BMSR_LSTATUS = 0x4,
 
 	ADVERTISE_PAUSE_CAP  = 0x0400, /* try for pause */
 	ADVERTISE_CSMA       = 0x0001, /* only selector supported */
@@ -2945,6 +3283,7 @@ enum {
 	ADVERTISE_10FULL     = 0x0040,
 	ADVERTISE_100HALF    = 0x0080,
 	ADVERTISE_100FULL    = 0x0100,
+	ADVERTISE_1000FULL   = 0x0200,
 	ADVERTISE_ALL        = ADVERTISE_10HALF | ADVERTISE_10FULL |
 	                       ADVERTISE_100HALF | ADVERTISE_100FULL
 };
@@ -2957,6 +3296,8 @@ struct mii_if_info
 	struct net_device *dev;
 	int (*mdio_read) (struct net_device *dev, int phy_id, int location);
 	void (*mdio_write) (struct net_device *dev, int phy_id, int location, int val);
+
+	unsigned int supports_gmii : 1; /* are GMII registers supported? */
 };
 
 
@@ -2988,6 +3329,7 @@ struct tasklet_struct
 static inline void tasklet_schedule(struct tasklet_struct *t) { t->func(t->data); }
 void tasklet_kill(struct tasklet_struct *);
 
+
 /*************************
  ** linux/etherdevice.h **
  *************************/
@@ -3001,6 +3343,10 @@ void random_ether_addr(u8 *addr);
 
 struct net_device *alloc_etherdev(int);
 
+void eth_hw_addr_random(struct net_device *dev);
+void eth_random_addr(u8 *addr);
+
+
 /********************
  ** asm/checksum.h **
  ********************/
@@ -3008,11 +3354,113 @@ struct net_device *alloc_etherdev(int);
 __wsum csum_partial(const void *, int, __wsum);
 __sum16 csum_fold(__wsum);
 
+
+/********************
+ ** linux/socket.h **
+ ********************/
+
+struct sockaddr {
+	unsigned short sa_family;
+	char           sa_data[14];
+};
+
+
+/*****************
+ ** linux/idr.h **
+ *****************/
+
+#define DEFINE_IDA(name) struct ida name;
+struct ida { };
+
+int ida_simple_get(struct ida *ida, unsigned int start, unsigned int end,
+                   gfp_t gfp_mask);
+void ida_simple_remove(struct ida *ida, unsigned int id);
+
+/*******************
+ ** linux/async.h **
+ *******************/
+
+struct async_domain { };
+
+#define ASYNC_DOMAIN(name) struct async_domain name = { };
+
+
+/*******************************
+ ** uapi/linux/usbdevice_fs.h **
+ *******************************/
+
+enum { USBDEVFS_HUB_PORTINFO };
+
+struct usbdevfs_hub_portinfo
+{
+	char nports;
+	char port [127];
+};
+
+
+/********************
+ ** linux/bitmap.h **
+ ********************/
+
+int bitmap_subset(const unsigned long *,
+                  const unsigned long *, int);
+
+
+/*******************
+ ** linux/crc16.h **
+ *******************/
+
+u16 crc16(u16 crc, const u8 *buffer, size_t len);
+
+
+/*******************
+ ** linux/birev.h **
+ *******************/
+
+u16 bitrev16(u16 in);
+
+
+/******************
+ ** linux/phy.h  **
+ ******************/
+
+typedef enum {
+	PHY_INTERFACE_MODE_MII = 1,
+} phy_interface_t;
+
+
+/************************
+ ** linux/usb/gadget.h **
+ ************************/
+
+struct usb_ep { };
+struct usb_request { };
+struct usb_gadget { };
+
+
+/****************
+ ** linux/of.h **
+ ****************/
+
+bool of_property_read_bool(const struct device_node *np, const char *propname);
+
+
+/************************
+ ** linux/radix-tree.h **
+ ************************/
+
+#define INIT_RADIX_TREE(root, mask) dde_kit_printf("INIT_RADIX_TREE not impelemnted\n")
+struct radix_tree_root { };
+void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index);
+int   radix_tree_insert(struct radix_tree_root *, unsigned long, void *);
+void *radix_tree_delete(struct radix_tree_root *, unsigned long);
+
 /**********************************
  ** Platform specific defintions **
- *********************************/
-#include <platform/lx_emul.h>
+ **********************************/
 
+
+#include <platform/lx_emul.h>
 
 /**********
  ** misc **

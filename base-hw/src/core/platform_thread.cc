@@ -28,7 +28,13 @@ bool Platform_thread::_attaches_utcb_by_itself()
 	 * virtual context area by itself, as it is done for other threads
 	 * through a sub RM-session.
 	 */
-	return _pd_id == Kernel::core_id() || !_main_thread;
+	return _pd_id == Kernel::core_id() || !main_thread();
+}
+
+
+Weak_ptr<Address_space> Platform_thread::address_space()
+{
+	return _address_space;
 }
 
 
@@ -60,13 +66,12 @@ Platform_thread::~Platform_thread()
 	Kernel::delete_thread(_id);
 }
 
-
 Platform_thread::Platform_thread(const char * name,
                                  Thread_base * const thread_base,
                                  size_t const stack_size, unsigned const pd_id)
 :
 	_thread_base(thread_base), _stack_size(stack_size),
-	_pd_id(pd_id), _rm_client(0), _virt_utcb(0)
+	_pd_id(pd_id), _rm_client(0), _virt_utcb(0), _main_thread(0)
 {
 	strncpy(_name, name, NAME_MAX_LEN);
 
@@ -85,7 +90,7 @@ Platform_thread::Platform_thread(const char * name, unsigned int priority,
                                  addr_t utcb)
 :
 	_thread_base(0), _stack_size(0), _pd_id(0), _rm_client(0),
-	_virt_utcb((Native_utcb *)utcb)
+	_virt_utcb((Native_utcb *)utcb), _main_thread(0)
 {
 	strncpy(_name, name, NAME_MAX_LEN);
 

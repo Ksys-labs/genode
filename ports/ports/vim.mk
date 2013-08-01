@@ -1,7 +1,8 @@
 VIM      = vim-7.3
 VIM_TBZ2 = $(VIM).tar.bz2
 VIM_URL  = ftp://ftp.vim.org/pub/vim/unix/$(VIM_TBZ2)
-
+# from ftp://ftp.vim.org/pub/vim/unix/MD5SUMS
+VIM_MD5  = 5b9510a17074e2b37d8bb38ae09edbf2
 #
 # Interface to top-level prepare Makefile
 #
@@ -20,8 +21,12 @@ prepare:: $(CONTRIB_DIR)/$(VIM)
 $(DOWNLOAD_DIR)/$(VIM_TBZ2):
 	$(VERBOSE)wget -c -P $(DOWNLOAD_DIR) $(VIM_URL) && touch $@
 
-$(CONTRIB_DIR)/$(VIM): $(DOWNLOAD_DIR)/$(VIM_TBZ2)
-	$(VERBOSE)tar xfj $< -C $(CONTRIB_DIR)
+$(DOWNLOAD_DIR)/$(VIM_TBZ2).verified: $(DOWNLOAD_DIR)/$(VIM_TBZ2)
+	$(VERBOSE)$(HASHVERIFIER) $(DOWNLOAD_DIR)/$(VIM_TBZ2) $(VIM_MD5) md5
+	$(VERBOSE)touch $@
+
+$(CONTRIB_DIR)/$(VIM): $(DOWNLOAD_DIR)/$(VIM_TBZ2).verified
+	$(VERBOSE)tar xfj $(<:.verified=) -C $(CONTRIB_DIR)
 	$(VERBOSE)mv $(CONTRIB_DIR)/vim73 $@ && touch $@
 	@#
 	@# Prevent configure script from breaking unconditionally

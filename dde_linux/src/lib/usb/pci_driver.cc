@@ -17,8 +17,7 @@
 
 /* Linux includes */
 #include <lx_emul.h>
-
-#include "mem.h"
+#include <platform/lx_mem.h>
 
 struct  bus_type pci_bus_type;
 
@@ -196,7 +195,13 @@ int pci_register_driver(struct pci_driver *drv)
 
 	bool found = false;
 
-	while (id->vendor || id->subvendor || id->class_mask) {
+	while (id->device_class || id->class_mask) {
+
+		if (id->device_class == (unsigned)PCI_ANY_ID) {
+				dde_kit_log(DEBUG_PCI, "Skipping PCI_ANY_ID device class");
+				id++;
+				continue;
+		}
 
 		Pci::Device_capability cap = pci.first_device(id->device_class,
 		                                              id->class_mask);
@@ -311,10 +316,13 @@ const char *pci_name(const struct pci_dev *pdev)
 	return "dummy";
 }
 
-Genode::Ram_dataspace_capability Genode::Mem::alloc_dma_buffer(size_t size)
+Genode::Ram_dataspace_capability Backend_memory::alloc(Genode::addr_t size,
+                                                       bool cached)
 {
 	using namespace Genode;
-	Ram_dataspace_capability ram_cap = pci.alloc_dma_buffer(pci_device_cap,
-	                                                        size);
-	return ram_cap;
+
+	if (cached)
+		return env()->ram_session()->alloc(size, cached);
+	else
+		return pci.alloc_dma_buffer(pci_device_cap, size);
 }

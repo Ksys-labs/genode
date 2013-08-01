@@ -29,21 +29,67 @@ namespace Genode
 	 */
 	class Mmio
 	{
+		/*
+		 * If set 0 verbosity isn't needed at all and the enum enables the
+		 * compiler to remove all verbosity code. If set 1 verbosity code
+		 * gets compiled and is then switched via '*_verbose' member variables.
+		 */
+		enum { VERBOSITY_AVAILABLE = 0 };
+
+		/**
+		 * Proclaim a MMIO access
+		 *
+		 * \param _ACCESS_T  integer type of access
+		 * \param dst        access destination
+		 * \param v          access value
+		 * \param w          1: write access 0: read access
+		 */
+		template <typename _ACCESS_T>
+		inline void _access_verbosity(addr_t const dst, _ACCESS_T const v,
+		                              bool const w) const
+		{
+			if (!VERBOSITY_AVAILABLE) return;
+			if (!_write_verbose) return;
+			printf("mmio %s 0x%p: 0x", w ? "write" : "read ", (void *)dst);
+			Trait::Uint_type<_ACCESS_T>::print_hex(v);
+			printf("\n");
+		}
+
+		/**
+		 * Write '_ACCESS_T' typed 'value' to MMIO base + 'o'
+		 */
+		template <typename _ACCESS_T>
+		inline void _write(off_t const o, _ACCESS_T const value)
+		{
+			addr_t const dst = (addr_t)base + o;
+			_access_verbosity<_ACCESS_T>(dst, value, 1);
+			*(_ACCESS_T volatile *)dst = value;
+		}
+
+		/**
+		 * Read '_ACCESS_T' typed from MMIO base + 'o'
+		 */
+		template <typename _ACCESS_T>
+		inline _ACCESS_T _read(off_t const o) const
+		{
+			addr_t const dst = (addr_t)base + o;
+			_ACCESS_T const value = *(_ACCESS_T volatile *)dst;
+			_access_verbosity<_ACCESS_T>(dst, value, 0);
+			return value;
+		}
+
 		protected:
 
-			/**
-			 * Write typed 'value' to MMIO base + 'o'
+			/*
+			 * If VERBOSITY_AVAILABLE is set MMIO isn't verbose by default.
+			 * Instead it causes this switches to be asked everytime MMIO
+			 * could be verbose. This way the user can either enable verbosity
+			 * locally by overwriting them in a deriving class or change their
+			 * initialization temporarily to enable verbosity globally and
+			 * then supress it locally by overwriting it.
 			 */
-			template <typename _ACCESS_T>
-			inline void _write(off_t const o, _ACCESS_T const value)
-			{ *(_ACCESS_T volatile *)((addr_t)base + o) = value; }
-
-			/**
-			 * Read typed from MMIO base + 'o'
-			 */
-			template <typename _ACCESS_T>
-			inline _ACCESS_T _read(off_t const o) const
-			{ return *(_ACCESS_T volatile *)((addr_t)base + o); }
+			bool _write_verbose;
+			bool _read_verbose;
 
 		public:
 
@@ -151,7 +197,7 @@ namespace Genode
 			struct Register_array : public Register<_OFFSET, _ACCESS_WIDTH,
 			                                        _STRICT_WRITE>
 			{
-				typedef typename Trait::Uint_type<_ACCESS_WIDTH>::
+				typedef typename Trait::Uint_width<_ACCESS_WIDTH>::
 				                 template Divisor<_ITEM_WIDTH> Item;
 
 				enum {
@@ -207,14 +253,28 @@ namespace Genode
 				 *                targeted by 'offset'.
 				 * \param index   index of the targeted array item
 				 */
-				static inline void access_dest(off_t & offset,
-				                               unsigned long & shift,
-				                               unsigned long const index)
+				static inline void dst(off_t & offset,
+				                       unsigned long & shift,
+				                       unsigned long const index)
 				{
 					unsigned long const bit_off = index << ITEM_WIDTH_LOG2;
 					offset  = (off_t) ((bit_off >> BYTE_WIDTH_LOG2)
 					          & ~(sizeof(access_t)-1) );
 					shift   = bit_off - ( offset << BYTE_WIDTH_LOG2 );
+					offset += OFFSET;
+				}
+
+				/**
+				 * Calc destination of a simple array-item access without shift
+				 *
+				 * \param offset  gets overridden with the offset of the the
+				 *                access destination, relative to the MMIO base
+				 * \param index   index of the targeted array item
+				 */
+				static inline void simple_dst(off_t & offset,
+				                              unsigned long const index)
+				{
+					offset  = (index << ITEM_WIDTH_LOG2) >> BYTE_WIDTH_LOG2;
 					offset += OFFSET;
 				}
 			};
@@ -226,7 +286,8 @@ namespace Genode
 			 *
 			 * \param mmio_base  base address of targeted MMIO region
 			 */
-			inline Mmio(addr_t mmio_base) : base(mmio_base) { }
+			inline Mmio(addr_t mmio_base)
+			: _write_verbose(0), _read_verbose(0), base(mmio_base) { }
 
 
 			/*************************
@@ -337,13 +398,13 @@ namespace Genode
 				/* if item width equals access width we optimize the access */
 				off_t offset;
 				if (Array::ITEM_WIDTH == Array::ACCESS_WIDTH) {
-					offset = Array::OFFSET + (index << Array::ITEM_WIDTH_LOG2);
+					Array::simple_dst(offset, index);
 					return _read<access_t>(offset);
 
 				/* access width and item width differ */
 				} else {
 					long unsigned shift;
-					Array::access_dest(offset, shift, index);
+					Array::dst(offset, shift, index);
 					return (_read<access_t>(offset) >> shift) &
 					       Array::ITEM_MASK;
 				}
@@ -369,14 +430,13 @@ namespace Genode
 				/* optimize the access if item width equals access width */
 				off_t offset;
 				if (Array::ITEM_WIDTH == Array::ACCESS_WIDTH) {
-					offset = Array::OFFSET +
-					         (index << Array::ITEM_WIDTH_LOG2);
+					Array::simple_dst(offset, index);
 					_write<access_t>(offset, value);
 
 				/* access width and item width differ */
 				} else {
 					long unsigned shift;
-					Array::access_dest(offset, shift, index);
+					Array::dst(offset, shift, index);
 
 					/* insert new value into old register value */
 					access_t write_value;
@@ -462,6 +522,30 @@ namespace Genode
 				 */
 				virtual void usleep(unsigned us) = 0;
 			};
+
+			/**
+			 * Wait until register 'T' contains the specified 'value'
+			 *
+			 * \param value         value to wait for
+			 * \param delayer       sleeping facility to be used when the
+			 *                      value is not reached yet
+			 * \param max_attempts  number of register probing attempts
+			 * \param us            number of microseconds between attempts
+			 */
+			template <typename T>
+			inline bool
+			wait_for(typename T::Register_base::access_t const value,
+			         Delayer & delayer,
+			         unsigned max_attempts = 500,
+			         unsigned us           = 1000)
+			{
+				typedef typename T::Register_base Register;
+				for (unsigned i = 0; i < max_attempts; i++, delayer.usleep(us))
+				{
+					if (read<Register>() == value) return true;
+				}
+				return false;
+			}
 
 			/**
 			 * Wait until bitfield 'T' contains the specified 'value'

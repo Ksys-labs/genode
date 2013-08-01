@@ -1,4 +1,5 @@
 assert_spec foc
+assert_spec 32bit
 
 #
 # Build
@@ -53,26 +54,11 @@ append_if [have_spec pci] config {
 		<provides><service name="PCI"/></provides>
 	</start>}
 
-append_if [have_spec vesa] config {
+append_if [have_spec framebuffer] config {
 	<start name="fb_drv">
-		<binary name="vesa_drv"/>
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start> }
-
-append_if [have_spec pl11x] config {
-	<start name="fb_drv">
-		<binary name="pl11x_drv"/>
-		<resource name="RAM" quantum="2M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start> }
-
-append_if [have_spec omap4] config {
-	<start name="fb_drv">
-		<binary name="omap4_fb_drv"/>
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
-	</start>}
+	</start> }
 
 append_if [have_spec ps2] config {
 	<start name="input_drv">
@@ -86,7 +72,7 @@ append_if [expr ![have_spec ps2] && [have_spec usb]] config {
 		<binary name="usb_drv"/>
 		<resource name="RAM" quantum="12M"/>
 		<provides> <service name="Input"/> </provides>
-		<config> <hid/> </config>
+		<config uhci="yes" ehci="yes" xhci="yes"> <hid/> </config>
 	</start> }
 
 append config {
@@ -121,14 +107,7 @@ append config {
 					</default-route>
 					<start name="liquid_fb">
 						<resource name="RAM" quantum="6M"/>
-						<config>
-							<animate>off</animate>
-							<x>400</x>
-							<y>270</y>
-							<width>300</width>
-							<height>200</height>
-							<title>Linux</title>
-						</config>
+						<config xpos="400" ypos="270" width="300" height="200" animate="off" title="Linux"/>
 						<provides>
 							<service name="Input"/>
 							<service name="Framebuffer"/>
@@ -159,12 +138,10 @@ set boot_modules {
 	l4linux
 	initrd.gz
 }
-lappend_if [have_spec   pci] boot_modules pci_drv
-lappend_if [have_spec   ps2] boot_modules ps2_drv
-lappend_if [have_spec pl11x] boot_modules pl11x_drv
-lappend_if [have_spec  vesa] boot_modules vesa_drv
-lappend_if [have_spec omap4] boot_modules omap4_fb_drv
-lappend_if [have_spec   usb] boot_modules usb_drv
+lappend_if [have_spec         pci] boot_modules pci_drv
+lappend_if [have_spec         ps2] boot_modules ps2_drv
+lappend_if [have_spec framebuffer] boot_modules fb_drv
+lappend_if [have_spec         usb] boot_modules usb_drv
 
 if {[have_spec x86]} {
 	set uri "https://github.com/downloads/skalk/genode/busybox-initrd-x86-20120618.gz"
@@ -175,6 +152,10 @@ if {![file exists bin/initrd.gz]} {
 	puts "Download initramfs ..."
 	exec >& /dev/null wget -c -O bin/initrd.gz $uri
 }
+exec >& /dev/null wget -O bin/initrd.gz.md5 $uri.md5
+cd bin
+exec md5sum -c initrd.gz.md5
+cd ..
 
 build_boot_image  [join $boot_modules " "]
 

@@ -31,6 +31,12 @@ namespace Genode
 			MMIO_0_BASE = 0x10000000,
 			MMIO_0_SIZE = 0x10000000,
 
+			CMU_MMIO_BASE = 0x10010000,
+			CMU_MMIO_SIZE = 0x24000,
+
+			PMU_MMIO_BASE = 0x10040000,
+			PMU_MMIO_SIZE = 0x5000,
+
 			/* interrupt controller */
 			GIC_CPU_MMIO_BASE = 0x10480000,
 			GIC_CPU_MMIO_SIZE = 0x00010000,
@@ -38,13 +44,22 @@ namespace Genode
 			/* UART */
 			UART_2_MMIO_BASE = 0x12C20000,
 			UART_2_CLOCK     = 100000000,
+			UART_2_IRQ       = 85,
 
 			/* timer */
 			PWM_MMIO_BASE = 0x12dd0000,
+			PWM_MMIO_SIZE = 0x1000,
 			PWM_CLOCK     = 66000000,
 			PWM_IRQ_0     = 68,
+			MCT_MMIO_BASE = 0x101c0000,
+			MCT_MMIO_SIZE = 0x1000,
+			MCT_CLOCK     = 24000000,
+			MCT_IRQ_L0    = 152,
 
-			/* if board provides security extension */
+			/* CPU cache */
+			CACHE_LINE_SIZE_LOG2 = 6,
+
+			/* wether board provides security extension */
 			SECURITY_EXTENSION = 1,
 		};
 	};

@@ -246,8 +246,7 @@ extern "C" {
 		/* Initialize nic-session */
 		enum {
 			PACKET_SIZE = Nic::Packet_allocator::DEFAULT_PACKET_SIZE,
-			RX_BUF_SIZE = Nic::Session::RX_QUEUE_SIZE * PACKET_SIZE,
-			TX_BUF_SIZE = Nic::Session::TX_QUEUE_SIZE * PACKET_SIZE,
+			BUF_SIZE    = Nic::Session::QUEUE_SIZE * PACKET_SIZE,
 		};
 
 		Nic::Packet_allocator *tx_block_alloc = new (env()->heap())
@@ -255,7 +254,7 @@ extern "C" {
 
 		Nic::Connection *nic = 0;
 		try {
-			nic = new (env()->heap()) Nic::Connection(tx_block_alloc, TX_BUF_SIZE, RX_BUF_SIZE);
+			nic = new (env()->heap()) Nic::Connection(tx_block_alloc, BUF_SIZE, BUF_SIZE);
 		} catch (Parent::Service_denied) {
 			destroy(env()->heap(), tx_block_alloc);
 			return ERR_IF;
@@ -264,7 +263,6 @@ extern "C" {
 		/* Setup receiver thread */
 		Nic_receiver_thread *th = new (env()->heap())
 			Nic_receiver_thread(nic, netif);
-		th->start();
 
 		/* Store receiver thread address in user-defined netif struct part */
 		netif->state      = (void*) th;
@@ -285,6 +283,8 @@ extern "C" {
 		Nic::Mac_address _mac = nic->mac_address();
 		for(int i=0; i<6; ++i)
 			netif->hwaddr[i] = _mac.addr[i];
+
+		th->start();
 
 		return ERR_OK;
 	}

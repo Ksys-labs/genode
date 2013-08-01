@@ -23,7 +23,7 @@
 
 #define SKIP_VERBOSE    0
 
-#if VERBOSE_LX_EMUL
+#if DEBUG_TRACE
 #define TRACE dde_kit_printf("\033[32m%s\033[0m called, not implemented\n", __PRETTY_FUNCTION__)
 #else
 #define TRACE
@@ -40,14 +40,6 @@
  ******************/
 
 int  atomic_inc_return(atomic_t *v) { TRACE; return 0; }
-
-
-/*******************************
- ** linux/byteorder/generic.h **
- *******************************/
-
-u16  get_unaligned_le16(const void *p) { TRACE; return 0; }
-u32  get_unaligned_le32(const void *p) { TRACE; return 0; }
 
 
 /*******************************
@@ -85,6 +77,9 @@ int  roundup_pow_of_two(u32 n) { TRACE; return 0; }
 void print_hex_dump(const char *level, const char *prefix_str,
                     int prefix_type, int rowsize, int groupsize,
                     const void *buf, size_t len, bool ascii) { TRACE; }
+int printk_ratelimit() { TRACE; return 0; }
+bool printk_timed_ratelimit(unsigned long *caller_jiffies,
+                            unsigned int interval_msec) { TRACE; return false; }
 
 
 /**********************************
@@ -160,11 +155,34 @@ void down_write(struct rw_semaphore *sem) { TRACE; }
 void up_write(struct rw_semaphore *sem) { TRACE; }
 
 
+/*********************
+ ** linux/lockdep.h **
+ *********************/
+
+bool lockdep_is_held(void *l) { TRACE; return 1; }
+
+
+/********************
+ ** linux/random.h **
+ ********************/
+
+void add_device_randomness(const void *buf, unsigned int size) { TRACE; }
+
+
 /*******************
  ** linux/ktime.h **
  *******************/
 
-ktime_t ktime_add_ns(const ktime_t kt, u64 nsec) { TRACE; ktime_t ret = { 0 }; return ret; }
+#define KTIME_RET ({TRACE; ktime_t t = { 0 }; return t;})
+
+ktime_t ktime_add(const ktime_t lhs, const ktime_t rhs) { KTIME_RET; }
+ktime_t ktime_add_ns(const ktime_t kt, u64 nsec) { KTIME_RET; }
+ktime_t ktime_get(void) { KTIME_RET; }
+ktime_t ktime_get_monotonic_offset(void) { KTIME_RET; }
+ktime_t ktime_set(const long secs, const unsigned long nsecs) { KTIME_RET; }
+ktime_t ktime_sub(const ktime_t lhs, const ktime_t rhs) { KTIME_RET; }
+
+struct timeval ktime_to_timeval(const ktime_t kt) { TRACE; struct timeval ret;  return ret; }
 
 s64 ktime_us_delta(const ktime_t later, const ktime_t earlier) { TRACE; return 0; };
 
@@ -175,20 +193,18 @@ s64 ktime_us_delta(const ktime_t later, const ktime_t earlier) { TRACE; return 0
 
 int del_timer_sync(struct timer_list *timer) { TRACE; return 0; }
 unsigned long round_jiffies(unsigned long j) { TRACE; return 1; }
-
+void add_timer(struct timer_list *timer) { TRACE; }
+void set_timer_slack(struct timer_list *time, int slack_hz) { TRACE; }
 
 /*********************
  ** linux/hrtimer.h **
  *********************/
 
 ktime_t ktime_get_real(void) { TRACE; ktime_t ret; return ret; }
-
-
-/*******************
- ** linux/delay.h **
- *******************/
-
-void mdelay(unsigned long msecs) { TRACE; }
+int hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
+                           unsigned long delta_ns, const enum hrtimer_mode mode) { TRACE; return 0; }
+void hrtimer_init(struct hrtimer *timer, clockid_t clock_id, enum hrtimer_mode mode) { TRACE; }
+int hrtimer_cancel(struct hrtimer *timer) { TRACE; return 0; }
 
 
 /***********************
@@ -197,6 +213,8 @@ void mdelay(unsigned long msecs) { TRACE; }
 
 bool cancel_work_sync(struct work_struct *work) { TRACE; return 0; }
 int cancel_delayed_work_sync(struct delayed_work *work) { TRACE; return 0; }
+
+bool flush_work(struct work_struct *work) { TRACE; return 0; }
 bool flush_work_sync(struct work_struct *work) { TRACE; return 0; }
 
 
@@ -282,6 +300,9 @@ int sysfs_create_group(struct kobject *kobj,
                        const struct attribute_group *grp) { TRACE; return 0; }
 void sysfs_remove_group(struct kobject *kobj,
                         const struct attribute_group *grp) { TRACE; }
+int sysfs_create_link(struct kobject *kobj, struct kobject *target,
+                      const char *name) { TRACE; return 0; }
+void sysfs_remove_link(struct kobject *kobj, const char *name) { TRACE; }
 
 int fasync_helper(int fd, struct file * filp, int on, struct fasync_struct **fapp) { TRACE; return 0; }
 
@@ -296,12 +317,18 @@ int  pm_runtime_set_active(struct device *dev) { TRACE; return 0; }
 void pm_suspend_ignore_children(struct device *dev, bool enable) { TRACE; }
 void pm_runtime_enable(struct device *dev) { TRACE; }
 void pm_runtime_disable(struct device *dev) { TRACE; }
+void pm_runtime_allow(struct device *dev) { TRACE; }
+void pm_runtime_forbid(struct device *dev) { TRACE; }
 void pm_runtime_set_suspended(struct device *dev) { TRACE; }
 void pm_runtime_get_noresume(struct device *dev) { TRACE; }
 void pm_runtime_put_noidle(struct device *dev) { TRACE; }
 void pm_runtime_use_autosuspend(struct device *dev) { TRACE; }
 int  pm_runtime_put_sync_autosuspend(struct device *dev) { TRACE; return 0; }
 void pm_runtime_no_callbacks(struct device *dev) { TRACE; }
+void pm_runtime_set_autosuspend_delay(struct device *dev, int delay) { TRACE; }
+int  pm_runtime_get_sync(struct device *dev) { TRACE; return 0; }
+int  pm_runtime_put_sync(struct device *dev) { TRACE; return 0; }
+int  pm_runtime_put(struct device *dev) { TRACE; return 0; }
 
 
 /***********************
@@ -313,6 +340,13 @@ int  device_wakeup_enable(struct device *dev) { TRACE; return 0; }
 bool device_may_wakeup(struct device *dev) { TRACE; return 1; }
 int  device_set_wakeup_enable(struct device *dev, bool enable) { TRACE; return 0; }
 bool device_can_wakeup(struct device *dev) { TRACE; return 0; }
+
+
+/********************
+ ** linux/pm_qos.h **
+ ********************/
+
+int dev_pm_qos_expose_flags(struct device *dev, s32 value) { TRACE; return 0; }
 
 
 /********************
@@ -349,6 +383,7 @@ void device_remove_file(struct device *dev,
                         const struct device_attribute *attr) { TRACE; }
 
 void put_device(struct device *dev) { TRACE; }
+struct device *get_device(struct device *dev) { TRACE; return dev; }
 
 void driver_unregister(struct device_driver *drv) { TRACE; }
 int  driver_attach(struct device_driver *drv) { TRACE; return 0; }
@@ -377,14 +412,22 @@ int class_register(struct class *cls) { TRACE; return 0; }
 void class_unregister(struct class *cls) { TRACE; }
 void class_destroy(struct class *cls) { TRACE; }
 
+void *devres_alloc(dr_release_t release, size_t size, gfp_t gfp) { TRACE; return 0; }
+void  devres_add(struct device *dev, void *res) { TRACE; }
+int   devres_destroy(struct device *dev, dr_release_t release,
+                     dr_match_t match, void *match_data) { TRACE; return 0; }
+void devres_free(void *res) { TRACE; }
+
 
 /*****************************
  ** linux/platform_device.h **
  *****************************/
 
 void *platform_get_drvdata(const struct platform_device *pdev) { TRACE; return NULL; }
-void platform_set_drvdata(struct platform_device *pdev, void *data) { TRACE; }
-
+void platform_set_drvdata(struct platform_device *pdev, void *data) { TRACE; printk("ret: %p\n", __builtin_return_address(0)); }
+int platform_device_del(struct platform_device *pdev) { TRACE; return 0; }
+int platform_device_put(struct platform_device *pdev) { TRACE; return 0; }
+void platform_device_unregister(struct platform_device *pdev) { TRACE; }
 
 /********************
  ** linux/dcache.h **
@@ -453,6 +496,13 @@ int fasync_add_entry(int fd, struct file *filp, struct fasync_struct **fapp) { T
 const struct file_operations  simple_dir_operations;
 const struct inode_operations simple_dir_inode_operations;
 
+
+struct inode *file_inode(struct file *f)
+{
+	TRACE;
+	static struct inode _i;
+	return &_i;
+}
 
 /*******************
  ** linux/namei.h **
@@ -558,6 +608,7 @@ void free_irq(unsigned int i, void *p) { TRACE; }
  *********************/
 
 void synchronize_irq(unsigned int irq) { TRACE; }
+bool in_interrupt(void) { TRACE; return 1; }
 
 
 /*****************
@@ -620,6 +671,8 @@ void dma_unmap_page(struct device *dev, dma_addr_t dma_address, size_t size,
                     enum dma_data_direction direction) { SKIP;; }
 
 int dma_mapping_error(struct device *dev, dma_addr_t dma_addr) { SKIP; return 0; }
+int dma_set_mask(struct device *dev, u64 mask) { TRACE; return 0; }
+
 
 /*****************
  ** linux/pid.h **
@@ -746,12 +799,6 @@ int scsi_get_resid(struct scsi_cmnd *cmd) { TRACE; return 0; }
 void scsi_report_bus_reset(struct Scsi_Host *shost, int channel) { TRACE; }
 void scsi_report_device_reset(struct Scsi_Host *shost, int channel, int target) { TRACE; }
 
-void scsi_eh_prep_cmnd(struct scsi_cmnd *scmd,
-                       struct scsi_eh_save *ses, unsigned char *cmnd,
-                       int cmnd_size, unsigned sense_bytes) { TRACE; }
-
-void scsi_eh_restore_cmnd(struct scsi_cmnd* scmd,
-                          struct scsi_eh_save *ses) { TRACE; }
 
 
 int scsi_normalize_sense(const u8 *sense_buffer, int sb_len,
@@ -776,6 +823,7 @@ int scsi_add_host_with_dma(struct Scsi_Host *shost, struct device *dev,
 void scsi_remove_host(struct Scsi_Host *shost) { TRACE; }
 void scsi_host_put(struct Scsi_Host *shost) { TRACE; }
 struct scsi_device *scsi_get_host_dev(struct Scsi_Host *shost) { TRACE; return 0; }
+int scsi_is_host_device(const struct device *dev) { TRACE; return 0; }
 
 
 /********************************
@@ -796,6 +844,12 @@ int omap_usbhs_enable(struct device *dev) { TRACE; return 0; }
 void omap_usbhs_disable(struct device *dev) { TRACE; }
 
 
+/*****************
+ ** linux/net.h **
+ *****************/
+
+int net_ratelimit(void) { TRACE; return 0; }
+
 /********************
  ** linux/skbuff.h **
  ********************/
@@ -805,13 +859,14 @@ int skb_checksum_start_offset(const struct sk_buff *skb) { TRACE; return 0; }
 struct sk_buff *skb_copy_expand(const struct sk_buff *skb,
                                 int newheadroom, int newtailroom,
                                 gfp_t gfp_mask) { TRACE; return 0; }
-int skb_tailroom(const struct sk_buff *skb) { TRACE; return 0; }
 
 int skb_queue_empty(const struct sk_buff_head *list) { TRACE; return 1; }
 void skb_queue_purge(struct sk_buff_head *list) { TRACE; }
 
 void skb_tx_timestamp(struct sk_buff *skb) { TRACE; }
 bool skb_defer_rx_timestamp(struct sk_buff *skb) { TRACE; return 0; }
+
+int skb_linearize(struct sk_buff *skb) { TRACE; return 0; }
 
 
 /*********************
@@ -820,6 +875,8 @@ bool skb_defer_rx_timestamp(struct sk_buff *skb) { TRACE; return 0; }
 
 __u32 ethtool_cmd_speed(const struct ethtool_cmd *ep) { TRACE; return 0; }
 u32 ethtool_op_get_link(struct net_device *dev) { TRACE; return 0; }
+int ethtool_op_get_ts_info(struct net_device *dev, struct ethtool_ts_info *eti) {
+	TRACE; return 0; }
 
 
 /***********************
@@ -832,12 +889,14 @@ void netif_start_queue(struct net_device *dev) { TRACE; }
 void netif_device_detach(struct net_device *dev) { TRACE; }
 void netif_stop_queue(struct net_device *dev) { TRACE; }
 void netif_wake_queue(struct net_device *dev) { TRACE; }
+void netif_tx_wake_all_queues(struct net_device *dev) { TRACE; }
 void netif_device_attach(struct net_device *dev) { TRACE; }
 void unregister_netdev(struct net_device *dev) { TRACE; }
 void free_netdev(struct net_device *dev) { TRACE; }
-void netif_carrier_off(struct net_device *dev) { TRACE; }
 
 int netdev_mc_empty(struct net_device *dev) { TRACE; return 1; }
+unsigned netdev_mc_count(struct net_device * dev) { TRACE; return 1; }
+
 
 /*****************
  ** linux/mii.h **
@@ -895,3 +954,145 @@ struct clk *clk_get(struct device *dev, const char *id)
 int    clk_enable(struct clk *clk) { TRACE; return 0; }
 void   clk_disable(struct clk *clk) { TRACE; }
 void   clk_put(struct clk *clk) { TRACE; }
+
+struct clk *devm_clk_get(struct device *dev, const char *id) { TRACE; return 0; }
+int    clk_prepare_enable(struct clk *clk) { TRACE; return 0; }
+void   clk_disable_unprepare(struct clk *clk) { TRACE; }
+
+
+/********************
+ ** linux/bitmap.h **
+ ********************/
+
+int bitmap_subset(const unsigned long *src1,
+                  const unsigned long *src2, int nbits) { TRACE; return 1; }
+
+
+/*****************
+ ** linux/idr.h **
+ *****************/
+
+int ida_simple_get(struct ida *ida, unsigned int start, unsigned int end,
+                   gfp_t gfp_mask) { TRACE; return 0; }
+void ida_simple_remove(struct ida *ida, unsigned int id) { TRACE; }
+
+
+/****************************
+ ** drivers/usb/core/usb.h **
+ ****************************/
+
+#include <linux/usb.h>
+#include <drivers/usb/core/usb.h>
+
+const struct attribute_group *usb_interface_groups[1];
+const struct attribute_group *usb_device_groups[1];
+struct usb_driver usbfs_driver;
+
+DEFINE_MUTEX(usbfs_mutex);
+
+void usb_create_sysfs_intf_files(struct usb_interface *intf) { TRACE; }
+void usb_remove_sysfs_intf_files(struct usb_interface *intf) { TRACE; }
+
+int usb_create_sysfs_dev_files(struct usb_device *dev) { TRACE; return 0; }
+void usb_remove_sysfs_dev_files(struct usb_device *dev) { TRACE; }
+
+int usb_devio_init(void) { TRACE; return 0; }
+void usb_devio_cleanup(void) { TRACE; }
+
+
+/*******************
+ ** linux/crc16.h **
+ *******************/
+
+u16 crc16(u16 crc, const u8 *buffer, size_t len) { TRACE; return 0; }
+
+
+/*******************
+ ** linux/birev.h **
+ *******************/
+
+u16 bitrev16(u16 in) { TRACE; return 0; }
+
+
+/************************
+ ** linux/radix-tree.h **
+ ************************/
+
+void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index) { TRACE; return 0; }
+int radix_tree_insert(struct radix_tree_root *root, unsigned long index, void *item) { TRACE; return 0; }
+void *radix_tree_delete(struct radix_tree_root *root, unsigned long index) { TRACE; return 0; }
+
+/******************
+ ** linux/gpio.h **
+ ******************/
+
+bool gpio_is_valid(int number) { TRACE; return false; }
+void gpio_set_value_cansleep(unsigned gpio, int value) { TRACE; }
+int gpio_request_one(unsigned gpio, unsigned long flags, const char *label) { TRACE; return 0; }
+
+
+/*********************
+ ** linux/of_gpio.h **
+ *********************/
+
+ int of_get_named_gpio(struct device_node *np,
+                       const char *propname, int index) { TRACE; return 0; }
+
+
+/******************
+ ** linux/phy.h  **
+ ******************/
+
+#include <linux/usb/phy.h>
+
+struct mii_bus *mdiobus_alloc(void) { TRACE; return 0; }
+int  mdiobus_register(struct mii_bus *bus) { TRACE; return 0; }
+void mdiobus_unregister(struct mii_bus *bus) { TRACE; }
+void mdiobus_free(struct mii_bus *bus) { TRACE; }
+
+int  phy_mii_ioctl(struct phy_device *phydev, struct ifreq *ifr, int cmd) { TRACE; return 0; }
+void phy_print_status(struct phy_device *phydev) { TRACE; }
+int  phy_ethtool_sset(struct phy_device *phydev, struct ethtool_cmd *cmd) { TRACE; return 0; }
+int  phy_ethtool_gset(struct phy_device *phydev, struct ethtool_cmd *cmd) { TRACE; return 0; }
+int  phy_start_aneg(struct phy_device *phydev) { TRACE; return 0; }
+void phy_start(struct phy_device *phydev) { TRACE; }
+void phy_stop(struct phy_device *phydev) { TRACE; }
+int  genphy_resume(struct phy_device *phydev) { TRACE; return 0; }
+
+struct phy_device * phy_connect(struct net_device *dev, const char *bus_id,
+                                void (*handler)(struct net_device *),
+                                phy_interface_t interface) { TRACE; return 0; }
+void phy_disconnect(struct phy_device *phydev) { TRACE; }
+
+#ifdef CONFIG_USB_OTG_UTILS
+struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev, 
+                                            const char *phandle, u8 index)
+{ TRACE; return 0; }
+
+
+struct usb_phy *devm_usb_get_phy(struct device *dev,
+                                 enum usb_phy_type type)
+{
+	static struct usb_phy _p;
+	TRACE;
+	return &_p;
+}
+#endif
+
+/****************
+ ** linux/of.h **
+ ****************/
+
+bool of_property_read_bool(const struct device_node *np, const char *propname) { TRACE; return false; }
+
+
+
+/******************************
+ ** drivers/usb/dwc3/debug.h **
+ ******************************/
+
+struct dwc3;
+
+int dwc3_debugfs_init(struct dwc3 *d){ SKIP;  return 0;  }
+void dwc3_debugfs_exit(struct dwc3 *d) { SKIP; }
+

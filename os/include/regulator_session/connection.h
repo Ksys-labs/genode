@@ -1,12 +1,11 @@
 /*
  * \brief  Connection to regulator service
- * \author Alexander Tarasikov <tarasikov@ksyslabs.org>
- * \date   2012-02-15
+ * \author Stefan Kalkowski
+ * \date   2013-06-13
  */
 
 /*
- * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -16,21 +15,24 @@
 #define _INCLUDE__REGULATOR_SESSION__CONNECTION_H_
 
 #include <regulator_session/client.h>
+#include <regulator/consts.h>
 #include <base/connection.h>
 
 namespace Regulator {
 
-	class Connection : public Genode::Connection<Session>,
-	                   public Session_client
+	struct Connection : Genode::Connection<Session>, Session_client
 	{
-		public:
-			Connection(const char *label="")
-			:
-				Genode::Connection<Session>(
-					session("ram_quota=4K, label=\"%s\"", label)
-				),
-				Session_client(cap())
-			{ }
+		/**
+		 * Constructor
+		 *
+		 * \param regulator  identifier for the specific regulator
+		 * \param label      string identifier of the client
+		 */
+		Connection(Regulator_id regulator, const char * label = "")
+		: Genode::Connection<Session>(
+			session("ram_quota=8K, regulator=\"%s\", label=\"%s\"",
+			        regulator_name_by_id(regulator), label)),
+		  Session_client(cap()) { }
 	};
 }
 

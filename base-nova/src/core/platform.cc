@@ -515,7 +515,7 @@ Platform::Platform() :
 			aux_len = strlen(reinterpret_cast<char const *>(aux)) + 1;
 
 			/* if last page is unused, free it up */
-			if (aux + aux_len <= rom_mem_end) {
+			if (aux + aux_len <= round_page(core_local_addr) + rom_mem_size) {
 				bool overlap = intersects(rom_mem_end,
 				                          (Hip::Mem_desc *)mem_desc_base,
 				                          num_mem_desc);
@@ -525,8 +525,9 @@ Platform::Platform() :
 
 			/* all behind rom module will be cleared, copy the command line */
 			char *name_tmp = commandline_to_basename(reinterpret_cast<char *>(aux));
-			name = new (core_mem_alloc()) char [aux_len];
-			memcpy(name, name_tmp, aux_len);
+			unsigned name_tmp_size = aux_len - (name_tmp - reinterpret_cast<char *>(aux));
+			name = new (core_mem_alloc()) char [name_tmp_size];
+			memcpy(name, name_tmp, name_tmp_size);
 
 		} else {
 

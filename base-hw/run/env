@@ -18,12 +18,6 @@ proc clean_boot_modules { } {
 	exec rm -rf boot_modules.s var/libcache/boot_modules/boot_modules.o }
 
 
-#
-# Get target argument
-#
-proc target { } { return [get_cmd_arg --target "qemu"] }
-
-
 ##########################
 ## 'tool/run' interface ##
 ##########################
@@ -59,6 +53,7 @@ proc create_boot_directory { } {
 
 
 proc build_boot_image {binaries} {
+	global run_target
 
 	# strip binaries
 	copy_and_strip_genode_binaries_to_run_dir $binaries
@@ -177,40 +172,47 @@ proc build_boot_image {binaries} {
 	exec cp -L bin/core $elf_img
 	exec [cross_dev_prefix]strip $elf_img
 
-	# target specific ops
-	if {[target] == "uboot"} {
+	build_uboot_image $elf_img
 
-		# parse ELF entrypoint and load address
-		set entrypoint [exec [cross_dev_prefix]readelf -h $elf_img | \
-		                grep "Entry point address: " | \
-		                sed -e "s/.*Entry point address: *//"]
-		set load_addr [exec [cross_dev_prefix]readelf -l $elf_img | \
-		               grep -m 1 "LOAD"]
-		set load_addr [lindex [regexp -inline -all -- {\S+} $load_addr] 3]
+	# set symbolic link to image.elf file in TFTP directory for PXE boot
+	if {[info exists ::env(PXE_TFTP_DIR_BASE)] &&
+	    [info exists ::env(PXE_TFTP_DIR_OFFSET)]} {
+		exec ln -sf "[pwd]/$elf_img" "$::env(PXE_TFTP_DIR_BASE)$::env(PXE_TFTP_DIR_OFFSET)"
 
-		# compress ELF
-		set bin_img "[run_dir]/image.bin"
-		exec [cross_dev_prefix]objcopy -O binary $elf_img $bin_img
-		exec gzip --best --force $bin_img
-
-		# create compressed uImage
-		set uboot_img [run_dir]/uImage
-		exec mkimage -A arm -O linux -T kernel -C gzip -a $load_addr \
-		             -e $entrypoint -d $bin_img.gz $uboot_img
-		exec rm -rf $bin_img.gz
+		if {[regexp "uboot" $run_target]} {
+			exec ln -sf "[pwd]/[run_dir]/uImage" "$::env(PXE_TFTP_DIR_BASE)$::env(PXE_TFTP_DIR_OFFSET)"
+		}
 	}
+
 	# retrieve stand-alone core
-	exec mv core/core.standalone bin/core
+	exec cp core/core.standalone bin/core
+	exec rm core/core.standalone
 }
 
 
-proc run_genode_until {{wait_for_re forever} {timeout_value 0}} {
-
-	if {[target] == "qemu"} { spawn_qemu $wait_for_re $timeout_value
-	} else {
-		puts stderr "Error: Can't execute automatically on target '$target'"
-		puts stderr "       Target might be: 'qemu'"
-		exit -1
+proc run_genode_until {{wait_for_re forever} {timeout_value 0} {running_spawn_id -1}} {
+	#
+	# If a running_spawn_id is specified, wait for the expected output
+	#
+	if {$running_spawn_id != -1} {
+		wait_for_output $wait_for_re $timeout_value $running_spawn_id
+		return
 	}
+
+	#
+	# Try to use one of the supported backends for running the scripts
+	#
+	if {[is_qemu_available]} {
+		spawn_qemu $wait_for_re $timeout_value
+		return
+	}
+	if {[is_serial_available]} {
+		spawn_serial $wait_for_re $timeout_value "Kernel started!"
+		return
+	}
+
+	global run_target
+	puts stderr "Error: Can't execute automatically on target '$run_target'"
+	exit -1
 }
 

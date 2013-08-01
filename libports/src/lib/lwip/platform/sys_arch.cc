@@ -180,7 +180,7 @@ extern "C" {
 					PWRN("DHCP timed out!");
 					return 1;
 				}
-				PDBG("got IP address %d.%d.%d.%d",
+				PINF("got IP address %d.%d.%d.%d",
 				     ip4_addr1(&(netif.ip_addr)),
 				     ip4_addr2(&(netif.ip_addr)),
 				     ip4_addr3(&(netif.ip_addr)),
@@ -578,6 +578,8 @@ extern "C" {
 		}
 	}
 
+	u32_t sys_now() {
+		return Genode::Timeout_thread::alarm_timer()->time(); }
 
 #if 0
 	/**************
@@ -627,4 +629,7 @@ extern "C" {
 	}
 #endif
 
+	void genode_memcpy(void * dst, const void *src, unsigned long size) {
+		Genode::memcpy(dst, src, size);
+	}
 } /* extern "C" */

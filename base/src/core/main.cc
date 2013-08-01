@@ -138,6 +138,25 @@ class Core_child : public Child_policy
 		 ** Child-policy interface **
 		 ****************************/
 
+		void filter_session_args(const char *, char *args,
+					 Genode::size_t args_len)
+		{
+			using namespace Genode;
+
+			char label_buf[Parent::Session_args::MAX_SIZE];
+			Arg_string::find_arg(args, "label").string(label_buf, sizeof(label_buf), "");
+
+			char value_buf[Parent::Session_args::MAX_SIZE];
+			Genode::snprintf(value_buf, sizeof(value_buf),
+			                 "\"%s%s%s\"",
+			                 "init",
+			                 Genode::strcmp(label_buf, "") == 0 ? "" : " -> ",
+			                 label_buf);
+
+			Arg_string::set_arg(args, args_len, "label", value_buf);
+		}
+
+
 		const char *name() const { return "init"; }
 
 		Service *resolve_session_request(const char *service, const char *)
@@ -219,13 +238,13 @@ int main()
 		= static_cap_cast<Ram_session>(ram_root.session("ram_quota=32K"));
 	Ram_session_client(init_ram_session_cap).ref_account(env()->ram_session_cap());
 
-	Cpu_connection init_cpu;
+	Cpu_connection init_cpu("init");
 	Rm_connection  init_rm;
 
 	/* transfer all left memory to init, but leave some memory left for core */
 	/* NOTE: exception objects thrown in core components are currently allocated on
 	         core's heap and not accounted by the component's meta data allocator */
-	Genode::size_t init_quota = platform()->ram_alloc()->avail() - 140*1024;
+	Genode::size_t init_quota = platform()->ram_alloc()->avail() - 172*1024;
 	env()->ram_session()->transfer_quota(init_ram_session_cap, init_quota);
 	PDBG("transferred %zd MB to init", init_quota / (1024*1024));
 

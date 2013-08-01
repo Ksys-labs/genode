@@ -114,12 +114,7 @@ puts $launchpad_cfg_fd {<config>
 				<route>
 					<any-service><parent/></any-service>
 				</route>
-				<config>
-					<animate>off</animate>
-					<x>10</x><y>10</y>
-					<width>640</width>
-					<height>480</height>
-				</config>
+				<config xpos="10" ypos="10" width="800" height="600" animate="off"/>
 			</start>
 
 			<start name="vancouver">
@@ -212,7 +207,7 @@ append config {
 		</route>
 	</start>
 
-	<start name="vesa_drv">
+	<start name="fb_drv">
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Framebuffer"/></provides>
 		<route>
@@ -233,7 +228,7 @@ append config {
 		<resource name="RAM" quantum="8M"/>
 		<route>
 			<service name="Timer">      <child name="timer"/></service>
-			<service name="Framebuffer"><child name="vesa_drv"/></service>
+			<service name="Framebuffer"><child name="fb_drv"/></service>
 			<service name="Input">      <child name="ps2_drv"/></service>
 			<any-service><parent/></any-service>
 		</route>
@@ -259,7 +254,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init
-	vesa_drv
+	fb_drv
 	nitpicker
 	liquid_fb
 	ps2_drv

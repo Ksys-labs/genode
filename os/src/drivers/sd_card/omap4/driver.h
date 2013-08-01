@@ -4,6 +4,13 @@
  * \date   2012-07-19
  */
 
+/*
+ * Copyright (C) 2012-2013 Genode Labs GmbH
+ *
+ * This file is part of the Genode OS framework, which is distributed
+ * under the terms of the GNU General Public License version 2.
+ */
+
 #ifndef _DRIVER_H_
 #define _DRIVER_H_
 
@@ -31,18 +38,7 @@ class Block::Omap4_driver : public Block::Driver
 			/**
 			 * Implementation of 'Delayer' interface
 			 */
-			void usleep(unsigned us)
-			{
-				/* polling */
-				if (us == 0)
-					return;
-
-				unsigned ms = us / 1000;
-				if (ms == 0)
-					ms = 1;
-
-				Timer::Connection::msleep(ms);
-			}
+			void usleep(unsigned us) { Timer::Connection::usleep(us); }
 		} _delayer;
 
 		/* memory map */
@@ -121,8 +117,7 @@ class Block::Omap4_driver : public Block::Driver
 		bool dma_enabled() { return _use_dma; }
 
 		Ram_dataspace_capability alloc_dma_buffer(size_t size) {
-			/* unused */
-			return Ram_dataspace_capability(); }
+			return Genode::env()->ram_session()->alloc(size, false); }
 };
 
 #endif /* _DRIVER_H_ */

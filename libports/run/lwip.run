@@ -19,8 +19,11 @@
 # TODO: Add support for Linux via user-level networking (using the
 #       tun/tap proxy driver at os/src/drivers/nic/linux)
 #
-if {[have_spec linux]} {
-	puts "Run script does not support Linux."; exit 0 }
+set use_usb_driver [expr [have_spec omap4] || [have_spec exynos5]]
+set use_nic_driver [expr !$use_usb_driver && ![have_spec platform_imx53] && ![have_spec linux]]
+
+if {[expr !$use_usb_driver && !$use_nic_driver]} {
+	puts "\n Run script is not supported on this platform. \n"; exit 0 }
 
 requires_installation_of lynx
 
@@ -34,9 +37,10 @@ set build_components {
 	test/lwip/http_srv
 }
 
-lappend_if [have_spec omap4] build_components drivers/usb
-lappend_if [have_spec acpi]  build_components drivers/acpi
-lappend_if [have_spec pci]   build_components drivers/pci/device_pd
+lappend_if $use_usb_driver              build_components drivers/usb
+lappend_if [have_spec acpi]             build_components drivers/acpi
+lappend_if [have_spec pci]              build_components drivers/pci/device_pd
+lappend_if [have_spec platform_arndale] build_components drivers/platform
 
 build $build_components
 
@@ -69,21 +73,28 @@ set config {
 		<provides> <service name="Timer"/> </provides>
 	</start>
 	<start name="test-lwip_httpsrv">
-		<resource name="RAM" quantum="2M"/>
+		<resource name="RAM" quantum="3M"/>
 	</start> }
 
-append_if [have_spec omap4] config {
-	<start name="usb_drv" priority="-1">
+
+append_if [have_spec platform_arndale] config {
+	<start name="platform_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Regulator"/></provides>
+	</start>}
+
+append_if $use_usb_driver config {
+	<start name="usb_drv">
 		<resource name="RAM" quantum="12M"/>
 		<provides>
 			<service name="Nic"/>
 		</provides>
-		<config>
+		<config ehci="yes">
 			<nic mac="2e:60:90:0c:4e:01" />
 		</config>
 	</start>}
 
-append_if [expr ![have_spec omap4]] config {
+append_if $use_nic_driver config {
 	<start name="nic_drv">
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Nic"/></provides>
@@ -91,7 +102,7 @@ append_if [expr ![have_spec omap4]] config {
 
 append_if [have_spec acpi] config {
 	<start name="acpi">
-		<resource name="RAM" quantum="5M"/>
+		<resource name="RAM" quantum="6M"/>
 		<binary name="acpi_drv"/>
 		<provides>
 			<service name="PCI"/>
@@ -126,11 +137,12 @@ set boot_modules {
 }
 
 # platform-specific modules
-lappend_if [have_spec acpi]          boot_modules acpi_drv
-lappend_if [have_spec pci]           boot_modules pci_drv
-lappend_if [have_spec omap4]         boot_modules usb_drv
-lappend_if [expr ![have_spec omap4]] boot_modules nic_drv
-lappend_if [have_spec nova]          boot_modules pci_device_pd
+lappend_if [have_spec acpi]             boot_modules acpi_drv
+lappend_if [have_spec pci]              boot_modules pci_drv
+lappend_if $use_usb_driver              boot_modules usb_drv
+lappend_if $use_nic_driver              boot_modules nic_drv
+lappend_if [have_spec nova]             boot_modules pci_device_pd
+lappend_if [have_spec platform_arndale] boot_modules platform_drv
 
 build_boot_image $boot_modules
 
@@ -148,7 +160,15 @@ append qemu_args " -net user -redir tcp:5555::80 "
 
 run_genode_until {.*Start the server loop \.\.\..*} 30
 
-set uri "http://localhost:5555/"
+if [is_qemu_available] {
+	set uri "http://localhost:5555/"
+} else {
+	set match_string "got IP address (.*)\033.*\n"
+	regexp $match_string $output ip_addr
+	regexp {[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+} $ip_addr ip_addr 
+
+	set uri "http://$ip_addr:80/"
+}
 
 puts "http server is up, try to query website $uri"
 
@@ -161,6 +181,6 @@ if {![regexp {Welcome to our lwIP HTTP server!} $website dummy]} {
 	exit 2;
 }
 
-puts "test succeeded"
+puts "Test succeeded"
 
 # vi: set ft=tcl :

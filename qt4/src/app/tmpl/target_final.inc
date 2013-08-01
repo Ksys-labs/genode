@@ -57,7 +57,7 @@ endif
 
 # QtWebKit
 ifeq ($(findstring webkit, $(QT)), webkit)
-LIBS += qt_webcore
+LIBS += qt_webcore qt_webkit
 endif
 
 # QtWebKit

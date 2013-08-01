@@ -109,7 +109,7 @@ mimetype.assign      = (
 	<start name="lighttpd">
 		<resource name="RAM" quantum="256M" />
 		<config>
-			<interface ip_addr="10.0.2.55" netmask="255.255.255.0" gateway="10.0.2.1"/>
+			<libc ip_addr="10.0.2.55" netmask="255.255.255.0" gateway="10.0.2.1"/>
 			<arg value="lighttpd" />
 			<arg value="-f" />
 			<arg value="/etc/lighttpd/lighttpd.conf" />
@@ -154,9 +154,7 @@ set boot_modules {
 # platform-specific modules
 lappend_if [have_spec linux] boot_modules fb_sdl
 lappend_if [have_spec pci]   boot_modules pci_drv
-lappend_if [have_spec vesa]  boot_modules vesa_drv
 lappend_if [have_spec ps2]   boot_modules ps2_drv
-lappend_if [have_spec pl11x] boot_modules pl11x_drv
 
 build_boot_image $boot_modules
 

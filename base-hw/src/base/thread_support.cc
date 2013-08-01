@@ -19,7 +19,7 @@
 
 using namespace Genode;
 
-extern Native_utcb * _main_utcb;
+extern Native_utcb * __initial_sp;
 
 namespace Genode { Rm_session  *env_context_area_rm_session(); }
 
@@ -31,7 +31,7 @@ namespace Genode { Rm_session  *env_context_area_rm_session(); }
 Native_utcb * Thread_base::utcb()
 {
 	/* this is a main thread, so CRT0 provides UTCB through '_main_utcb' */
-	if (!this) return _main_utcb;
+	if (!this) return __initial_sp;
 
 	/* otherwise we have a valid thread base */
 	return &_context->utcb;
@@ -99,6 +99,6 @@ void Thread_base::start()
 }
 
 
-void Thread_base::cancel_blocking()
-{ env()->cpu_session()->cancel_blocking(_thread_cap); }
+void Thread_base::cancel_blocking() {
+	env()->cpu_session()->cancel_blocking(_thread_cap); }
 

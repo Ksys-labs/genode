@@ -40,13 +40,74 @@ namespace Genode
 			EPIT_2_MMIO_BASE   = 0x53fb0000,
 			EPIT_2_MMIO_SIZE   = 0x00004000,
 
+			GPIO1_MMIO_BASE    = 0x53f84000,
+			GPIO1_MMIO_SIZE    = 0x4000,
+			GPIO2_MMIO_BASE    = 0x53f88000,
+			GPIO2_MMIO_SIZE    = 0x4000,
+			GPIO3_MMIO_BASE    = 0x53f8c000,
+			GPIO3_MMIO_SIZE    = 0x4000,
+			GPIO4_MMIO_BASE    = 0x53f90000,
+			GPIO4_MMIO_SIZE    = 0x4000,
+			GPIO5_MMIO_BASE    = 0x53fdc000,
+			GPIO5_MMIO_SIZE    = 0x4000,
+			GPIO6_MMIO_BASE    = 0x53fe0000,
+			GPIO6_MMIO_SIZE    = 0x4000,
+			GPIO7_MMIO_BASE    = 0x53fe4000,
+			GPIO7_MMIO_SIZE    = 0x4000,
+			GPIO1_IRQL         = 50,
+			GPIO1_IRQH         = 51,
+			GPIO2_IRQL         = 52,
+			GPIO2_IRQH         = 53,
+			GPIO3_IRQL         = 54,
+			GPIO3_IRQH         = 55,
+			GPIO4_IRQL         = 56,
+			GPIO4_IRQH         = 57,
+			GPIO5_IRQL         = 103,
+			GPIO5_IRQH         = 104,
+			GPIO6_IRQL         = 105,
+			GPIO6_IRQH         = 106,
+			GPIO7_IRQL         = 107,
+			GPIO7_IRQH         = 108,
+
 			TZIC_MMIO_BASE     = 0x0fffc000,
 			TZIC_MMIO_SIZE     = 0x00004000,
 
 			AIPS_1_MMIO_BASE   = 0x53f00000,
 			AIPS_2_MMIO_BASE   = 0x63f00000,
 
+			IOMUXC_BASE        = 0x53fa8000,
+			IOMUXC_SIZE        = 0x00004000,
+
+			PWM2_BASE          = 0x53fb8000,
+			PWM2_SIZE          = 0x00004000,
+
+			IPU_ERR_IRQ        = 10,
+			IPU_SYNC_IRQ       = 11,
+			IPU_BASE           = 0x18000000,
+			IPU_SIZE           = 0x08000000,
+
+			SRC_BASE           = 0x53fd0000,
+			SRC_SIZE           = 0x00004000,
+
+			CCM_BASE           = 0x53FD4000,
+			CCM_SIZE           = 0x00004000,
+
+			I2C_2_IRQ          = 63,
+			I2C_2_BASE         = 0x63fc4000,
+			I2C_2_SIZE         = 0x00004000,
+
+			I2C_3_IRQ          = 64,
+			I2C_3_BASE         = 0x53fec000,
+			I2C_3_SIZE         = 0x00004000,
+
+			IIM_BASE           = 0x63f98000,
+			IIM_SIZE           = 0x00004000,
+
+			/* wether board provides security extension */
 			SECURITY_EXTENSION = 1,
+
+			/* CPU cache */
+			CACHE_LINE_SIZE_LOG2 = 2, /* FIXME get correct value from board spec */
 		};
 	};
 }

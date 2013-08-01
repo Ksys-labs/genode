@@ -1,6 +1,7 @@
 /*
  * \brief  Manager of all VM requested console functionality
  * \author Markus Partheymueller
+ * \author Norman Feske
  * \date   2012-07-31
  */
 
@@ -24,6 +25,7 @@
 
 /* Genode includes */
 #include <base/snprintf.h>
+#include <util/register.h>
 
 /* nitpicker graphics backend */
 #include <nitpicker_gfx/chunky_canvas.h>
@@ -33,8 +35,6 @@
 extern char _binary_mono_tff_start;
 Font default_font(&_binary_mono_tff_start);
 
-extern Genode::Lock global_lock;
-extern bool console_init;
 
 using Genode::env;
 using Genode::Dataspace_client;
@@ -42,39 +42,73 @@ using Genode::Dataspace_client;
 bool fb_active = true;
 
 
-static unsigned mouse_value(Input::Event * ev)
+/**
+ * Layout of PS/2 mouse packet
+ */
+struct Ps2_mouse_packet : Genode::Register<32>
 {
-	/* bit 3 is always set */
-	unsigned ret = 0x8;
+	struct Packet_size   : Bitfield<0, 3> { };
+	struct Left_button   : Bitfield<8, 1> { };
+	struct Middle_button : Bitfield<9, 1> { };
+	struct Right_button  : Bitfield<10, 1> { };
+	struct Rx_high       : Bitfield<12, 1> { };
+	struct Ry_high       : Bitfield<13, 1> { };
+	struct Rx_low        : Bitfield<16, 8> { };
+	struct Ry_low        : Bitfield<24, 8> { };
+};
 
-	/* signs and movements */
-	int x=0, y=0;
-	if (ev->rx() > 0) x = 1;
-	if (ev->rx() < 0) x = -1;
-	if (ev->ry() > 0) y = 1;
-	if (ev->ry() < 0) y = -1;
 
-	if (x > 0)
-		ret |= (1 << 8);
-	if (x < 0)
-		ret |= (0xfe << 8) | (1 << 4);
-	if (y < 0) /* nitpicker's negative is PS2 positive */
-		ret |= (1 << 16);
-	if (y > 0)
-		ret |= (0xfe << 16) | (1 << 5);
+static bool is_mouse_event(Input::Event const *ev)
+{
+	using Input::Event;
+	if (ev->type() == Event::PRESS || ev->type() == Event::RELEASE) {
+		if (ev->code() == Input::BTN_LEFT)   return true;
+		if (ev->code() == Input::BTN_MIDDLE) return true;
+		if (ev->code() == Input::BTN_RIGHT)  return true;
+	}
 
-	/* buttons */
-	ret |= ((ev->code() == Input::BTN_MIDDLE ? 1 : 0) << 2);
-	ret |= ((ev->code() == Input::BTN_RIGHT ? 1 : 0) << 1);
-	ret |= ((ev->code() == Input::BTN_LEFT ? 1 : 0) << 0);
+	if (ev->type() == Event::MOTION)
+		return true;
 
-	/* ps2mouse model expects 3 in the first byte */
-	return (ret << 8) | 0x3;
+	return false;
 }
 
-/*
- * Console implementation
+
+/**
+ * Convert Genode::Input event to PS/2 packet
+ *
+ * This function updates _left, _middle, and _right as a side effect.
  */
+unsigned Vancouver_console::_input_to_ps2mouse(Input::Event const *ev)
+{
+	/* track state of mouse buttons */
+	using Input::Event;
+	if (ev->type() == Event::PRESS || ev->type() == Event::RELEASE) {
+		bool const pressed = ev->type() == Event::PRESS;
+		if (ev->code() == Input::BTN_LEFT)   _left   = pressed;
+		if (ev->code() == Input::BTN_MIDDLE) _middle = pressed;
+		if (ev->code() == Input::BTN_RIGHT)  _right  = pressed;
+	}
+
+	/* clamp relative motion vector to bounds */
+	int const boundary = 200;
+	int const rx =  min(boundary, max(-boundary, ev->rx()));
+	int const ry = -min(boundary, max(-boundary, ev->ry()));
+
+	/* assemble PS/2 packet */
+	Ps2_mouse_packet::access_t packet = 0;
+	Ps2_mouse_packet::Packet_size::set  (packet, 3);
+	Ps2_mouse_packet::Left_button::set  (packet, _left);
+	Ps2_mouse_packet::Middle_button::set(packet, _middle);
+	Ps2_mouse_packet::Right_button::set (packet, _right);
+	Ps2_mouse_packet::Rx_high::set      (packet, (rx >> 8) & 1);
+	Ps2_mouse_packet::Ry_high::set      (packet, (ry >> 8) & 1);
+	Ps2_mouse_packet::Rx_low::set       (packet, rx & 0xff);
+	Ps2_mouse_packet::Ry_low::set       (packet, ry & 0xff);
+
+	return packet;
+}
+
 
 /* bus callbacks */
 
@@ -155,12 +189,6 @@ void Vancouver_console::entry()
 {
 	Logging::printf("Hello, this is VancouverConsole.\n");
 
-	/* register host operations */
-	_mb.bus_console.add(this, receive_static<MessageConsole>);
-	_mb.bus_memregion.add(this, receive_static<MessageMemRegion>);
-
-	/* create environment for input/output */
-
 	/*
 	 * Init sessions to the required external services
 	 */
@@ -188,14 +216,15 @@ void Vancouver_console::entry()
 	 */
 	unsigned long count = 0;
 	bool revoked = false;
-	Vancouver_keyboard vkeyb(_mb);
+	Vancouver_keyboard vkeyb(_motherboard);
 
 	Genode::uint64_t checksum1 = 0;
 	Genode::uint64_t checksum2 = 0;
 	unsigned unchanged = 0;
 	bool cmp_even = 1;
 
-	console_init = true;
+	_startup_lock.unlock();
+
 	while (1) {
 		while (!input.is_pending()) {
 
@@ -234,15 +263,13 @@ void Vancouver_console::entry()
 					/* if we copy the same data 10 times, unmap the text buffer from guest */
 					if (unchanged == 10) {
 
-						/* protect against thread interference */
-						global_lock.lock();
+						Genode::Lock::Guard guard(_console_lock);
 
 						env()->rm_session()->detach((void *)_guest_fb);
 						env()->rm_session()->attach_at(_fb_ds, (Genode::addr_t)_guest_fb);
 						unchanged = 0;
 						fb_active = false;
 
-						global_lock.unlock();
 						Logging::printf("Deactivated text buffer loop.\n");
 					}
 				} else unchanged = 0;
@@ -252,8 +279,7 @@ void Vancouver_console::entry()
 
 				if (!revoked) {
 
-					/* protect against thread interference */
-					global_lock.lock();
+					Genode::Lock::Guard guard(_console_lock);
 
 					env()->rm_session()->detach((void *)_guest_fb);
 					env()->rm_session()->attach_at(framebuffer.dataspace(),
@@ -269,8 +295,6 @@ void Vancouver_console::entry()
 					}
 
 					revoked = true;
-
-					global_lock.unlock();
 				}
 			}
 			framebuffer.refresh(0, 0, _fb_mode.width(), _fb_mode.height());
@@ -282,9 +306,10 @@ void Vancouver_console::entry()
 			Input::Event *ev = &ev_buf[i];
 
 			/* update mouse model (PS2) */
-			unsigned mouse = mouse_value(ev);
-			MessageInput msg(0x10001, mouse);
-			_mb.bus_input.send(msg);
+			if (is_mouse_event(ev)) {
+				MessageInput msg(0x10001, _input_to_ps2mouse(ev));
+				_motherboard()->bus_input.send(msg);
+			}
 
 			if (ev->type() == Input::Event::PRESS)   {
 				if (ev->code() <= 0xee) {
@@ -301,11 +326,26 @@ void Vancouver_console::entry()
 }
 
 
-Vancouver_console::Vancouver_console(Motherboard &mb, Genode::size_t vm_fb_size,
+void Vancouver_console::register_host_operations(Motherboard &motherboard)
+{
+	motherboard.bus_console.  add(this, receive_static<MessageConsole>);
+	motherboard.bus_memregion.add(this, receive_static<MessageMemRegion>);
+}
+
+
+Vancouver_console::Vancouver_console(Synced_motherboard &mb,
+                                     Genode::Lock &console_lock,
+                                     Genode::size_t vm_fb_size,
                                      Genode::Dataspace_capability fb_ds)
 :
-	_vm_fb_size(vm_fb_size), _mb(mb), _fb_size(0), _pixels(0), _guest_fb(0),
-	_regs(0), _fb_ds(fb_ds)
+	_startup_lock(Genode::Lock::LOCKED),
+	_vm_fb_size(vm_fb_size), _motherboard(mb), _console_lock(console_lock),
+	_fb_size(0), _pixels(0), _guest_fb(0),
+	_regs(0), _fb_ds(fb_ds),
+	_left(false), _middle(false), _right(false)
 {
 	start();
+
+	/* shake hands with console thread */
+	_startup_lock.lock();
 }

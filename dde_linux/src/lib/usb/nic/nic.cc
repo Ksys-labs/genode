@@ -20,7 +20,6 @@
 #include <util/xml_node.h>
 
 #include <lx_emul.h>
-#include <mem.h>
 
 #include <nic/component.h>
 #include "signal.h"
@@ -33,7 +32,6 @@ extern "C" {
 static Signal_helper *_signal = 0;
 
 enum {
-	START     = 0x1, /* device flag */
 	HEAD_ROOM = 8,  /* head room in skb in bytes */
 	MAC_LEN   = 17,  /* 12 number and 6 colons */ 
 };
@@ -48,38 +46,45 @@ struct sk_buff *_alloc_skb(unsigned int size, bool tx = true);
 /**
  * Skb-bitmap allocator
  */
-template <unsigned ENTRIES, unsigned BUFFER>
 class Skb
 {
 	private:
 
-		enum {
-			IDX     = ENTRIES / 32,
-		};
+		unsigned const _entries;
 
-		sk_buff  _buf[ENTRIES];
-		unsigned _free[ENTRIES / sizeof(unsigned)];
+		sk_buff  *_buf;
+		unsigned *_free;
 		unsigned _idx;
-		bool     _wait_free;
+
+		enum { ENTRY_ELEMENT_SIZE = sizeof(unsigned) * 8 };
 
 	public:
 
-		Skb() : _idx(0)
+		Skb(unsigned const entries, unsigned const buffer_size)
+		:
+			_entries(entries), _idx(0)
 		{
-			Genode::memset(_free, 0xff, sizeof(_free));
+			unsigned const size = _entries / sizeof(unsigned);
 
-			for (unsigned i = 0; i < ENTRIES; i++)
-				_buf[i].start = (unsigned char *)Genode::Mem::dma()->alloc(BUFFER);;
+			_buf  = (sk_buff *)kmalloc(sizeof(sk_buff) * _entries, GFP_KERNEL);
+			_free = (unsigned *)kmalloc(sizeof(unsigned) * size, GFP_KERNEL);
+
+			Genode::memset(_free, 0xff, size * sizeof(unsigned));
+
+			for (unsigned i = 0; i < _entries; i++)
+				_buf[i].start = (unsigned char *)kmalloc(buffer_size + NET_IP_ALIGN, GFP_NOIO);
 		}
 
 		sk_buff *alloc()
 		{
-			for (register int i = 0; i < IDX; i++) {
+			unsigned const IDX = _entries / ENTRY_ELEMENT_SIZE;
+
+			for (register unsigned i = 0; i < IDX; i++) {
 				if (_free[_idx] != 0) {
 					unsigned msb = Genode::log2(_free[_idx]);
 					_free[_idx] ^= (1 << msb);
 
-					sk_buff *r = &_buf[(_idx * 32) + msb];
+					sk_buff *r = &_buf[(_idx * ENTRY_ELEMENT_SIZE) + msb];
 					r->data = r->start;
 					r->phys   = 0;
 					r->cloned = 0;
@@ -91,46 +96,32 @@ class Skb
 			}
 			
 
-			/* wait until some SKBs are fred */
-			_wait_free = false;
-			_wait_event(_wait_free);
-
-			return alloc();
+			return 0;
 		}
 
 		void free(sk_buff *buf)
 		{
 			unsigned entry = buf - &_buf[0];
-			if (&_buf[0] >  buf || entry > ENTRIES)
+			if (&_buf[0] >  buf || entry > _entries)
 				return;
 
-			/* unblock waiting skb allocs */
-			_wait_free = true;
-			_idx = entry / 32;
-			_free[_idx] |= (1 << (entry % 32));
+			_idx = entry / ENTRY_ELEMENT_SIZE;
+			_free[_idx] |= (1 << (entry % ENTRY_ELEMENT_SIZE));
 		}
 };
 
 
-/* smsc95xx.c */
-enum { DEFAULT_HS_BURST_CAP_SIZE = 18944 };
-
-/* send/receive skb type */
-typedef Skb<50,DEFAULT_HS_BURST_CAP_SIZE> Tx_skb;
-typedef Skb<32, DEFAULT_HS_BURST_CAP_SIZE> Rx_skb;
-
-
 /* send/receive skb allocators */
-static Tx_skb *skb_tx()
+static Skb *skb_tx(unsigned const elements = 0, unsigned const buffer_size = 0)
 {
-	static Tx_skb _skb;
+	static Skb _skb(elements, buffer_size);
 	return &_skb;
 }
 
 
-static Rx_skb *skb_rx()
+static Skb *skb_rx(unsigned const elements = 0, unsigned const buffer_size = 0)
 {
-	static Rx_skb _skb;
+	static Skb _skb(elements, buffer_size);
 	return &_skb;
 }
 
@@ -150,18 +141,32 @@ class Nic_device : public Nic::Device
 {
 	public:
 
-		struct net_device *_ndev; /* Linux-net device */
+		struct net_device *_ndev;  /* Linux-net device */
 		fixup_t            _tx_fixup;
+		bool const         _burst;
 
 	public:
 
-		Nic_device(struct net_device *ndev) : _ndev(ndev)
+		Nic_device(struct net_device *ndev)
+		:
+			_ndev(ndev),
+			/* XXX should be configurable instead of guessing burst mode */
+			_burst(((usbnet *)netdev_priv(ndev))->rx_urb_size > 2048)
 		{
+			struct usbnet *dev = (usbnet *)netdev_priv(_ndev);
+
+			/* initialize skb allocators */
+			unsigned urb_cnt = dev->rx_urb_size <= 2048 ? 128 : 64;
+			skb_rx(urb_cnt, dev->rx_urb_size);
+			skb_tx(urb_cnt, dev->rx_urb_size);
+
+			if (!burst()) return;
+
 			/*
-			 * Retrieve 'tx_fixup' funcion from driver and set it to zero, so it
-			 * cannot be called by the actual driver.
+			 * Retrieve 'tx_fixup' function from driver and set it to zero,
+			 * so it cannot be called by the actual driver. Required for
+			 * burst mode.
 			 */
-			struct usbnet *dev = (usbnet *)netdev_priv(ndev);
 			_tx_fixup = dev->driver_info->tx_fixup;
 			dev->driver_info->tx_fixup = 0;
 		}
@@ -180,14 +185,19 @@ class Nic_device : public Nic::Device
 		/**
 		 * Submit packet to driver
 		 */
-		void tx(Genode::addr_t virt, Genode::size_t size)
+		bool tx(Genode::addr_t virt, Genode::size_t size)
 		{
-			sk_buff *skb = _alloc_skb(size + HEAD_ROOM);
+			sk_buff *skb;
+			
+			if (!(skb = _alloc_skb(size + HEAD_ROOM)))
+				return false;
+
 			skb->len     = size;
 			skb->data   += HEAD_ROOM;
 			Genode::memcpy(skb->data, (void *)virt, skb->len);
 
 			tx_skb(skb);
+			return true;
 		}
 
 		/**
@@ -195,7 +205,12 @@ class Nic_device : public Nic::Device
 		 */
 		sk_buff *alloc_skb()
 		{
-			sk_buff *skb = _alloc_skb(18944);
+			struct usbnet *dev = (usbnet *)netdev_priv(_ndev);
+			sk_buff *skb;
+
+			if (!(skb = _alloc_skb(dev->rx_urb_size)))
+				return 0;
+
 			skb->len = 0;
 			return skb;
 		}
@@ -260,7 +275,7 @@ class Nic_device : public Nic::Device
 			return m;
 		}
 
-		bool burst() { return true; }
+		bool burst() { return _burst; }
 };
 
 
@@ -280,6 +295,7 @@ int register_netdev(struct net_device *ndev)
 {
 	using namespace Genode;
 	static bool announce = false;
+	int err = -ENODEV;
 
 	Nic_device *nic = Nic_device::add(ndev);
 
@@ -291,27 +307,69 @@ int register_netdev(struct net_device *ndev)
 
 		announce = true;
 
-		ndev->state |= START;
-		int err = ndev->netdev_ops->ndo_open(ndev);
+		ndev->state |= 1 << __LINK_STATE_START;
+		netif_carrier_off(ndev);
+
+		if ((err = ndev->netdev_ops->ndo_open(ndev)))
+			return err;
+
+		if (ndev->netdev_ops->ndo_set_rx_mode)
+			ndev->netdev_ops->ndo_set_rx_mode(ndev);
+
+/*
+		if(ndev->netdev_ops->ndo_change_mtu)
+			ndev->netdev_ops->ndo_change_mtu(ndev, 4000);
+*/
 		_nic = nic;
 		env()->parent()->announce(ep_nic.manage(&root));
-
-		return err;
 	}
 
-	return -ENODEV;
+	return err;
 }
 
 
-int netif_running(const struct net_device *dev) { return dev->state & START; }
+int netif_running(const struct net_device *dev)
+{
+	return dev->state & (1 << __LINK_STATE_START);
+}
+
 int netif_device_present(struct net_device *dev) { return 1; }
 
+int netif_carrier_ok(const struct net_device *dev)
+{
+	return !(dev->state & (1 << __LINK_STATE_NOCARRIER));
+}
+
+void netif_carrier_on(struct net_device *dev)
+{
+	dev->state &= ~(1 << __LINK_STATE_NOCARRIER);
+}
+
+void netif_carrier_off(struct net_device *dev)
+{
+	dev->state |= 1 << __LINK_STATE_NOCARRIER;
+}
+
+#ifdef GENODE_NET_STAT
+	#include <nic/stat.h>
+	static Timer::Connection _timer;
+	static Nic::Measurement  _stat(_timer);
+#endif
 
 int netif_rx(struct sk_buff *skb)
 {
 	if (_nic && _nic->session()) {
 		_nic->rx(skb);
 	}
+#ifdef GENODE_NET_STAT
+	else if (_nic) {
+		try {
+		_stat.data(new (skb->data) Net::Ethernet_frame(skb->len), skb->len);
+		} catch(Net::Ethernet_frame::No_ethernet_frame) {
+			PWRN("No ether frame");
+		}
+	}
+#endif
 
 	dev_kfree_skb(skb);
 	return NET_RX_SUCCESS;
@@ -326,9 +384,13 @@ struct sk_buff *_alloc_skb(unsigned int size, bool tx)
 {
 	sk_buff *skb = tx ?  skb_tx()->alloc() : skb_rx()->alloc();
 
+	if (!skb)
+		return 0;
+
 	size = (size + 3) & ~(0x3);
 
-	skb->tail     = skb->end = skb->start + size;
+	skb->end = skb->start + size;
+	skb->tail = skb->start;
 	skb->truesize = size;
 
 	return skb;
@@ -342,6 +404,16 @@ struct sk_buff *alloc_skb(unsigned int size, gfp_t priority)
 	 */
 	struct sk_buff *skb = _alloc_skb(size, false);
 	return skb;
+}
+
+struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev, unsigned int length)
+{
+	struct sk_buff *s = _alloc_skb(length + NET_IP_ALIGN, false);
+	if (s && dev->net_ip_align) {
+		s->data += NET_IP_ALIGN;
+		s->tail += NET_IP_ALIGN;
+	}
+	return s;
 }
 
 
@@ -363,6 +435,8 @@ void dev_kfree_skb(struct sk_buff *skb)
 
 
 void dev_kfree_skb_any(struct sk_buff *skb) { dev_kfree_skb(skb); }
+
+void kfree_skb(struct sk_buff *skb) { dev_kfree_skb(skb); }
 
 
 /**
@@ -427,6 +501,13 @@ unsigned int skb_headroom(const struct sk_buff *skb)
 }
 
 
+int skb_tailroom(const struct sk_buff *skb)
+{
+	return skb->end - skb->tail; 
+}
+
+
+
 /**
  * Take 'len' from front
  */
@@ -466,7 +547,11 @@ void skb_trim(struct sk_buff *skb, unsigned int len)
  */
 struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 {
-	sk_buff *c = alloc_skb(0, 0);
+	sk_buff *c;
+
+	if (!(c = alloc_skb(0,0)))
+		return 0;
+
 	unsigned char *start =  c->start;
 	*c = *skb;
 
@@ -474,6 +559,12 @@ struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 	c->cloned = 1;
 	c->clone  = start;
 	return c;
+}
+
+
+int skb_header_cloned(const struct sk_buff *skb)
+{
+	return skb->cloned;
 }
 
 
@@ -504,20 +595,20 @@ struct skb_shared_info *skb_shinfo(struct sk_buff * /* skb */)
  */
 void skb_queue_head_init(struct sk_buff_head *list)
 {
+	static int count_x = 0;
 	list->prev = list->next = (sk_buff *)list;
 	list->qlen = 0;
 }
-
 
 /**
  * Add to tail of queue
  */
 void __skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk)
 {
-	newsk->next = (sk_buff *)list;
-	newsk->prev  = list->prev;
+	newsk->next      = (sk_buff *)list;
+	newsk->prev      = list->prev;
 	list->prev->next = newsk;
-	list->prev = newsk;
+	list->prev       = newsk;
 	list->qlen++;
 }
 
@@ -531,19 +622,13 @@ void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk) {
  */
 void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
-	sk_buff *l = (sk_buff *)list;
-	while (l->next != l) {
-		l = l->next;
+	if (!list->qlen)
+		return;
 
-		if (l == skb) {
-			l->prev->next = l->next;
-			l->next->prev = l->prev;
-			list->qlen--;
-			return;
-		}
-	}
-
-	PERR("SKB not found in __skb_unlink");
+	skb->prev->next = skb->next;
+	skb->next->prev = skb->prev;
+	skb->next = skb->prev = 0;
+	list->qlen--;
 }
 
 
@@ -552,13 +637,11 @@ void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
  */
 struct sk_buff *skb_dequeue(struct sk_buff_head *list)
 {
-	if (list->next == (sk_buff *)list)
+	if (list->qlen == 0)
 		return 0;
-
+	
 	sk_buff *skb = list->next;
-	list->next = skb->next;
-	list->next->prev = (sk_buff *)list;
-	list->qlen--;
+	__skb_unlink(skb, list);
 
 	return skb;
 }
@@ -568,11 +651,11 @@ struct sk_buff *skb_dequeue(struct sk_buff_head *list)
  ** linux/inerrupt.h **
  **********************/
 
-static void snprint_mac(char *buf, char *mac)
+static void snprint_mac(u8 *buf, u8 *mac)
 {
 	for (int i = 0; i < ETH_ALEN; i++)
 	{
-		Genode::snprintf(&buf[i * 3], 3, "%02x", mac[i]);
+		Genode::snprintf((char *)&buf[i * 3], 3, "%02x", mac[i]);
 		if ((i * 3) < MAC_LEN)
 			buf[(i * 3) + 2] = ':';
 	}
@@ -581,11 +664,27 @@ static void snprint_mac(char *buf, char *mac)
 }
 
 
+/*************************
+ ** linux/etherdevice.h **
+ *************************/
+
+void eth_hw_addr_random(struct net_device *dev)
+{
+	random_ether_addr(dev->_dev_addr);
+}
+
+
+void eth_random_addr(u8 *addr)
+{
+	random_ether_addr(addr);
+}
+
+
 void random_ether_addr(u8 *addr)
 {
 	using namespace Genode;
-	char str[MAC_LEN + 1];
-	char fallback[] = { 0x2e, 0x60, 0x90, 0x0c, 0x4e, 0x01 };
+	u8 str[MAC_LEN + 1];
+	u8 fallback[] = { 0x2e, 0x60, 0x90, 0x0c, 0x4e, 0x01 };
 	Nic::Mac_address mac;
 
 	/* try using configured mac */
@@ -605,7 +704,11 @@ void random_ether_addr(u8 *addr)
 
 	/* use configured mac*/
 	Genode::memcpy(addr, mac.addr, ETH_ALEN);
-	snprint_mac(str, mac.addr);
+	snprint_mac(str, (u8 *)mac.addr);
 	PINF("Using configured mac: %s", str);
+
+#ifdef GENODE_NET_STAT
+	_stat.set_mac(mac.addr);
+#endif
 }
 

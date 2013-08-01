@@ -1,4 +1,5 @@
 assert_spec foc
+assert_spec 32bit
 
 #
 # Build
@@ -11,10 +12,16 @@ set build_components {
 	drivers/framebuffer
 	l4linux }
 
-lappend_if [have_spec     x86] build_components drivers/nic
+set use_usb_driver   [expr [have_spec omap4] || [have_spec exynos5]]
+set use_nic_driver   [expr !$use_usb_driver && [expr [have_spec lan9118] || [have_spec x86]]]
+set use_platform_drv [expr [have_spec platform_arndale] || [have_spec platform_imx53]]
+
+lappend_if $use_usb_driver     build_components drivers/usb
+lappend_if $use_nic_driver     build_components drivers/nic
 lappend_if [have_spec     pci] build_components drivers/pci
+lappend_if [have_spec    acpi] build_components drivers/acpi
 lappend_if [have_spec     ps2] build_components drivers/input/ps2
-lappend_if [have_spec lan9118] build_components drivers/nic
+lappend_if $use_platform_drv   build_components drivers/platform
 
 build $build_components
 create_boot_directory
@@ -44,27 +51,38 @@ set config  {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
 	</start>
-	<start name="uart_drv">
+	<start name="kdb_uart_drv">
 		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Terminal"/></provides>
-		<config><policy label="l4linux" uart="1"/></config>
+		<provides>
+			<service name="Terminal"/>
+			<service name="Uart"/>
+		</provides>
+		<config><policy label="l4linux" uart="0"/></config>
 	</start> }
 
-append_if [have_spec pci] config {
+append_if [have_spec acpi] config {
+	<start name="acpi">
+		<resource name="RAM" quantum="6M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+			<service name="PCI"/>
+			<service name="IRQ" />
+		</provides>
+		<route>
+			<service name="PCI"> <any-child /> </service>
+			<any-service> <parent/> <any-child /> </any-service>
+		</route>
+	</start> }
+
+append_if [expr ![have_spec acpi] && [have_spec pci]] config {
 	<start name="pci_drv">
-		<resource name="RAM" quantum="2M"/>
-		<provides><service name="PCI"/></provides>
-	</start>}
-
-append_if [have_spec vesa] config {
-	<start name="vesa_drv">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Framebuffer"/></provides>
+		<resource name="RAM" quantum="3M"/>
+		<provides> <service name="PCI"/> </provides>
 	</start> }
 
-append_if [have_spec pl11x] config {
-	<start name="pl11x_drv">
-		<resource name="RAM" quantum="2M"/>
+append_if [have_spec framebuffer] config {
+	<start name="fb_drv">
+		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start> }
 
@@ -72,49 +90,62 @@ append_if [have_spec ps2] config {
 	<start name="ps2_drv">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Input"/></provides>
+	</start> }
+
+append_if $use_platform_drv config {
+	<start name="platform_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides>
+			<service name="Regulator"/>
+		</provides>
 	</start>}
 
-append_if [have_spec x86] config {
+append_if $use_usb_driver config {
+	<start name="usb_drv">
+		<resource name="RAM" quantum="12M"/>
+		<provides>
+			<service name="Nic"/>
+			<service name="Input"/>
+		</provides>
+		<config uhci="yes" ehci="yes">
+			<nic mac="2e:60:90:0c:4e:01"/>
+			<hid />
+		</config>
+	</start>}
+
+append_if $use_nic_driver config {
 	<start name="nic_drv">
 		<resource name="RAM" quantum="2M"/>
-		<provides><service name="Nic"/></provides>
-	</start>}
-
-append_if [have_spec lan9118] config {
-	<start name="nic_drv">
-		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nic"/></provides>
 	</start> }
 
 append config {
 	<start name="l4linux">
-		<resource name="RAM" quantum="128M"/>
-}
+		<resource name="RAM" quantum="128M"/> }
 
 append_if [have_spec x86] config {
-		<config args="mem=64M console=ttyS0 l4x_rd=initrd.gz l4x_cpus=2 l4x_cpus_map=0,1"/>
-}
+		<config args="mem=64M l4x_rd=initrd.gz l4x_cpus=2 l4x_cpus_map=0,1"/> }
 
 append_if [have_spec arm] config {
-		<config args="mem=64M console=ttyS0 l4x_rd=initrd.gz"/>
-}
+		<config args="mem=64M l4x_rd=initrd.gz"/> }
 
 append config {
 	</start>
-</config>}
+</config> }
 
 install_config $config
 
 #
 # Boot modules
 #
-set boot_modules { core init timer uart_drv l4linux initrd.gz }
-lappend_if [have_spec     pci] boot_modules pci_drv
-lappend_if [have_spec     ps2] boot_modules ps2_drv
-lappend_if [have_spec   pl11x] boot_modules pl11x_drv
-lappend_if [have_spec    vesa] boot_modules vesa_drv
-lappend_if [have_spec     x86] boot_modules nic_drv
-lappend_if [have_spec lan9118] boot_modules nic_drv
+set boot_modules { core init timer kdb_uart_drv l4linux initrd.gz }
+lappend_if [have_spec         pci] boot_modules pci_drv
+lappend_if [have_spec        acpi] boot_modules acpi_drv
+lappend_if [have_spec         ps2] boot_modules ps2_drv
+lappend_if [have_spec framebuffer] boot_modules fb_drv
+lappend_if $use_nic_driver         boot_modules nic_drv
+lappend_if $use_usb_driver         boot_modules usb_drv
+lappend_if $use_platform_drv       boot_modules platform_drv
 
 if {[have_spec x86]} {
 	set uri "http://genode.org/files/release-11.11/l4lx/initrd-ia32.gz"
@@ -125,6 +156,10 @@ if {![file exists bin/initrd.gz]} {
 	puts "Download initramfs ..."
 	exec >& /dev/null wget -c -O bin/initrd.gz $uri
 }
+exec >& /dev/null wget -O bin/initrd.gz.md5 $uri.md5
+cd bin
+exec md5sum -c initrd.gz.md5
+cd ..
 
 build_boot_image  [join $boot_modules " "]
 
@@ -132,7 +167,6 @@ build_boot_image  [join $boot_modules " "]
 # Qemu
 #
 append qemu_args " -m 128 -nographic "
-append qemu_args " -serial file:kdb.log "
 append qemu_args " -serial mon:stdio "
 append_if [have_spec     x86] qemu_args " -smp 2,cores=2 "
 append_if [have_spec     x86] qemu_args " -net nic,model=e1000 -net user "
@@ -153,4 +187,4 @@ expect {
 }
 
 puts "Test succeeded"
-exec rm bin/initrd.gz kdb.log
+exec rm bin/initrd.gz bin/initrd.gz.md5

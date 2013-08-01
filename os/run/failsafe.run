@@ -8,6 +8,21 @@ if {[have_spec pistachio]} {
 	puts "Pistachio is unsupported (see https://github.com/genodelabs/genode/issues/16)"
 	exit 0
 }
+if {[have_spec fiasco]} {
+	puts "Fiasco is unsupported (see run script for details)"
+	#
+	# The L4/Fiasco kernel has known problems with the destruction of threads
+	# that are currently participating in IPC (the "red-thread issue"). The
+	# failsafe test reliably triggers the problem. Since the development of
+	# the kernel has been stopped, however, this issue is expected to remain
+	# unresolved. Newer kernels such as Fiasco.OC do not have the problem.
+	#
+	exit 0
+}
+if {[have_spec hw]} {
+	puts "Hw kernel is unsupported (see https://github.com/genodelabs/genode/issues/801)"
+	exit 0
+}
 
 #
 # Build
@@ -63,3 +78,4 @@ append qemu_args "-nographic -m 64"
 
 run_genode_until "--- finished failsafe test ---.*\n" 30
 
+puts "Test succeeded"

@@ -20,6 +20,7 @@
 namespace Genode
 {
 	class Platform_thread;
+	class Platform_pd;
 	class Tlb;
 }
 
@@ -29,6 +30,7 @@ namespace Kernel
 	typedef Genode::addr_t          addr_t;
 	typedef Genode::size_t          size_t;
 	typedef Genode::Platform_thread Platform_thread;
+	typedef Genode::Platform_pd     Platform_pd;
 
 	/**
 	 * Unique opcodes of all syscalls supported by the kernel
@@ -58,6 +60,7 @@ namespace Kernel
 		/* management of resource protection-domains */
 		SET_PAGER = 11,
 		UPDATE_PD = 12,
+		UPDATE_REGION = 32,
 		NEW_PD = 13,
 
 		/* interrupt handling */
@@ -78,8 +81,9 @@ namespace Kernel
 		ACK_SIGNAL = 29,
 
 		/* vm specific */
-		NEW_VM = 24,
-		RUN_VM = 25,
+		NEW_VM   = 24,
+		RUN_VM   = 25,
+		PAUSE_VM = 31,
 	};
 
 	/*****************************************************************
@@ -143,6 +147,7 @@ namespace Kernel
 	 *
 	 * \param dst  physical base of an appropriate portion of memory
 	 *             that is thereupon allocated to the kernel
+	 * \param pd   core local Platform_pd object
 	 *
 	 * \retval >0  ID of the new PD
 	 * \retval  0  if no new PD was created
@@ -150,8 +155,8 @@ namespace Kernel
 	 * Restricted to core threads. Regaining of the supplied memory is not
 	 * supported by now.
 	 */
-	inline int new_pd(void * const dst) {
-		return syscall(NEW_PD, (Syscall_arg)dst); }
+	inline int new_pd(void * const dst, Platform_pd * const pd) {
+		return syscall(NEW_PD, (Syscall_arg)dst, (Syscall_arg)pd); }
 
 
 	/**
@@ -165,13 +170,27 @@ namespace Kernel
 	 * applied from the moment it returns to the userland. This syscall is
 	 * inappropriate in case that a PD wants to change its own configuration.
 	 * There's no need for this syscall after a configuration change that
-	 * can't affect the kernel and/or hardware caches.
+	 * can't affect the kernel- and/or hardware-caches.
 	 *
 	 * Restricted to core threads.
 	 */
 	inline void update_pd(unsigned const pd_id) {
 		syscall(UPDATE_PD, (Syscall_arg)pd_id); }
 
+	/**
+	 * Propagate memory-updates within a given virtual region
+	 *
+	 * \param base  virtual base of the region
+	 * \param size  size of the region
+	 *
+	 * If one updates a memory region and must ensure that the update
+	 * gets visible directly to other address spaces, this syscall does
+	 * the job.
+	 *
+	 * Restricted to core threads.
+	 */
+	inline void update_region(addr_t base, size_t size) {
+		syscall(UPDATE_REGION, (Syscall_arg)base, (Syscall_arg)size); }
 
 	/**
 	 * Create a new thread that is stopped initially
@@ -249,6 +268,9 @@ namespace Kernel
 	 * \retval >0  if syscall was successful and thread were already active
 	 * \retval <0  if targeted thread doesn't participate in CPU
 	 *             scheduling after
+	 *
+	 * If the targeted thread blocks for any event except a 'start_thread'
+	 * call this call cancels the blocking.
 	 */
 	inline int resume_thread(unsigned const id = 0) {
 		return syscall(RESUME_THREAD, id); }
@@ -505,12 +527,14 @@ namespace Kernel
 	 *
 	 * \param context_id  kernel name of the targeted signal context
 	 *
+	 * \return  wether the context could be destructed
+	 *
 	 * Blocks the caller until the last delivered signal of the targeted
 	 * context is acknowledged. Then the context gets destructed, losing
 	 * all submits that were not delivered when this syscall occured.
 	 */
-	inline void kill_signal_context(unsigned context_id) {
-		syscall(KILL_SIGNAL_CONTEXT, (Syscall_arg)context_id); }
+	inline bool kill_signal_context(unsigned context_id) {
+		return syscall(KILL_SIGNAL_CONTEXT, (Syscall_arg)context_id); }
 
 	/**
 	 * Create a new virtual-machine that is stopped initially
@@ -543,6 +567,17 @@ namespace Kernel
 	 */
 	inline void run_vm(unsigned const id) {
 		syscall(RUN_VM, (Syscall_arg)id); }
+
+
+	/**
+	 * Stop execution of a virtual-machine
+	 *
+	 * \param id  ID of the targeted VM
+	 *
+	 * Restricted to core threads.
+	 */
+	inline void pause_vm(unsigned const id) {
+		syscall(PAUSE_VM, (Syscall_arg)id); }
 }
 
 #endif /* _INCLUDE__KERNEL__SYSCALLS_H_ */

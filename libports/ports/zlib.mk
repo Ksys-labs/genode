@@ -1,6 +1,8 @@
-ZLIB     = zlib-1.2.7
-ZLIB_TGZ = $(ZLIB).tar.gz
-ZLIB_URL = http://zlib.net/$(ZLIB_TGZ)
+ZLIB_VERSION = 1.2.8
+ZLIB         = zlib-$(ZLIB_VERSION)
+ZLIB_TGZ     = $(ZLIB).tar.gz
+ZLIB_URL     = http://downloads.sourceforge.net/project/libpng/zlib/$(ZLIB_VERSION)/$(ZLIB_TGZ)
+ZLIB_MD5     = 44d667c142d7cda120332623eab69f40
 
 #
 # Interface to top-level prepare Makefile
@@ -17,8 +19,12 @@ $(CONTRIB_DIR)/$(ZLIB):clean-zlib
 $(DOWNLOAD_DIR)/$(ZLIB_TGZ):
 	$(VERBOSE)wget -c -P $(DOWNLOAD_DIR) $(ZLIB_URL) && touch $@
 
-$(CONTRIB_DIR)/$(ZLIB): $(DOWNLOAD_DIR)/$(ZLIB_TGZ)
-	$(VERBOSE)tar xfz $< -C $(CONTRIB_DIR) && touch $@
+$(DOWNLOAD_DIR)/$(ZLIB_TGZ).verified: $(DOWNLOAD_DIR)/$(ZLIB_TGZ)
+	$(VERBOSE)$(HASHVERIFIER) $(DOWNLOAD_DIR)/$(ZLIB_TGZ) $(ZLIB_MD5) md5
+	$(VERBOSE)touch $@
+
+$(CONTRIB_DIR)/$(ZLIB): $(DOWNLOAD_DIR)/$(ZLIB_TGZ).verified
+	$(VERBOSE)tar xfz $(<:.verified=) -C $(CONTRIB_DIR) && touch $@
 
 ZLIB_INCLUDES = zconf.h zlib.h
 

@@ -10,8 +10,9 @@ set build_components {
 	drivers/framebuffer drivers/pci drivers/input
 }
 
-lappend_if [have_spec usb] build_components drivers/usb
-lappend_if [have_spec omap4] build_components drivers/gpio
+lappend_if [have_spec usb]   build_components drivers/usb
+lappend_if [have_spec gpio]  build_components drivers/gpio
+lappend_if [have_spec imx53] build_components drivers/platform
 
 build $build_components
 
@@ -55,29 +56,30 @@ append_if [have_spec pci] config {
 		<provides><service name="PCI"/></provides>
 	</start>}
 
-append_if [have_spec vesa] config {
-	<start name="vesa_drv">
-		<resource name="RAM" quantum="1M"/>
+append_if [have_spec framebuffer] config {
+	<start name="fb_drv">
+		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>}
 
-append_if [have_spec pl11x] config {
-	<start name="pl11x_drv">
-		<resource name="RAM" quantum="2M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start>}
-
-append_if [have_spec omap4] config {
-	<start name="omap4_gpio_drv">
+append_if [have_spec gpio] config {
+	<start name="gpio_drv">
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Gpio"/></provides>
+		<config/>
 	</start>}
 
-append_if [have_spec omap4] config {
-	<start name="omap4_fb_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start>}
+append_if [have_spec imx53] config {
+	<start name="platform_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Platform"/></provides>
+		<config/>
+	</start>
+	<start name="input_drv">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Input"/></provides>
+		<config/>
+	</start> }
 
 append_if [have_spec ps2] config {
 	<start name="ps2_drv">
@@ -89,7 +91,7 @@ append_if [expr ![have_spec ps2] && [have_spec usb]] config {
 	<start name="usb_drv">
 		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Input"/></provides>
-		<config> <hid/> </config>
+		<config ehci="yes" uhci="yes" xhci="yes"> <hid/> </config>
 	</start> }
 
 append config {
@@ -121,14 +123,14 @@ set boot_modules {
 }
 
 # platform-specific modules
-lappend_if [have_spec linux] boot_modules fb_sdl
-lappend_if [have_spec pci]   boot_modules pci_drv
-lappend_if [have_spec vesa]  boot_modules vesa_drv
-lappend_if [have_spec ps2]   boot_modules ps2_drv
-lappend_if [have_spec pl11x] boot_modules pl11x_drv
-lappend_if [have_spec omap4] boot_modules omap4_gpio_drv
-lappend_if [have_spec omap4] boot_modules omap4_fb_drv
-lappend_if [have_spec usb]   boot_modules usb_drv
+lappend_if [have_spec linux]       boot_modules fb_sdl
+lappend_if [have_spec pci]         boot_modules pci_drv
+lappend_if [have_spec ps2]         boot_modules ps2_drv
+lappend_if [have_spec framebuffer] boot_modules fb_drv
+lappend_if [have_spec usb]         boot_modules usb_drv
+lappend_if [have_spec gpio]        boot_modules gpio_drv
+lappend_if [have_spec imx53]       boot_modules platform_drv
+lappend_if [have_spec imx53]       boot_modules input_drv
 
 build_boot_image $boot_modules
 

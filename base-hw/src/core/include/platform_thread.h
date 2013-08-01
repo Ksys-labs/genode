@@ -47,13 +47,22 @@ namespace Genode {
 		Weak_ptr<Address_space>  _address_space;
 		unsigned                 _id;
 		Rm_client *              _rm_client;
-		bool                     _main_thread;
 		Native_utcb *            _phys_utcb;
 		Native_utcb *            _virt_utcb;
 		Tlb *                    _tlb;
 		Ram_dataspace_capability _utcb;
 		char                     _name[NAME_MAX_LEN];
 		char                     _kernel_thread[sizeof(Kernel::Thread)];
+
+		/*
+		 * Wether this thread is the main thread of a program.
+		 * This should be used only after 'join_pd' was called
+		 * or if this is a core thread. For core threads its save
+		 * also without 'join_pd' because '_main_thread' is initialized
+		 * with 0 wich is always true as cores main thread has no
+		 * 'Platform_thread'.
+		 */
+		bool _main_thread;
 
 		/**
 		 * Common construction part
@@ -169,7 +178,7 @@ namespace Genode {
 
 			Thread_base * thread_base()
 			{
-				if (!_thread_base) assert(_main_thread);
+				if (!_thread_base) assert(main_thread());
 				return _thread_base;
 			}
 
@@ -178,6 +187,8 @@ namespace Genode {
 			Native_utcb * virt_utcb() const { return _virt_utcb; }
 
 			Ram_dataspace_capability utcb() const { return _utcb; }
+
+			bool main_thread() const { return _main_thread; }
 
 			Tlb * tlb() const { return _tlb; }
 	};

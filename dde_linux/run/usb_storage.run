@@ -10,11 +10,15 @@
 
 build {
 	core init
-	drivers/pci
 	drivers/timer
 	drivers/usb
 	test/block
 }
+
+lappend_if [have_spec acpi]             build_components drivers/acpi
+lappend_if [have_spec pci]              build_components drivers/pci
+lappend_if [have_spec pci]              build_components drivers/pci/device_pd
+lappend_if [have_spec platform_arndale] build_components drivers/platform
 
 create_boot_directory
 
@@ -39,22 +43,46 @@ set config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>
+	</default-route>}
+
+append_if [have_spec acpi] config {
+	<start name="acpi">
+		<resource name="RAM" quantum="8M"/>
+		<binary name="acpi_drv"/>
+		<provides>
+			<service name="PCI"/>
+			<service name="IRQ" />
+		</provides>
+		<route>
+			<service name="PCI"> <any-child /> </service>
+			<any-service> <parent/> <any-child /> </any-service>
+		</route>
+	</start>}
+
+append_if [expr ![have_spec acpi] && [have_spec pci]] config {
+	<start name="pci_drv">
+		<resource name="RAM" quantum="5M"/>
+		<provides><service name="PCI"/></provides>
+	</start>}
+
+append_if [have_spec platform_arndale] config {
+		<start name="platform_drv">
+			<resource name="RAM" quantum="1M"/>
+			<provides><service name="Regulator"/></provides>
+		</start>}
+
+append config {
 	<start name="timer">
-		<resource name="RAM" quantum="512K"/>
+		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
 	</start>
 	<start name="usb_drv">
 		<resource name="RAM" quantum="6M"/>
 		<provides> <service name="Block"/> </provides>
-		<config><storage /></config>
-	</start>
-	<start name="pci_drv">
-		<resource name="RAM" quantum="512K"/>
-		<provides> <service name="PCI"/> </provides>
+		<config uhci="yes" ehci="yes" xhci="yes"><storage /></config>
 	</start>
 		<start name="test-usb">
-		<resource name="RAM" quantum="1M" />
+		<resource name="RAM" quantum="2M" />
 		<binary name="test-block" />
 	</start>
 </config>
@@ -67,9 +95,13 @@ install_config $config
 
 # generic modules
 set boot_modules {
-	core init timer usb_drv pci_drv test-block
+	core init timer usb_drv test-block
 }
 
+lappend_if [have_spec acpi]             boot_modules acpi_drv
+lappend_if [have_spec pci]              boot_modules pci_drv
+lappend_if [have_spec nova]             boot_modules pci_device_pd
+lappend_if [have_spec platform_arndale] boot_modules platform_drv
 
 build_boot_image $boot_modules
 

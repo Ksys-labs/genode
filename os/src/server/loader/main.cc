@@ -50,8 +50,8 @@ namespace Loader {
 				void _close(Rom_session_component *rom)
 				{
 					_ep.dissolve(rom);
-					destroy(&_md_alloc, rom);
 					_rom_sessions.remove(rom);
+					destroy(&_md_alloc, rom);
 				}
 
 				Local_rom_service(Rpc_entrypoint      &ep,
@@ -260,6 +260,15 @@ namespace Loader {
 			{
 				if (_child)
 					destroy(&_md_alloc, _child);
+
+				/*
+				 * The parent-service registry is populated by the 'Child'
+				 * on demand. Revert those allocations.
+				 */
+				while (Service *service = _parent_services.find_by_server(0)) {
+					_parent_services.remove(service);
+					destroy(env()->heap(), service);
+				}
 			}
 
 

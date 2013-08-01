@@ -35,6 +35,7 @@ namespace Genode
 
 			/* clocks */
 			MPU_DPLL_CLOCK = 200*1000*1000,
+			SYS_CLK        = 38400000,
 
 			/* UARTs */
 			TL16C750_1_MMIO_BASE = MMIO_0_BASE + 0x6a000,
@@ -63,9 +64,32 @@ namespace Genode
 			HDMI_MMIO_BASE  = 0x58006000,
 			HDMI_MMIO_SIZE  = 0x00001000,
 
-			/* misc */
+			/* GPIO */
+			GPIO1_MMIO_BASE = 0x4a310000,
+			GPIO1_MMIO_SIZE = 0x1000,
+			GPIO1_IRQ       = 29 + 32,
+			GPIO2_MMIO_BASE = 0x48055000,
+			GPIO2_MMIO_SIZE = 0x1000,
+			GPIO2_IRQ       = 30 + 32,
+			GPIO3_MMIO_BASE = 0x48057000,
+			GPIO3_MMIO_SIZE = 0x1000,
+			GPIO3_IRQ       = 31 + 32,
+			GPIO4_MMIO_BASE = 0x48059000,
+			GPIO4_MMIO_SIZE = 0x1000,
+			GPIO4_IRQ       = 32 + 32,
+			GPIO5_MMIO_BASE = 0x4805b000,
+			GPIO5_MMIO_SIZE = 0x1000,
+			GPIO5_IRQ       = 33 + 32,
+			GPIO6_MMIO_BASE = 0x4805d000,
+			GPIO6_MMIO_SIZE = 0x1000,
+			GPIO6_IRQ       = 34 + 32,
+
+			/* CPU cache */
+			CACHE_LINE_SIZE_LOG2 = 2, /* FIXME get correct value from board spec */
+
+			/* wether board provides security extension */
 			SECURITY_EXTENSION = 0,
-			SYS_CLK            = 38400000,
+
 		};
 	};
 }

@@ -75,7 +75,7 @@ namespace Genode {
 			addr_t base = 0;
 			for (size_t try_size_log2 = get_page_size_log2();
 			     try_size_log2 < sizeof(addr_t)*8 ; try_size_log2++) {
-				addr_t fpage_mask = ~((1 << try_size_log2) - 1);
+				addr_t fpage_mask = ~((1UL << try_size_log2) - 1);
 				addr_t try_base = _fault_addr & fpage_mask;
 
 				/* check lower bound of existing fault area */
@@ -401,7 +401,7 @@ Rm_session_component::attach(Dataspace_capability ds_cap, size_t size,
 			 * store. The backing store would constrain the mapping size
 			 * anyway such that a higher alignment of the region is of no use.
 			 */
-			if (((dsc->map_src_addr() + offset) & ((1 << align_log2) - 1)) != 0)
+			if (((dsc->map_src_addr() + offset) & ((1UL << align_log2) - 1)) != 0)
 				continue;
 
 			/* try allocating the align region */
@@ -723,16 +723,19 @@ bool Rm_session_component::reverse_lookup(addr_t                dst_base,
 	/* constrain source fault area by the source dataspace dimensions */
 	src_fault_area->constrain(src_base, (*src_dataspace)->size());
 
-	bool lookup = src_fault_area->valid() && dst_fault_area->valid();
-
-	if (!lookup)
-		return lookup;
+	if (!src_fault_area->valid() || !dst_fault_area->valid())
+		return false;
 
 	/* lookup and lock nested dataspace if required */
 	Native_capability session_cap = (*src_dataspace)->sub_rm_session();
-	*sub_rm_session = dynamic_cast<Rm_session_component *>(_session_ep->lookup_and_lock(session_cap));
+	if (session_cap.valid()) {
+		*sub_rm_session = dynamic_cast<Rm_session_component *>(_session_ep->lookup_and_lock(session_cap));
+		return (*sub_rm_session != 0);
+	}
 
-	return lookup;
+	/* loop refer to leaf */
+	*sub_rm_session = 0;
+	return true;
 }
 
 

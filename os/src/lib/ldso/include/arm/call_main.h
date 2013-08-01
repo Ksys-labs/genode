@@ -13,12 +13,20 @@
 #ifndef _ARM__CALL_MAIN_H_
 #define _ARM__CALL_MAIN_H_
 
-	/**
-	 * Restore SP from initial sp and jump to entry function
-	 */
+/**
+ * Restore SP from initial sp and jump to entry function
+ */
 void call_main(void (*func)(void))
 {
-	func();
+        extern long __initial_sp;
+
+        asm volatile ("mov %%sp, %0;"
+                      "bx %1;"
+                      :
+                      : "r" (__initial_sp),
+                        "r" (func)
+                      : "memory"
+                     );
 }
 
 #endif /* _ARM__CALL_MAIN_H_ */

@@ -1,12 +1,11 @@
 /*
- * \brief  regulator driver session capability type
- * \author Alexander Tarasikov <tarasikov@ksyslabs.org> 
- * \date   2012-02-15
+ * \brief  Regulator session capability type
+ * \author Stefan Kalkowski
+ * \date   2013-06-13
  */
 
 /*
- * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2013 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.

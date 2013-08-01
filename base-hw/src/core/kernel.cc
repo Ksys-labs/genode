@@ -29,8 +29,12 @@
 
 /* core includes */
 #include <platform_thread.h>
+#include <platform_pd.h>
 #include <tlb.h>
 #include <trustzone.h>
+
+/* base-hw includes */
+#include <singleton.h>
 
 using namespace Kernel;
 
@@ -56,6 +60,14 @@ namespace Kernel
 }
 
 
+void Kernel::Ipc_node::cancel_waiting()
+{
+	if (_state == PREPARE_AND_AWAIT_REPLY) _state = PREPARE_REPLY;
+	if (_state == AWAIT_REPLY || _state == AWAIT_REQUEST) _state = INACTIVE;
+	return;
+}
+
+
 void Kernel::Ipc_node::_receive_request(Message_buf * const r)
 {
 	/* assertions */
@@ -75,9 +87,11 @@ void Kernel::Ipc_node::_receive_request(Message_buf * const r)
 void Kernel::Ipc_node::_receive_reply(void * const base, size_t const size)
 {
 	/* assertions */
-	assert(_awaits_reply());
 	assert(size <= _inbuf.size);
-
+	if (!_awaits_reply()) {
+		PDBG("discard unexpected IPC reply");
+		return;
+	}
 	/* receive reply */
 	Genode::memcpy(_inbuf.base, base, size);
 	_inbuf.size = size;
@@ -261,14 +275,15 @@ namespace Kernel
 	 * Static mode transition control
 	 */
 	static Mode_transition_control * mtc()
-	{ static Mode_transition_control _object; return &_object; }
+	{ return unsynchronized_singleton<Mode_transition_control>(); }
 
 	/**
 	 * Kernel object that represents a Genode PD
 	 */
 	class Pd : public Object<Pd, MAX_PDS>
 	{
-		Tlb * const _tlb;
+		Tlb * const         _tlb;
+		Platform_pd * const _platform_pd;
 
 		/* keep ready memory for size aligned extra costs at construction */
 		enum { EXTRA_SPACE_SIZE = 2*Tlb::MAX_COSTS_PER_TRANSLATION };
@@ -279,7 +294,8 @@ namespace Kernel
 			/**
 			 * Constructor
 			 */
-			Pd(Tlb * const t) : _tlb(t)
+			Pd(Tlb * const t, Platform_pd * const platform_pd)
+			: _tlb(t), _platform_pd(platform_pd)
 			{
 				/* try to add translation for mode transition region */
 				Page_flags::access_t const flags = Page_flags::mode_transition();
@@ -322,14 +338,15 @@ namespace Kernel
 			 ** Accessors **
 			 ***************/
 
-			Tlb * tlb() { return _tlb; }
+			Tlb * const tlb() { return _tlb; }
+			Platform_pd * const platform_pd() { return _platform_pd; }
 	};
 
 
 	/**
 	 * Access to static interrupt-controller
 	 */
-	static Pic * pic() { static Pic _object; return &_object; }
+	static Pic * pic() { return unsynchronized_singleton<Pic>(); }
 }
 
 
@@ -364,6 +381,10 @@ void Kernel::Irq_owner::await_irq()
 	pic()->unmask(irq);
 	_awaits_irq();
 }
+
+
+void Kernel::Irq_owner::cancel_waiting() {
+	if (_id) pic()->mask(id_to_irq(_id)); }
 
 
 void Kernel::Irq_owner::receive_irq(unsigned const irq)
@@ -403,9 +424,11 @@ namespace Kernel
 	 */
 	static Pd * core()
 	{
-		static Core_tlb tlb;
-		static Pd _pd(&tlb);
-		return &_pd;
+		constexpr int tlb_align = 1 << Core_tlb::ALIGNM_LOG2;
+
+		Core_tlb *core_tlb = unsynchronized_singleton<Core_tlb, tlb_align>();
+		Pd       *pd       = unsynchronized_singleton<Pd>(core_tlb, nullptr);
+		return pd;
 	}
 
 
@@ -424,16 +447,16 @@ namespace Kernel
 }
 
 
-void Kernel::Thread::_activate()
+void Kernel::Thread::_schedule()
 {
 	cpu_scheduler()->insert(this);
-	_state = ACTIVE;
+	_state = SCHEDULED;
 }
 
 
 void Kernel::Thread::pause()
 {
-	assert(_state == AWAIT_RESUMPTION || _state == ACTIVE);
+	assert(_state == AWAIT_RESUMPTION || _state == SCHEDULED);
 	cpu_scheduler()->remove(this);
 	_state = AWAIT_RESUMPTION;
 }
@@ -442,20 +465,7 @@ void Kernel::Thread::pause()
 void Kernel::Thread::stop()
 {
 	cpu_scheduler()->remove(this);
-	_state = STOPPED;
-}
-
-
-int Kernel::Thread::resume()
-{
-	if (_state != AWAIT_RESUMPTION && _state != ACTIVE) {
-		PDBG("Unexpected thread state");
-		return -1;
-	}
-	cpu_scheduler()->insert(this);
-	if (_state == ACTIVE) return 1;
-	_state = ACTIVE;
-	return 0;
+	_state = AWAIT_START;
 }
 
 
@@ -480,17 +490,25 @@ void Kernel::Thread::reply(size_t const size, bool const await_request)
 }
 
 
-void Kernel::Thread::await_signal()
+void Kernel::Thread::await_signal(Kernel::Signal_receiver * receiver)
 {
 	cpu_scheduler()->remove(this);
-	_state = AWAIT_IRQ;
+	_state = AWAIT_SIGNAL;
+	_signal_receiver = receiver;
 }
 
 
 void Kernel::Thread::received_signal()
 {
+	assert(_state == AWAIT_SIGNAL);
+	_schedule();
+}
+
+
+void Kernel::Thread::_received_irq()
+{
 	assert(_state == AWAIT_IRQ);
-	_activate();
+	_schedule();
 }
 
 
@@ -524,7 +542,7 @@ void Kernel::Thread::scheduled_next()
 void Kernel::Thread::_has_received(size_t const s)
 {
 	user_arg_0(s);
-	if (_state != ACTIVE) _activate();
+	if (_state != SCHEDULED) _schedule();
 }
 
 
@@ -589,16 +607,19 @@ namespace Kernel
 
 			/**
 			 * Destruct or prepare to do it at next call of 'ack'
+			 *
+			 * \return  wether destruction is done
 			 */
-			void kill(Thread * const killer)
+			bool kill(Thread * const killer)
 			{
 				assert(!_killer);
 				_killer = killer;
 				if (_await_ack) {
 					_killer->kill_signal_context_blocks();
-					return;
+					return 0;
 				}
 				this->~Signal_context();
+				return 1;
 			}
 	};
 
@@ -646,10 +667,16 @@ namespace Kernel
 			 */
 			void add_listener(Thread * const t)
 			{
-				t->await_signal();
+				t->await_signal(this);
 				_listeners.enqueue(t);
 				_listen();
 			}
+
+			/**
+			 * Stop a thread from listening to our contexts
+			 */
+			void remove_listener(Thread * const t) {
+				_listeners.remove(t); }
 
 			/**
 			 * If any of our contexts is pending
@@ -687,8 +714,13 @@ namespace Kernel
 			   Signal_context * const context)
 			: _state(state), _context(context) { }
 
-			void run() {
-				cpu_scheduler()->insert(this); }
+
+			/**************************
+			 ** Vm_session interface **
+			 **************************/
+
+			void run()   { cpu_scheduler()->insert(this); }
+			void pause() { cpu_scheduler()->remove(this); }
 
 
 			/**********************
@@ -734,7 +766,15 @@ namespace Kernel
 			/* initialize idle thread */
 			void * sp;
 			sp = (void *)&idle_stack[sizeof(idle_stack)/sizeof(idle_stack[0])];
-			idle.init_context((void *)&idle_main, sp, core_id());
+
+			/*
+			 * Idle doesn't use its UTCB pointer, thus
+			 * utcb_phys = utcb_virt = 0 is save.
+			 * Base-hw doesn't support multiple cores, thus
+			 * cpu_no = 0 is ok. We don't use 'start' to avoid
+			 * recursive call of'cpu_scheduler'.
+			 */
+			idle.prepare_to_start((void *)&idle_main, sp, 0, core_id(), 0, 0);
 			initial = 0;
 		}
 		/* create scheduler with a permanent idle thread */
@@ -833,7 +873,7 @@ namespace Kernel
 		void * dst = (void *)user->user_arg_1();
 		Tlb * const tlb = new (dst) Tlb();
 		dst = (void *)((addr_t)dst + sizeof(Tlb));
-		Pd * const pd = new (dst) Pd(tlb);
+		Pd * const pd = new (dst) Pd(tlb, (Platform_pd *)user->user_arg_2());
 
 		/* return success */
 		user->user_arg_0(pd->id());
@@ -897,8 +937,7 @@ namespace Kernel
 		assert(t);
 
 		/* start thread */
-		assert(!t->start(ip, sp, cpu, pt->pd_id(),
-		                 pt->phys_utcb(), pt->virt_utcb()))
+		t->start(ip, sp, cpu, pt->pd_id(), pt->phys_utcb(), pt->virt_utcb());
 
 		/* return software TLB that the thread is assigned to */
 		Pd::Pool * const pp = Pd::pool();
@@ -1081,6 +1120,19 @@ namespace Kernel
 	/**
 	 * Do specific syscall for 'user', for details see 'syscall.h'
 	 */
+	void do_update_region(Thread * const user)
+	{
+		assert(user->pd_id() == core_id());
+
+		/* FIXME we don't handle instruction caches by now */
+		Cpu::flush_data_cache_by_virt_region((addr_t)user->user_arg_1(),
+		                                     (size_t)user->user_arg_2());
+	}
+
+
+	/**
+	 * Do specific syscall for 'user', for details see 'syscall.h'
+	 */
 	void do_allocate_irq(Thread * const user)
 	{
 		assert(user->pd_id() == core_id());
@@ -1252,7 +1304,7 @@ namespace Kernel
 		Signal_context * const c =
 			Signal_context::pool()->object(user->user_arg_1());
 		assert(c);
-		c->kill(user);
+		user->user_arg_0(c->kill(user));
 	}
 
 	/**
@@ -1293,6 +1345,23 @@ namespace Kernel
 
 		/* run targeted vm */
 		vm->run();
+	}
+
+
+	/**
+	 * Do specific syscall for 'user', for details see 'syscall.h'
+	 */
+	void do_pause_vm(Thread * const user)
+	{
+		/* check permissions */
+		assert(user->pd_id() == core_id());
+
+		/* get targeted vm via its id */
+		Vm * const vm = Vm::pool()->object(user->user_arg_1());
+		assert(vm);
+
+		/* pause targeted vm */
+		vm->pause();
 	}
 
 
@@ -1340,6 +1409,8 @@ namespace Kernel
 			/* 28         */ do_resume_faulter,
 			/* 29         */ do_ack_signal,
 			/* 30         */ do_kill_signal_context,
+			/* 31         */ do_pause_vm,
+			/* 32         */ do_update_region,
 		};
 		enum { MAX_SYSCALL = sizeof(handle_sysc)/sizeof(handle_sysc[0]) - 1 };
 
@@ -1377,6 +1448,8 @@ extern "C" void kernel()
 	/* kernel initialization */
 	} else {
 
+		Genode::printf("Kernel started!\n");
+
 		/* compose kernel CPU context */
 		static Cpu::Context kernel_context;
 		kernel_context.ip = (addr_t)kernel;
@@ -1393,6 +1466,12 @@ extern "C" void kernel()
 
 		/* switch to core address space */
 		Cpu::init_virt_kernel(core()->tlb()->base(), core_id());
+
+		/*
+		 * From this point on, it is safe to use 'cmpxchg', i.e., to create
+		 * singleton objects via the static-local object pattern. See
+		 * the comment in 'src/base/singleton.h'.
+		 */
 
 		/* create the core main thread */
 		static Native_utcb cm_utcb;
@@ -1424,42 +1503,84 @@ extern "C" void kernel()
  ** Kernel::Thread **
  ********************/
 
-int Thread::start(void *ip, void *sp, unsigned cpu_no,
-                         unsigned const pd_id,
-                         Native_utcb * const phys_utcb,
-                         Native_utcb * const virt_utcb)
+int Kernel::Thread::resume()
 {
-	/* check state and arguments */
-	assert(_state == STOPPED)
-	assert(!cpu_no);
-
-	/* apply thread configuration */
-	init_context(ip, sp, pd_id);
-	_phys_utcb = phys_utcb;
-	_virt_utcb = virt_utcb;
-
-	/* offer thread-entry arguments */
-	user_arg_0((unsigned)_virt_utcb);
-
-	/* start thread */
-	_activate();
-	return 0;
+	switch (_state) {
+	case AWAIT_RESUMPTION:
+		_schedule();
+		return 0;
+	case SCHEDULED:
+		return 1;
+	case AWAIT_IPC:
+		PDBG("cancel IPC receipt");
+		Ipc_node::cancel_waiting();
+		_schedule();
+		return 0;
+	case AWAIT_IRQ:
+		PDBG("cancel IRQ receipt");
+		Irq_owner::cancel_waiting();
+		_schedule();
+		return 0;
+	case AWAIT_SIGNAL:
+		PDBG("cancel signal receipt");
+		_signal_receiver->remove_listener(this);
+		_schedule();
+		return 0;
+	case AWAIT_SIGNAL_CONTEXT_DESTRUCT:
+		PDBG("cancel signal context destruction");
+		_schedule();
+		return 0;
+	case AWAIT_START:
+	default:
+		PERR("unresumable state");
+		return -1;
+	}
 }
 
 
-void Thread::init_context(void * const instr_p, void * const stack_p,
-                                  unsigned const pd_id)
+void Thread::prepare_to_start(void * const        ip,
+                              void * const        sp,
+                              unsigned const      cpu_id,
+                              unsigned const      pd_id,
+                              Native_utcb * const utcb_phys,
+                              Native_utcb * const utcb_virt)
 {
-	/* basic thread state */
-	sp = (addr_t)stack_p;
-	ip = (addr_t)instr_p;
+	/* check state and arguments */
+	assert(_state == AWAIT_START)
+	assert(!cpu_id);
 
-	/* join a pd */
-	_pd_id = pd_id;
+	/* store thread parameters */
+	_phys_utcb = utcb_phys;
+	_virt_utcb = utcb_virt;
+	_pd_id     = pd_id;
+
+	/* join a protection domain */
 	Pd * const pd = Pd::pool()->object(_pd_id);
 	assert(pd)
-	protection_domain(pd_id);
-	tlb(pd->tlb()->base());
+	addr_t const tlb = pd->tlb()->base();
+
+	/* initialize CPU context */
+	if (!_platform_thread)
+		/* this is the main thread of core */
+		User_context::init_core_main_thread(ip, sp, tlb, pd_id);
+	else if (!_platform_thread->main_thread())
+		/* this is not a main thread */
+		User_context::init_thread(ip, sp, tlb, pd_id);
+	else
+		/* this is the main thread of a program other than core */
+		User_context::init_main_thread(ip, _virt_utcb, tlb, pd_id);
+}
+
+
+void Thread::start(void * const        ip,
+                   void * const        sp,
+                   unsigned const      cpu_id,
+                   unsigned const      pd_id,
+                   Native_utcb * const utcb_phys,
+                   Native_utcb * const utcb_virt)
+{
+	prepare_to_start(ip, sp, cpu_id, pd_id, utcb_phys, utcb_virt);
+	_schedule();
 }
 
 
@@ -1479,14 +1600,18 @@ void Thread::pagefault(addr_t const va, bool const w)
 void Thread::kill_signal_context_blocks()
 {
 	cpu_scheduler()->remove(this);
-	_state = KILL_SIGNAL_CONTEXT_BLOCKS;
+	_state = AWAIT_SIGNAL_CONTEXT_DESTRUCT;
 }
 
 
 void Thread::kill_signal_context_done()
 {
-	assert(_state == KILL_SIGNAL_CONTEXT_BLOCKS)
-	_activate();
+	if (_state != AWAIT_SIGNAL_CONTEXT_DESTRUCT) {
+		PDBG("ignore unexpected signal-context destruction");
+		return;
+	}
+	user_arg_0(1);
+	_schedule();
 }
 
 

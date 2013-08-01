@@ -45,7 +45,6 @@ set config  {
 		<provides><service name="Timer"/></provides>
 	</start>
 	<start name="fb_drv">
-		<binary name="omap4_fb_drv"/>
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>
@@ -55,7 +54,7 @@ set config  {
 			<service name="Input"/>
 			<service name="Nic"/>
 		</provides>
-		<config>
+		<config ehci="yes">
 			<hid/>
 			<nic mac="2e:60:90:0c:4e:01" />
 		</config>
@@ -149,7 +148,7 @@ set boot_modules {
 	timer
 	l4linux
 	initrd.gz
-	omap4_fb_drv
+	fb_drv
 	usb_drv
 	terminal
 	terminal_log
@@ -163,6 +162,10 @@ if {![file exists bin/initrd.gz]} {
 	puts "Download initramfs ..."
 	exec >& /dev/null wget -c -O bin/initrd.gz $uri
 }
+exec >& /dev/null wget -O bin/initrd.gz.md5 $uri.md5
+cd bin
+exec md5sum -c initrd.gz.md5
+cd ..
 
 build_boot_image  [join $boot_modules " "]
 
