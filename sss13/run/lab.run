@@ -1,0 +1,51 @@
+#
+# \brief  SSS'13 Lab
+# \author Ivan Loskutov
+# \date   2013-06-24
+#
+
+# Build program images
+build { core initsig drivers/timer app/hackme }
+
+# Create directory where boot files are written to
+create_boot_directory
+
+# Define XML configuration for init
+install_config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service><parent/><any-child/></any-service>
+	</default-route>
+	<start name="timer">
+		<resource name="RAM" quantum="20M"/>
+		<provides><service name="Timer"/></provides>
+		<signature value=""/>
+	</start>
+	<start name="hackme">
+		<resource name="RAM" quantum="20M"/>
+		<signature value=""/>
+	</start>
+</config>
+}
+
+# Build boot files from source binaries
+build_boot_image { core init timer hackme }
+
+# Configure Qemu
+append qemu_args " -m 64 -nographic"
+
+# Execute test in Qemu
+run_genode_until forever
